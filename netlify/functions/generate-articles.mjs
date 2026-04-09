@@ -363,5 +363,4 @@ Write 400-600 words. Provide insight on championship trends, team performance, a
 
 export const config = {
   schedule: '0 */4 * * *',
-  path: '/api/generate-articles',
 };

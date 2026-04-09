@@ -144,5 +144,4 @@ export default async (req, context) => {
 
 export const config = {
   schedule: '*/30 * * * *',
-  path: '/api/sync-results',
 };

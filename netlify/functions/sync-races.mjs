@@ -121,5 +121,4 @@ export default async (req, context) => {
 
 export const config = {
   schedule: '0 6 * * *',
-  path: '/api/sync-races',
 };

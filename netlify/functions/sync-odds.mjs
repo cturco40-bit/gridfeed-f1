@@ -256,5 +256,4 @@ async function generatePicks(sb, raceId, oddsRows) {
 
 export const config = {
   schedule: '0 8,18 * * *',
-  path: '/api/sync-odds',
 };

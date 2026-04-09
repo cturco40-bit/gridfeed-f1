@@ -155,5 +155,4 @@ export default async (req, context) => {
 
 export const config = {
   schedule: '15 6 * * *',
-  path: '/api/sync-drivers',
 };
