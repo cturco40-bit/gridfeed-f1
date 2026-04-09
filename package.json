@@ -1,0 +1,9 @@
+{
+  "name": "gridfeed-platform",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "@anthropic-ai/sdk": "^0.39"
+  }
+}
