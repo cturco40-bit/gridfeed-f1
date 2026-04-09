@@ -5,3 +5,9 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# ── Redirects ──────────────────────────────────────────────
+[[redirects]]
+  from = "/gf-admin-drafts"
+  to = "/gf-admin-drafts.html"
+  status = 200
