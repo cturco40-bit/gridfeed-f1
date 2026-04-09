@@ -2,7 +2,6 @@ import { TwitterApi } from 'twitter-api-v2';
 import { getSupabase, logSync, jsonResponse } from './lib/supabase.js';
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-const MAX_JITTER_MS = 20 * 60 * 1000; // 20 minutes
 
 export default async (req, context) => {
   const start = Date.now();
@@ -40,13 +39,7 @@ export default async (req, context) => {
       return jsonResponse({ ok: true, posted: 0, reason: 'Tweet too old, marked failed' });
     }
 
-    // 3. Random jitter to avoid bot detection patterns
-    const jitter = Math.floor(Math.random() * MAX_JITTER_MS);
-    if (jitter > 0) {
-      await new Promise(resolve => setTimeout(resolve, jitter));
-    }
-
-    // 4. Post to Twitter via OAuth 1.0a
+    // 3. Post to Twitter via OAuth 1.0a
     const client = new TwitterApi({
       appKey: process.env.TWITTER_API_KEY,
       appSecret: process.env.TWITTER_API_SECRET,
@@ -73,7 +66,7 @@ export default async (req, context) => {
       functionName: 'post-tweet',
       status: 'success',
       recordsAffected: 1,
-      message: `Posted tweet ${result.data.id}: "${tweet.tweet_text.slice(0, 60)}..." (jitter: ${Math.round(jitter / 1000)}s)`,
+      message: `Posted tweet ${result.data.id}: "${tweet.tweet_text.slice(0, 60)}..."`,
       durationMs: Date.now() - start,
     });
 
@@ -100,5 +93,5 @@ export default async (req, context) => {
 };
 
 export const config = {
-  schedule: '0 10 * * *',
+  schedule: '20 10 * * *',
 };
