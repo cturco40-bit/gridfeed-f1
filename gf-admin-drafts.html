@@ -442,7 +442,31 @@ document.getElementById('editModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
 
-loadAll();
+// ═══════ AUTH GATE ═══════
+async function checkAuth() {
+  const token = sessionStorage.getItem('gf_admin_token');
+  if (!token) { window.location.href = '/admin-login'; return false; }
+
+  try {
+    const res = await fetch('/.netlify/functions/auth-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      sessionStorage.removeItem('gf_admin_token');
+      window.location.href = '/admin-login';
+      return false;
+    }
+    return true;
+  } catch {
+    window.location.href = '/admin-login';
+    return false;
+  }
+}
+
+checkAuth().then(ok => { if (ok) loadAll(); });
 </script>
 </body>
 </html>

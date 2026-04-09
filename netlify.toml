@@ -8,6 +8,11 @@
 
 # ── Redirects ──────────────────────────────────────────────
 [[redirects]]
+  from = "/admin-login"
+  to = "/admin-login.html"
+  status = 200
+
+[[redirects]]
   from = "/gf-admin-drafts"
   to = "/gf-admin-drafts.html"
   status = 200

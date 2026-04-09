@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridFeed — Admin Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1B1F2A;
+      color: #E0E0E8;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-box {
+      width: 100%;
+      max-width: 360px;
+      padding: 0 20px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo-text {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: 2px;
+    }
+    .logo-text .grid { color: #fff; }
+    .logo-text .feed { color: #E8002D; }
+    .logo-sub {
+      font-size: 11px;
+      color: #8A8E9A;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-top: 4px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8A8E9A;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #252A37;
+      border: 1px solid #3A3F4E;
+      border-radius: 4px;
+      color: #E0E0E8;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus {
+      border-color: #E8002D;
+    }
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: #E8002D;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-login:hover { background: #C50026; }
+    .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error-msg {
+      color: #E8002D;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-box">
+  <div class="logo">
+    <div class="logo-text"><span class="grid">GRID</span><span class="feed">FEED</span></div>
+    <div class="logo-sub">Admin Access</div>
+  </div>
+
+  <form id="loginForm" onsubmit="handleLogin(event)">
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password" autofocus />
+    </div>
+    <button type="submit" class="btn-login" id="submitBtn">Sign In</button>
+  </form>
+  <div class="error-msg" id="errorMsg"></div>
+</div>
+
+<script>
+'use strict';
+
+// If already authed, skip login
+const existing = sessionStorage.getItem('gf_admin_token');
+if (existing) {
+  fetch('/.netlify/functions/auth-admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: existing }),
+  })
+  .then(r => r.json())
+  .then(d => { if (d.success) window.location.href = '/gf-admin-drafts'; })
+  .catch(() => {});
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const pw = document.getElementById('password').value;
+  const errEl = document.getElementById('errorMsg');
+  const btn = document.getElementById('submitBtn');
+
+  if (!pw) { errEl.textContent = 'Enter a password'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch('/.netlify/functions/auth-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    const data = await res.json();
+
+    if (data.success && data.token) {
+      sessionStorage.setItem('gf_admin_token', data.token);
+      window.location.href = '/gf-admin-drafts';
+    } else {
+      errEl.textContent = 'Incorrect password';
+    }
+  } catch (err) {
+    errEl.textContent = 'Connection error';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Sign In';
+}
+</script>
+</body>
+</html>
