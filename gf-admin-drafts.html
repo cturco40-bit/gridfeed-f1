@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridFeed Admin — Draft Queue</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #F5F5F5; --card: #fff; --accent: #E8002D; --text: #1B1F2A;
+      --dim: #4A4E5A; --muted: #8A8E9A; --border: #E0E0E8; --green: #16A34A; --red: #DC2626;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; line-height: 1.5; padding: 20px; }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header .badge { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
+    .filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .filter-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+    .draft-card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+    .draft-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .draft-title { font-weight: 700; font-size: 15px; flex: 1; }
+    .draft-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; border-radius: 3px; background: #EFF6FF; color: #1E40AF; }
+    .draft-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; border-radius: 3px; }
+    .status-pending { background: #FEF3C7; color: #92400E; }
+    .status-approved { background: #DCFCE7; color: #166534; }
+    .status-rejected { background: #FEE2E2; color: #991B1B; }
+    .draft-body { padding: 16px 18px; font-size: 13px; color: var(--dim); white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+    .draft-meta { display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: #FAFAFA; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+    .draft-actions { display: flex; gap: 8px; margin-left: auto; }
+    .btn { padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-approve { background: var(--green); color: #fff; }
+    .btn-approve:hover { background: #15803D; }
+    .btn-reject { background: var(--red); color: #fff; }
+    .btn-reject:hover { background: #B91C1C; }
+    .btn-edit { background: var(--border); color: var(--text); }
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+    .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 12px 18px; min-width: 100px; }
+    .stat-num { font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--text); color: #fff; padding: 12px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; display: none; z-index: 100; }
+    .toast.show { display: block; }
+
+    /* Modal for editing */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--card); border-radius: 8px; width: 90%; max-width: 700px; max-height: 85vh; overflow-y: auto; padding: 24px; }
+    .modal h2 { font-size: 18px; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--dim); }
+    .modal input, .modal textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 13px; margin-bottom: 12px; }
+    .modal textarea { min-height: 200px; resize: vertical; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>GridFeed Draft Queue</h1>
+  <span class="badge">ADMIN</span>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="filters" id="filters">
+  <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+  <button class="filter-btn" onclick="setFilter('pending', this)">Pending</button>
+  <button class="filter-btn" onclick="setFilter('approved', this)">Approved</button>
+  <button class="filter-btn" onclick="setFilter('rejected', this)">Rejected</button>
+</div>
+
+<div id="draftsList"></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2>Edit Draft</h2>
+    <input type="hidden" id="editId" />
+    <label>Title</label>
+    <input type="text" id="editTitle" />
+    <label>Excerpt</label>
+    <input type="text" id="editExcerpt" />
+    <label>Body</label>
+    <textarea id="editBody"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-edit" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-approve" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const SUPABASE_URL = 'https://jrkptskwmdtbcucmqwft.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impya3B0c2t3bWR0YmN1Y21xd2Z0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NTY2MTksImV4cCI6MjA5MTMzMjYxOX0.oz9DUA4YtwxtJLbL-fpYTC9VstJ0B-tNC0B3wwiyRtk';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let allDrafts = [];
+let currentFilter = 'all';
+
+async function loadDrafts() {
+  const { data, error } = await sb
+    .from('content_drafts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to load drafts:', error);
+    document.getElementById('draftsList').innerHTML = '<div class="empty">Failed to load drafts.</div>';
+    return;
+  }
+
+  allDrafts = data || [];
+  renderStats();
+  renderDrafts();
+}
+
+function renderStats() {
+  const pending = allDrafts.filter(d => d.review_status === 'pending').length;
+  const approved = allDrafts.filter(d => d.review_status === 'approved').length;
+  const rejected = allDrafts.filter(d => d.review_status === 'rejected').length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-box"><div class="stat-num">${allDrafts.length}</div><div class="stat-label">Total</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#92400E;">${pending}</div><div class="stat-label">Pending</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--green);">${approved}</div><div class="stat-label">Approved</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--red);">${rejected}</div><div class="stat-label">Rejected</div></div>
+  `;
+}
+
+function renderDrafts() {
+  const el = document.getElementById('draftsList');
+  let drafts = allDrafts;
+  if (currentFilter !== 'all') {
+    drafts = drafts.filter(d => d.review_status === currentFilter);
+  }
+
+  if (!drafts.length) {
+    el.innerHTML = '<div class="empty">No drafts match this filter.</div>';
+    return;
+  }
+
+  el.innerHTML = drafts.map(d => {
+    const statusClass = `status-${d.review_status}`;
+    const timeAgo = getTimeAgo(d.created_at);
+    const isPublished = !!d.published_article_id;
+
+    return `
+      <div class="draft-card" id="draft-${d.id}">
+        <div class="draft-header">
+          <span class="draft-type">${d.content_type || 'draft'}</span>
+          <span class="draft-title">${d.title || 'Untitled'}</span>
+          <span class="draft-status ${statusClass}">${d.review_status}${isPublished ? ' (published)' : ''}</span>
+        </div>
+        <div class="draft-body">${escapeHtml(d.body || '')}</div>
+        <div class="draft-meta">
+          <span>${timeAgo}</span>
+          <span>${d.generation_model || ''}</span>
+          ${d.tags?.length ? `<span>${d.tags.join(', ')}</span>` : ''}
+          <div class="draft-actions">
+            <button class="btn btn-edit" onclick="openEdit('${d.id}')">Edit</button>
+            ${d.review_status === 'pending' ? `
+              <button class="btn btn-approve" onclick="setStatus('${d.id}', 'approved')">Approve</button>
+              <button class="btn btn-reject" onclick="setStatus('${d.id}', 'rejected')">Reject</button>
+            ` : d.review_status === 'rejected' ? `
+              <button class="btn btn-approve" onclick="setStatus('${d.id}', 'approved')">Approve</button>
+            ` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function setStatus(id, status) {
+  const { error } = await sb
+    .from('content_drafts')
+    .update({ review_status: status, reviewed_at: new Date().toISOString(), reviewed_by: 'admin' })
+    .eq('id', id);
+
+  if (error) { showToast('Error: ' + error.message); return; }
+
+  showToast(`Draft ${status}`);
+  await loadDrafts();
+}
+
+function openEdit(id) {
+  const draft = allDrafts.find(d => d.id === id);
+  if (!draft) return;
+  document.getElementById('editId').value = id;
+  document.getElementById('editTitle').value = draft.title || '';
+  document.getElementById('editExcerpt').value = draft.excerpt || '';
+  document.getElementById('editBody').value = draft.body || '';
+  document.getElementById('editModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('active');
+}
+
+async function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const title = document.getElementById('editTitle').value;
+  const excerpt = document.getElementById('editExcerpt').value;
+  const body = document.getElementById('editBody').value;
+
+  const { error } = await sb
+    .from('content_drafts')
+    .update({ title, excerpt, body })
+    .eq('id', id);
+
+  if (error) { showToast('Error: ' + error.message); return; }
+
+  closeModal();
+  showToast('Draft saved');
+  await loadDrafts();
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDrafts();
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getTimeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+// Close modal on overlay click
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+loadDrafts();
+</script>
+</body>
+</html>

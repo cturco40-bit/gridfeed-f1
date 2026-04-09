@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2",
-    "@anthropic-ai/sdk": "^0.39"
+    "@anthropic-ai/sdk": "^0.39",
+    "xml2js": "^0.6"
   }
 }
