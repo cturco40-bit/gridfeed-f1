@@ -78,7 +78,7 @@ img{display:block;max-width:100%}
   display:flex;align-items:center;justify-content:space-between;
 }
 .logo{display:flex;align-items:center;gap:10px;cursor:pointer}
-.logo svg{width:56px;height:24px;flex-shrink:0}
+.logo-img{height:24px;width:auto;flex-shrink:0;opacity:0.85}
 .logo-wrap{display:flex;flex-direction:column}
 .logo-text{font-family:var(--font);font-weight:900;font-size:20px;letter-spacing:3px;line-height:1}
 .logo-text .grid{color:#fff}
@@ -403,13 +403,7 @@ body.modal-open{overflow:hidden}
 <header class="site-header">
   <div class="header-inner">
     <a class="logo" onclick="switchTab('home');return false;" href="#">
-      <svg viewBox="0 0 72 28" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 20 L4 14 L8 12 L10 8 L18 6 L28 5 L38 5 L48 6 L56 8 L62 10 L66 12 L68 14 L70 16 L68 18 L62 19 L56 20 L50 20 L48 16 L44 14 L28 14 L24 16 L22 20 L12 20 L10 20 L8 16 L6 20 Z" fill="rgba(255,255,255,0.15)"/>
-        <ellipse cx="10" cy="20" rx="4" ry="4" fill="rgba(255,255,255,0.6)"/>
-        <ellipse cx="54" cy="20" rx="4" ry="4" fill="rgba(255,255,255,0.6)"/>
-        <path d="M28 8 L38 7 L48 8 L48 12 L28 12 Z" fill="rgba(255,255,255,0.5)"/>
-        <path d="M58 12 L66 14 L62 16 Z" fill="rgba(232,0,45,0.8)"/>
-      </svg>
+      <img src="/logo.png" alt="GridFeed" class="logo-img" />
       <div class="logo-wrap">
         <div class="logo-text"><span class="grid">GRID</span><span class="feed">FEED</span></div>
         <div class="logo-tagline">Your Daily F1 Fix</div>
