@@ -104,7 +104,7 @@ export default async (req, context) => {
         await sb('content_drafts', 'POST', {
           title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
           tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
-          review_status: 'approved', source_context: { topic: topicText, web_search: true },
+          review_status: 'pending', source_context: { topic: topicText, web_search: true },
           priority_score: topic.priority || 5, generation_model: 'GridFeed Pipeline',
           race_id: topic.race_id || null,
         });

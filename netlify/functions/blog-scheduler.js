@@ -106,7 +106,7 @@ JSON only.`;
       await sb('content_drafts', 'POST', {
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
         tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
-        review_status: 'approved', source_context: { triggered_by: 'blog-scheduler', day: dow, web_search: true },
+        review_status: 'pending', source_context: { triggered_by: 'blog-scheduler', day: dow, web_search: true },
         generation_model: 'GridFeed Pipeline', race_id: nextRace?.id || null,
       });
       generated++;
