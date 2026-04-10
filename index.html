@@ -217,10 +217,11 @@ body.mo{overflow:hidden}
 .lap-bar{background:var(--border);height:3px;margin:0}.lap-fill{background:var(--accent);height:3px;transition:width 2s}
 .wx-strip{background:#161B27;border-bottom:1px solid var(--border);padding:6px 16px;display:flex;gap:14px;font-size:10px;color:var(--muted);overflow-x:auto;white-space:nowrap}
 .wx-strip .wv{color:var(--text);font-weight:600}
-.live-split{display:grid;grid-template-columns:1fr 220px;min-height:380px;border-bottom:1px solid var(--border)}
-@media(max-width:640px){.live-split{grid-template-columns:1fr;min-height:auto}.twr-pane{max-height:320px}}
+.live-split{display:grid;grid-template-columns:280px 1fr;min-height:380px;border-bottom:1px solid var(--border)}
+@media(max-width:768px){.live-split{grid-template-columns:1fr;min-height:auto}}
 .map-pane{position:relative;background:#0A0D12;overflow:hidden;min-height:300px}
-.twr-pane{background:#0E1117;border-left:1px solid var(--border);overflow-y:auto}
+.twr-pane{background:#0E1117;border-right:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:420px}
+@media(max-width:768px){.twr-pane{max-height:none;border-right:none}}
 .twr-hd{position:sticky;top:0;background:var(--header);padding:6px 8px;display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
 .twr-row{display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;padding:6px 8px;border-bottom:1px solid #1C2333;border-left:3px solid transparent;cursor:pointer;align-items:center;transition:background .1s}
 .twr-row:hover{background:rgba(255,255,255,.02)}
@@ -228,7 +229,7 @@ body.mo{overflow:hidden}
 .twr-row.fl .tr-lt{color:#B47FFF}
 .tr-pos{font-size:10px;font-weight:900;color:var(--muted)}.tr-p1{color:#F5A623}.tr-p2{color:#B0B0B0}.tr-p3{color:#CD7F32}
 .tr-bar{width:3px;height:22px;border-radius:2px}
-.tr-nm{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden}
+.tr-nm{font-family:var(--head);font-size:12px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden}
 .tr-ty{width:16px;height:16px;border-radius:50%;font-size:7px;font-weight:900;display:flex;align-items:center;justify-content:center}
 .tr-gp{font-size:9px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
 .tr-lt{font-size:9px;text-align:right;font-variant-numeric:tabular-nums}
@@ -343,7 +344,12 @@ body.mo{overflow:hidden}
     <div class="lap-bar"><div class="lap-fill" id="lapFill" style="width:0%"></div></div>
     <div class="wx-strip" id="wxStrip"><span>Track <span class="wv" id="wxT">—</span></span><span>Air <span class="wv" id="wxA">—</span></span><span>Humidity <span class="wv" id="wxH">—</span></span><span>Rain <span class="wv" id="wxR">—</span></span></div>
     <div class="live-split">
-      <!-- MAP -->
+      <!-- TOWER (left on desktop) -->
+      <div class="twr-pane" id="twrPane">
+        <div class="twr-hd"><span>P</span><span></span><span>Driver</span><span>T</span><span style="text-align:right">Gap</span><span style="text-align:right">Lap</span><span></span></div>
+        <div id="twrRows"></div>
+      </div>
+      <!-- MAP (right on desktop) -->
       <div class="map-pane" id="mapPane">
         <svg id="lmSvg" viewBox="0 0 600 460" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
           <rect width="600" height="460" fill="#0A0D12"/>
@@ -358,12 +364,6 @@ body.mo{overflow:hidden}
           <div class="dc-r"><span class="dc-l">Pit Stops</span><span class="dc-v" id="dcP"></span></div>
           <div class="dc-tyre"><div class="dc-tl" id="dcTL"></div><div class="dc-tb"><div class="dc-tf" id="dcTF"></div></div></div>
         </div>
-      </div>
-      <button class="map-toggle-btn" onclick="toggleMap()"><span class="toggle-arrow">⌃</span><span class="toggle-label">Hide Map</span></button>
-      <!-- TOWER -->
-      <div class="twr-pane" id="twrPane">
-        <div class="twr-hd"><span>P</span><span></span><span>Driver</span><span>T</span><span style="text-align:right">Gap</span><span style="text-align:right">Lap</span><span></span></div>
-        <div id="twrRows"></div>
       </div>
     </div>
     <div class="rc-sec"><div class="rc-title">Race Control</div><div id="rcFeed"></div></div>
@@ -1008,7 +1008,7 @@ function renderRaceContent(){
 
     const sessTabs=orderedSess.map(s=>`<div class="stab${S._raceSess===s?' act':''}" onclick="S._raceSess='${s}';renderRaceContent()" style="cursor:pointer">${sessNames[s]||s}</div>`).join('');
 
-    const res=activeResults.map((r,i)=>{const isDnf=r.p==='DNF';return`<div class="twr-row" style="grid-template-columns:28px 6px 1fr auto;${isDnf?'opacity:0.4':''}"><div class="tr-pos${!isDnf&&i===0?' tr-p1':!isDnf&&i===1?' tr-p2':!isDnf&&i===2?' tr-p3':''}" style="${isDnf?'color:var(--accent);font-size:8px':''}">${isDnf?'DNF':'P'+r.p}</div><div class="tr-bar" style="background:${r.tc}"></div><div class="tr-nm" style="font-size:12px">${r.d} <span style="font-weight:400;color:var(--muted);font-size:10px">${r.t}</span></div><div class="tr-gp" style="font-size:10px">${r.g}</div></div>`}).join('');
+    const res=activeResults.map((r,i)=>{const isDnf=r.p==='DNF';return`<div class="twr-row" style="grid-template-columns:32px 6px 1fr auto;${isDnf?'opacity:0.4':''}"><div class="tr-pos${!isDnf&&i===0?' tr-p1':!isDnf&&i===1?' tr-p2':!isDnf&&i===2?' tr-p3':''}" style="${isDnf?'color:var(--accent);font-size:9px':''}">${isDnf?'DNF':'P'+r.p}</div><div class="tr-bar" style="background:${r.tc}"></div><div class="tr-nm">${r.d} <span style="font-weight:400;color:rgba(255,255,255,.4);font-size:10px;font-family:var(--font)">${r.t}</span></div><div class="tr-gp" style="font-size:10px">${r.g}</div></div>`}).join('');
     const rcHtml=rd.rc.map(m=>{let cls='rc-msg';if(m.includes('Safety')||m.includes('\ud83d\udfe1'))cls+=' rc-sc';else if(m.includes('Fastest')||m.includes('\ud83d\udfe3'))cls+=' rc-fl';else if(m.includes('Overtake')||m.includes('\u2705'))cls+=' rc-ot';return`<div class="${cls}" style="font-size:11px;padding:6px 10px;margin-bottom:4px">${m}</div>`}).join('');
     const stratHtml=rd.strats.map(s=>{const blocks=s.s.map((st,i)=>{const bg=TYC[st.c]||'#888';const fg=TYT[st.c]||'#fff';const w=Math.max(st.l/rd.laps*100,5);return`<div class="st-blk" style="width:${w.toFixed(0)}%;background:${bg};color:${fg}">${st.c}${st.l}</div>`}).join('');return`<div class="st-row"><div class="st-nm">${s.d}</div><div class="st-trk">${blocks}</div></div>`}).join('');
 
@@ -1027,7 +1027,7 @@ function renderRaceContent(){
       ${rd.sprint?`<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> ${rd.sprint}</div>`:''}
       ${mapSvg}
       <button class="map-toggle-btn${S._mapVis===false?' collapsed':''}" onclick="toggleMap()"><span class="toggle-arrow">\u2303</span><span class="toggle-label">${S._mapVis===false?'Show Map':'Hide Map'}</span></button>
-      <div style="background:#0E1117;max-height:480px;overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="padding:0">${res}</div></div>
+      <div style="background:#0E1117;max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="padding:0">${res}</div></div>
       <div class="rc-sec"><div class="rc-title">Key Moments</div>${rcHtml}</div>
       <div class="strat-sec"><div class="strat-title">Tyre Strategy</div>${stratHtml}</div>
     `;
