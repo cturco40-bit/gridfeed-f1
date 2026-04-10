@@ -183,7 +183,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .restore-btn:hover{background:rgba(245,166,35,.1)}
 
 /* ═══ TOAST ═══ */
-.toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-container{position:fixed;bottom:80px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{
   padding:12px 20px;border-radius:6px;font-size:13px;font-weight:500;
   background:var(--card);border:1px solid var(--border);color:var(--text);
@@ -198,12 +198,41 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .skeleton{height:14px;background:var(--border);border-radius:3px;animation:skel 1.2s infinite}
 @keyframes skel{0%,100%{opacity:.4}50%{opacity:.8}}
 
+/* ═══ MOBILE BOTTOM NAV ═══ */
+.mobile-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:var(--surface);border-top:1px solid var(--border);
+  padding:6px 0 env(safe-area-inset-bottom,6px);
+}
+.mobile-nav-inner{display:flex;justify-content:space-around}
+.mob-tab{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--muted);padding:6px 4px;border-radius:6px;min-width:56px;
+  position:relative;
+}
+.mob-tab.active{color:var(--accent)}
+.mob-tab .mob-icon{font-size:18px;line-height:1}
+.mob-badge{
+  position:absolute;top:0;right:6px;min-width:16px;height:16px;
+  font-size:9px;font-weight:700;line-height:16px;text-align:center;
+  background:var(--accent);color:#fff;border-radius:8px;padding:0 4px;
+}
+.mob-badge:empty{display:none}
+
 /* ═══ MOBILE ═══ */
 @media(max-width:768px){
   .admin-sidebar{display:none}
-  .admin-main{padding:16px}
+  .admin-main{padding:12px 12px 80px}
   .editor-grid{grid-template-columns:1fr}
   .hdr-center,.hdr-pills{display:none}
+  .mobile-nav{display:block}
+  .admin-header{padding:0 12px}
+  .hdr-logo{font-size:16px}
+  .admin-layout{height:calc(100vh - 56px)}
+  /* Make sidebar list items render in main panel on mobile */
+  .mob-list{padding:0}
+  .mob-list .sidebar-item{background:var(--card);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;padding:12px}
 }
 </style>
 </head>
@@ -251,6 +280,17 @@ input:focus,textarea:focus{border-color:var(--accent)}
 </div>
 
 <!-- TOASTS -->
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <div class="mobile-nav-inner">
+    <button class="mob-tab active" onclick="mobSwitch('articles',this)"><span class="mob-icon">&#128196;</span>Drafts<span class="mob-badge" id="mobBadgeArticles"></span></button>
+    <button class="mob-tab" onclick="mobSwitch('tweets',this)"><span class="mob-icon">&#128038;</span>Tweets<span class="mob-badge" id="mobBadgeTweets"></span></button>
+    <button class="mob-tab" onclick="mobSwitch('approved',this)"><span class="mob-icon">&#9989;</span>Done</button>
+    <button class="mob-tab" onclick="mobSwitch('rejected',this)"><span class="mob-icon">&#10060;</span>Rejected</button>
+    <button class="mob-tab" onclick="mobSwitch('queue',this)"><span class="mob-icon">&#9881;</span>Queue</button>
+  </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -351,6 +391,9 @@ function renderHeader(){
 
   document.getElementById('badgeArticles').textContent=pendingDrafts||'';
   document.getElementById('badgeTweets').textContent=pendingTweets||'';
+  // Mobile badges
+  const ma=document.getElementById('mobBadgeArticles');if(ma)ma.textContent=pendingDrafts||'';
+  const mt=document.getElementById('mobBadgeTweets');if(mt)mt.textContent=pendingTweets||'';
 }
 
 function getNextRaceInfo(){
@@ -372,7 +415,32 @@ function switchAdminTab(tab,btn){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   renderSidebar();
-  renderMainDefault();
+  // On mobile, render list in main panel
+  if(window.innerWidth<=768) renderMobileList();
+  else renderMainDefault();
+}
+
+function mobSwitch(tab,btn){
+  activeTab=tab;selectedId=null;
+  document.querySelectorAll('.mob-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderSidebar();
+  renderMobileList();
+}
+
+function renderMobileList(){
+  const main=document.getElementById('mainPanel');
+  if(activeTab==='queue'){renderQueuePanel();return}
+  // Render sidebar content directly in main panel for mobile
+  const el=document.getElementById('sidebarList');
+  const items=el.innerHTML;
+  if(activeTab==='articles'||activeTab==='tweets'){
+    main.innerHTML='<div class="mob-list">'+items+'</div>';
+  }else if(activeTab==='approved'||activeTab==='rejected'){
+    main.innerHTML='<div class="mob-list">'+items+'</div>';
+  }else{
+    main.innerHTML='<div class="panel-empty">Select a tab</div>';
+  }
 }
 
 /* ═══ SIDEBAR ═══ */
