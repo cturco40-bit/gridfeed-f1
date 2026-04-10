@@ -894,6 +894,13 @@ const RACE_DATA={
     strats:[{d:'ANT',s:[{c:'M',l:21},{c:'M',l:32}]},{d:'PIA',s:[{c:'S',l:8},{c:'M',l:20},{c:'H',l:25}]},{d:'LEC',s:[{c:'M',l:22},{c:'H',l:31}]}]},
 };
 
+// Real circuit outlines from OpenF1 2024 GPS data
+const CIRCUITS={
+  1:[[-1161,-1366],[-2091,-482],[-3142,514],[-3671,1294],[-3575,2258],[-4095,3083],[-4905,3819],[-5933,4954],[-6630,5903],[-7209,6948],[-6982,7302],[-6575,7361],[-5955,7596],[-5825,8228],[-5923,8878],[-5810,9808],[-5252,10363],[-4428,10869],[-3362,11341],[-2623,11739],[-1958,11735],[-1111,11356],[-210,11123],[576,10478],[1124,8952],[1141,7958],[822,6660],[371,5490],[266,4536],[514,3290],[1422,1866],[2368,1048],[3154,810],[3884,866],[4691,391],[5459,-254],[6279,-1116],[6840,-2361],[7300,-3771],[7490,-4597],[7348,-5020],[6969,-5143],[6301,-5311],[5319,-5556],[4557,-5177],[4111,-4351],[3803,-3790],[3437,-3652],[3108,-4026],[2628,-4428],[1902,-4298],[1319,-3773],[629,-3096],[-277,-2208],[-931,-1584]],
+  2:[[9361,-2101],[9126,-1607],[9306,-1306],[9744,-1202],[10434,-889],[10521,-433],[10398,-167],[10519,229],[10407,577],[9940,667],[8815,701],[7640,731],[6631,753],[5627,779],[4434,821],[3408,857],[1894,909],[342,938],[-1068,981],[-2144,1080],[-2560,1000],[-2592,692],[-2167,374],[-1611,99],[-798,326],[125,622],[1360,392],[2557,-324],[3701,-1019],[4970,-1780],[4895,-2172],[4575,-2504],[4413,-3143],[4060,-3898],[3210,-4257],[2091,-4105],[1077,-3490],[32,-2863],[-996,-2738],[-1721,-3081],[-2517,-2829],[-3628,-2488],[-4372,-3104],[-4343,-3675],[-3989,-3880],[-3357,-3905],[-2471,-4044],[-1464,-4138],[-435,-4100],[958,-4115],[2153,-4487],[3475,-4781],[4724,-4725],[5831,-4428],[7425,-3866],[8557,-3352],[9407,-2872],[9678,-2488],[9632,-2352]],
+  3:[[-5921,-1069],[-6131,2],[-5920,965],[-5888,1607],[-6160,1566],[-6343,1291],[-6672,726],[-7464,-181],[-8372,-423],[-9418,-294],[-10430,120],[-11401,1160],[-11838,2157],[-12286,2743],[-12743,2833],[-13334,2713],[-13662,2378],[-13669,1930],[-13272,1361],[-12466,756],[-11686,276],[-10753,-201],[-9632,-629],[-8621,-970],[-7720,-1272],[-6598,-1649],[-5376,-2046],[-4504,-1829],[-3941,-1506],[-3603,-1247],[-3165,-842],[-2624,-310],[-2122,146],[-1782,231],[-1578,105],[-1439,33],[-1294,31],[-1086,140],[-870,332],[-351,489],[126,421],[510,274],[816,85],[1071,-138],[1448,-550],[1640,-774],[1871,-1044],[2152,-1373],[2403,-1666],[2653,-1958],[2851,-2189],[3177,-2571],[3464,-2906],[3525,-2977],[3819,-3322],[4405,-4012],[4960,-4664],[5898,-5799],[6022,-6555],[5578,-7263],[5053,-7253],[4409,-6423],[3762,-5595],[3255,-5439],[2573,-5214],[2221,-4391],[1776,-3811],[994,-3683],[305,-3310],[145,-2695],[388,-2070],[329,-1320],[-249,-929],[-1081,-706],[-2207,-908],[-2876,-1409],[-3488,-2214],[-4335,-2773],[-5268,-2859],[-5633,-2527],[-5709,-2044],[-5868,-1314]],
+};
+
 S.selRound=3;
 
 function initRaceBrowser(){
@@ -933,10 +940,29 @@ function renderRaceContent(){
     const rcHtml=rd.rc.map(m=>{let cls='rc-msg';if(m.includes('Safety')||m.includes('\ud83d\udfe1'))cls+=' rc-sc';else if(m.includes('Fastest')||m.includes('\ud83d\udfe3'))cls+=' rc-fl';else if(m.includes('Overtake')||m.includes('\u2705'))cls+=' rc-ot';return`<div class="${cls}" style="font-size:11px;padding:6px 10px;margin-bottom:4px">${m}</div>`}).join('');
     const stratHtml=rd.strats.map(s=>{const blocks=s.s.map((st,i)=>{const bg=TYC[st.c]||'#888';const fg=TYT[st.c]||'#fff';const w=Math.max(st.l/rd.laps*100,5);return`<div class="st-blk" style="width:${w.toFixed(0)}%;background:${bg};color:${fg}">${st.c}${st.l}</div>`}).join('');return`<div class="st-row"><div class="st-nm">${s.d}</div><div class="st-trk">${blocks}</div></div>`}).join('');
 
+    // Build circuit map SVG
+    const circ=CIRCUITS[S.selRound];
+    let mapSvg='';
+    if(circ){
+      const xs=circ.map(p=>p[0]),ys=circ.map(p=>p[1]);
+      const mnx=Math.min(...xs),mxx=Math.max(...xs),mny=Math.min(...ys),mxy=Math.max(...ys);
+      const rx=mxx-mnx||1,ry=mxy-mny||1,pad=30,sw=400,sh=260;
+      const sc=Math.min((sw-pad*2)/rx,(sh-pad*2)/ry),ox=(sw-rx*sc)/2,oy=(sh-ry*sc)/2;
+      const pts=circ.map(p=>{const sx=ox+(p[0]-mnx)*sc,sy=sh-oy-(p[1]-mny)*sc;return sx.toFixed(1)+','+sy.toFixed(1)});
+      const pathD='M '+pts.join(' L ')+' Z';
+      // Place finishers around the track
+      const dots=rd.results.slice(0,10).map((r,i)=>{const ci=Math.floor(i/10*circ.length);const p=circ[ci];
+        const sx=ox+(p[0]-mnx)*sc,sy=sh-oy-(p[1]-mny)*sc;
+        return`<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="6" fill="${r.tc}" stroke="#fff" stroke-width="1"/><text x="${sx.toFixed(1)}" y="${(sy+16).toFixed(1)}" text-anchor="middle" fill="rgba(255,255,255,.6)" font-size="7" font-weight="700" font-family="DM Sans">${r.d.split(' ').pop().slice(0,3).toUpperCase()}</text>`;
+      }).join('');
+      mapSvg=`<div style="background:#0A0D12;border-radius:8px;padding:8px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 ${sw} ${sh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${pathD}" fill="none" stroke="#1C2333" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><path d="${pathD}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>${dots}</svg><div style="text-align:center;font-size:9px;color:var(--muted);margin-top:4px">Final positions \u00b7 Live GPS tracking available during sessions</div></div>`;
+    }
+
     el.innerHTML=`
       <div class="sess-bar"><div style="font-weight:700;color:#fff">${rd.name} \u2014 Race Results</div><div style="color:var(--muted);font-size:10px">${rd.circuit} \u00b7 ${rd.date}</div></div>
       <div class="wx-strip"><span>${rd.wx}</span></div>
       ${rd.sprint?`<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> ${rd.sprint}</div>`:''}
+      ${mapSvg}
       <div style="background:#0E1117"><div style="padding:0">${res}</div></div>
       <div class="rc-sec"><div class="rc-title">Key Moments</div>${rcHtml}</div>
       <div class="strat-sec"><div class="strat-title">Tyre Strategy</div>${stratHtml}</div>
