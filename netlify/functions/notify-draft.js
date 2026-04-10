@@ -26,11 +26,11 @@ Excerpt: ${(body.excerpt || '').slice(0, 200)}
 
 Review: https://gridfeed.co/gf-admin-drafts`;
 
-    const transporter = createTransport({ host: 'smtp-mail.outlook.com', port: 587, secure: false, tls: { ciphers: 'SSLv3' }, auth: { user: smtpUser, pass: smtpPass } });
+    const transporter = createTransport({ host: 'smtp-mail.outlook.com', port: 587, secure: false, tls: { ciphers: 'SSLv3', rejectUnauthorized: false }, auth: { user: smtpUser, pass: smtpPass }, connectionTimeout: 8000, greetingTimeout: 8000, socketTimeout: 8000 });
 
     await Promise.race([
       transporter.sendMail({ from: `GridFeed <${smtpUser}>`, to: notifyEmail, subject, text }),
-      new Promise((_, r) => setTimeout(() => r(new Error('SMTP timeout')), 5000)),
+      new Promise((_, r) => setTimeout(() => r(new Error('SMTP timeout')), 10000)),
     ]);
 
     await logSync('notify-draft', 'success', 1, `Notified: ${subject}`, Date.now() - start);
