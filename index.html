@@ -495,7 +495,7 @@ function go(t){
   history.replaceState({tab:t},'','?tab='+t);
   if(t==='results')initRes();if(t==='news')initNews();if(t==='picks')initPicks();
   if(t==='standings')initSt();if(t==='schedule')initSched();
-  try{navigator.vibrate(10)}catch(e){}
+  if(S._tapped)try{navigator.vibrate(10)}catch(e){}
 }
 document.querySelectorAll('.tn,.bn').forEach(b=>b.addEventListener('click',()=>go(b.dataset.t)));
 
@@ -1168,6 +1168,8 @@ function selDrvNum(num){
   }
   renderTwr();renderMap();
 }
+
+document.addEventListener('pointerdown',()=>{S._tapped=true},{once:true});
 
 /* ═══ BOOT ═══ */
 detectNR();initHome();initRoute();checkPush();checkLive();
