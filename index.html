@@ -940,7 +940,7 @@ function renderRaceContent(){
     const rcHtml=rd.rc.map(m=>{let cls='rc-msg';if(m.includes('Safety')||m.includes('\ud83d\udfe1'))cls+=' rc-sc';else if(m.includes('Fastest')||m.includes('\ud83d\udfe3'))cls+=' rc-fl';else if(m.includes('Overtake')||m.includes('\u2705'))cls+=' rc-ot';return`<div class="${cls}" style="font-size:11px;padding:6px 10px;margin-bottom:4px">${m}</div>`}).join('');
     const stratHtml=rd.strats.map(s=>{const blocks=s.s.map((st,i)=>{const bg=TYC[st.c]||'#888';const fg=TYT[st.c]||'#fff';const w=Math.max(st.l/rd.laps*100,5);return`<div class="st-blk" style="width:${w.toFixed(0)}%;background:${bg};color:${fg}">${st.c}${st.l}</div>`}).join('');return`<div class="st-row"><div class="st-nm">${s.d}</div><div class="st-trk">${blocks}</div></div>`}).join('');
 
-    // Build circuit map SVG
+    // Build clean circuit map preview (no car dots — show what live looks like)
     const circ=CIRCUITS[S.selRound];
     let mapSvg='';
     if(circ){
@@ -950,12 +950,9 @@ function renderRaceContent(){
       const sc=Math.min((sw-pad*2)/rx,(sh-pad*2)/ry),ox=(sw-rx*sc)/2,oy=(sh-ry*sc)/2;
       const pts=circ.map(p=>{const sx=ox+(p[0]-mnx)*sc,sy=sh-oy-(p[1]-mny)*sc;return sx.toFixed(1)+','+sy.toFixed(1)});
       const pathD='M '+pts.join(' L ')+' Z';
-      // Place finishers around the track
-      const dots=rd.results.slice(0,10).map((r,i)=>{const ci=Math.floor(i/10*circ.length);const p=circ[ci];
-        const sx=ox+(p[0]-mnx)*sc,sy=sh-oy-(p[1]-mny)*sc;
-        return`<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="6" fill="${r.tc}" stroke="#fff" stroke-width="1"/><text x="${sx.toFixed(1)}" y="${(sy+16).toFixed(1)}" text-anchor="middle" fill="rgba(255,255,255,.6)" font-size="7" font-weight="700" font-family="DM Sans">${r.d.split(' ').pop().slice(0,3).toUpperCase()}</text>`;
-      }).join('');
-      mapSvg=`<div style="background:#0A0D12;border-radius:8px;padding:8px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 ${sw} ${sh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${pathD}" fill="none" stroke="#1C2333" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><path d="${pathD}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>${dots}</svg><div style="text-align:center;font-size:9px;color:var(--muted);margin-top:4px">Final positions \u00b7 Live GPS tracking available during sessions</div></div>`;
+      // Start/finish marker
+      const sf=circ[0];const sfx=ox+(sf[0]-mnx)*sc,sfy=sh-oy-(sf[1]-mny)*sc;
+      mapSvg=`<div style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 ${sw} ${sh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${pathD}" fill="none" stroke="#1C2333" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="${pathD}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/><circle cx="${sfx.toFixed(1)}" cy="${sfy.toFixed(1)}" r="4" fill="#E8002D"/><text x="${(sfx+8).toFixed(1)}" y="${(sfy+3).toFixed(1)}" fill="#E8002D" font-size="7" font-weight="700" font-family="DM Sans">S/F</text></svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">During live sessions, 22 cars track in real time on this map</div></div>`;
     }
 
     el.innerHTML=`
