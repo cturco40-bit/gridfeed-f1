@@ -10,7 +10,10 @@ export default async (req, context) => {
     }
 
     const res = await fetchWT(`https://api.openf1.org/v1/weather?session_key=${session.session_key}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      await logSync('fetch-weather', 'success', 0, `No weather available (HTTP ${res.status}) for session ${session.session_key}`, Date.now() - start);
+      return json({ ok: true, records: 0, reason: `HTTP ${res.status}` });
+    }
     const data = await res.json();
     if (!data?.length) {
       await logSync('fetch-weather', 'success', 0, 'No weather data', Date.now() - start);

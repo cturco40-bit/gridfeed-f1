@@ -11,9 +11,10 @@ export default async (req, context) => {
     }
 
     const sessionType = SESSION_TYPE_MAP[session.session_name] || 'race';
-    const raceId = await matchRaceId(session.meeting_name || session.circuit_short_name || '');
+    const meetingLabel = session.meeting_name || session.circuit_short_name || '';
+    const raceId = await matchRaceId(meetingLabel);
     if (!raceId) {
-      await logSync('fetch-timing', 'success', 0, `No race match for "${session.meeting_name}"`, Date.now() - start);
+      await logSync('fetch-timing', 'success', 0, `No race match for "${meetingLabel}"`, Date.now() - start);
       return json({ ok: true, totalRecords: 0 });
     }
 
@@ -86,7 +87,7 @@ export default async (req, context) => {
       await sb(`races?id=eq.${raceId}`, 'PATCH', { status: 'completed', winner_name: winner?.driver_name, winner_team: winner?.team_name });
     }
 
-    await logSync('fetch-timing', 'success', totalRecords, `${session.meeting_name} ${session.session_name}: ${totalRecords} positions${session.isLive ? ' [LIVE]' : ''}`, Date.now() - start);
+    await logSync('fetch-timing', 'success', totalRecords, `${meetingLabel} ${session.session_name}: ${totalRecords} positions${session.isLive ? ' [LIVE]' : ''}`, Date.now() - start);
     return json({ ok: true, totalRecords, session: session.session_name, live: session.isLive });
   } catch (err) {
     await logSync('fetch-timing', 'error', 0, err.message, Date.now() - start, err.stack);
