@@ -297,6 +297,7 @@ function showApp(){
   const app=document.getElementById('appContainer');
   app.style.display='flex';
   refreshAll();
+  checkPushStatus();
   setInterval(()=>{if(!isEditing)refreshAll()},60000);
 }
 
@@ -793,21 +794,35 @@ async function registerPush(){
     toast('Push not supported on this browser','error');return;
   }
   try{
-    const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/gf-admin-drafts'});
+    const reg=await navigator.serviceWorker.register('/sw.js');
     let sub=await reg.pushManager.getSubscription();
     if(!sub){
       const perm=await Notification.requestPermission();
       if(perm!=='granted'){toast('Permission denied','error');return}
       sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
+      toast('Push notifications enabled','success');
     }
-    await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
-    toast('Push notifications enabled','success');
     const btn=document.getElementById('pushBtn');
     if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}
   }catch(e){
     console.error('[Push]',e);
     toast('Push setup failed: '+e.message,'error');
   }
+}
+
+// Auto-check push status on page load (after login)
+async function checkPushStatus(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  try{
+    const reg=await navigator.serviceWorker.getRegistration('/sw.js');
+    if(!reg)return;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      const btn=document.getElementById('pushBtn');
+      if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}
+    }
+  }catch(e){}
 }
 </script>
 </body>
