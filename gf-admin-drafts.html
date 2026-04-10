@@ -4,8 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>GridFeed Admin — Draft Review</title>
+<link rel="icon" type="image/png" href="/favicon.png" sizes="32x32"/>
+<link rel="shortcut icon" href="/favicon.ico"/>
 <link rel="manifest" href="/admin-manifest.json"/>
 <meta name="theme-color" content="#1B1F2A"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
@@ -242,8 +245,10 @@ input:focus,textarea:focus{border-color:var(--accent)}
 <div id="loginScreen">
   <div class="login-box">
     <div class="login-logo"><span class="g">GRID</span><span class="f">FEED</span></div>
-    <input type="password" class="login-input" id="loginPw" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"/>
-    <button class="login-btn" onclick="doLogin()">Access Drafts</button>
+    <form onsubmit="event.preventDefault();doLogin();" autocomplete="off">
+    <input type="password" class="login-input" id="loginPw" placeholder="Password" autocomplete="current-password"/>
+    <button type="submit" class="login-btn">Access Drafts</button>
+    </form>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
