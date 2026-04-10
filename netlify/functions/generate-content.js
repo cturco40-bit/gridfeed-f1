@@ -80,13 +80,27 @@ export default async (req, context) => {
             tools: [{ type: 'web_search_20250305', name: 'web_search' }],
             system: systemPrompt, messages: [{ role: 'user', content: userPrompt }],
           }),
-        }, 50000);
+        }, 55000);
 
-        const rJson = await response.json();
+        let rJson = await response.json();
         let parsed;
         try { parsed = parseAIResponse(rJson); } catch {
           const anyText = (rJson.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
           parsed = { title: topicText, body: anyText || '', excerpt: (anyText || '').slice(0, 150), tags: ['ANALYSIS'], content_type: contentType };
+        }
+
+        // If web search returned empty body, retry WITHOUT web search
+        if (!parsed.body || parsed.body.trim().split(/\s+/).length < 50) {
+          const retryRes = await fetchWT('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2048, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+          }, 30000);
+          rJson = await retryRes.json();
+          try { parsed = parseAIResponse(rJson); } catch {
+            const t2 = (rJson.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+            parsed = { title: topicText, body: t2 || '', excerpt: (t2 || '').slice(0, 150), tags: ['ANALYSIS'], content_type: contentType };
+          }
         }
 
         parsed.title = fixEncoding(parsed.title);
