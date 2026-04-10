@@ -52,6 +52,16 @@ export async function getLiveRace() {
   return rows[0] || null;
 }
 
+// Cancelled circuits — filter out from all OpenF1 session queries
+const CANCELLED_CIRCUITS = ['sakhir', 'bahrain', 'jeddah', 'saudi'];
+
+function isCancelledCircuit(session) {
+  const loc = (session.circuit_short_name || session.location || session.meeting_name || '').toLowerCase();
+  return CANCELLED_CIRCUITS.some(c => loc.includes(c));
+}
+
+export { isCancelledCircuit };
+
 export async function getLatestSession() {
   try {
     const res = await fetchWT('https://api.openf1.org/v1/sessions?year=2026');
@@ -59,14 +69,16 @@ export async function getLatestSession() {
     const sessions = await res.json();
     if (!sessions?.length) return null;
     const now = Date.now();
+    // Filter out cancelled circuits
+    const valid = sessions.filter(s => !isCancelledCircuit(s));
     // Prefer live session
-    const live = sessions.find(s => {
+    const live = valid.find(s => {
       const st = new Date(s.date_start).getTime(), en = s.date_end ? new Date(s.date_end).getTime() : Infinity;
       return st <= now && now <= en;
     });
     if (live) return { ...live, isLive: true };
     // Most recent ended
-    const ended = sessions.filter(s => s.date_end && new Date(s.date_end).getTime() < now).sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
+    const ended = valid.filter(s => s.date_end && new Date(s.date_end).getTime() < now).sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
     return ended[0] ? { ...ended[0], isLive: false } : null;
   } catch { return null; }
 }

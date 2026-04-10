@@ -26,7 +26,7 @@ Excerpt: ${(body.excerpt || '').slice(0, 200)}
 
 Review: https://gridfeed.co/gf-admin-drafts`;
 
-    const transporter = createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: smtpUser, pass: smtpPass } });
+    const transporter = createTransport({ host: 'smtp-mail.outlook.com', port: 587, secure: false, tls: { ciphers: 'SSLv3' }, auth: { user: smtpUser, pass: smtpPass } });
 
     await Promise.race([
       transporter.sendMail({ from: `GridFeed <${smtpUser}>`, to: notifyEmail, subject, text }),

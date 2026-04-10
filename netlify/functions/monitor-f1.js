@@ -62,12 +62,15 @@ export default async (req, context) => {
   const start = Date.now();
   let topicsCreated = 0;
   try {
-    // Daily cap check
-    const recent = await sb("content_drafts?select=id&created_at=gt." + new Date(Date.now() - 864e5).toISOString());
-    const cap = 8; // 15 on race weekends — simplified
-    if (recent.length >= cap) {
-      await logSync('monitor-f1', 'success', 0, `Daily cap reached (${recent.length}/${cap})`, Date.now() - start);
-      return json({ ok: true, skipped: 'Daily cap reached' });
+    // Daily cap check — count drafts created today only
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const liveRaces = await sb('races?status=eq.in_progress&select=id');
+    const isRaceWeekend = liveRaces.length > 0;
+    const DAILY_CAP = isRaceWeekend ? 15 : 8;
+    const todayDrafts = await sb('content_drafts?select=id&created_at=gte.' + todayStart.toISOString());
+    if (todayDrafts.length >= DAILY_CAP) {
+      await logSync('monitor-f1', 'success', 0, `Daily cap reached (${todayDrafts.length}/${DAILY_CAP})`, Date.now() - start);
+      return json({ ok: true, skipped: 'Daily cap reached', count: todayDrafts.length, cap: DAILY_CAP });
     }
 
     // Fetch all RSS in parallel (title+link only)
@@ -132,6 +135,12 @@ export default async (req, context) => {
         try { fetchWT('/.netlify/functions/generate-content', { method: 'POST' }, 5000).catch(() => {}); } catch {}
       }
     }
+
+    // Persist state
+    const stateData = { timestamp: new Date().toISOString(), topics_created: topicsCreated, sources_scanned: headlines.length };
+    const existing = await sb('monitor_state?key=eq.last_run&limit=1');
+    if (existing.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
+    else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
     await logSync('monitor-f1', 'success', topicsCreated, `Scanned ${headlines.length} headlines, created ${topicsCreated} topics`, Date.now() - start);
     return json({ ok: true, headlines: headlines.length, topicsCreated });
