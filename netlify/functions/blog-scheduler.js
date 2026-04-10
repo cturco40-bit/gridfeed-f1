@@ -42,9 +42,7 @@ export default async (req, context) => {
     const types = WEEKLY[dow] || ['analysis'];
 
     for (const contentType of types) {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const existing = await sb(`content_drafts?content_type=eq.${contentType}&created_at=gte.${todayStr}T00:00:00Z&limit=1`);
-      if (existing.length) continue;
+      // No skip checks — generate fresh content every run
 
       // picksContext FIRST
       const picks = await sb('betting_picks?status=eq.active&order=created_at.desc&limit=10');
@@ -108,7 +106,7 @@ JSON only.`;
       await sb('content_drafts', 'POST', {
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
         tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
-        review_status: 'pending', source_context: { triggered_by: 'blog-scheduler', day: dow, web_search: true },
+        review_status: 'approved', source_context: { triggered_by: 'blog-scheduler', day: dow, web_search: true },
         generation_model: 'GridFeed Pipeline', race_id: nextRace?.id || null,
       });
       generated++;

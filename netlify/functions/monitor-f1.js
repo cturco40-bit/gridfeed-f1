@@ -62,16 +62,7 @@ export default async (req, context) => {
   const start = Date.now();
   let topicsCreated = 0;
   try {
-    // Daily cap check — count drafts created today only
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const liveRaces = await sb('races?status=eq.in_progress&select=id');
-    const isRaceWeekend = liveRaces.length > 0;
-    const DAILY_CAP = isRaceWeekend ? 15 : 8;
-    const todayDrafts = await sb('content_drafts?select=id&created_at=gte.' + todayStart.toISOString());
-    if (todayDrafts.length >= DAILY_CAP) {
-      await logSync('monitor-f1', 'success', 0, `Daily cap reached (${todayDrafts.length}/${DAILY_CAP})`, Date.now() - start);
-      return json({ ok: true, skipped: 'Daily cap reached', count: todayDrafts.length, cap: DAILY_CAP });
-    }
+    // No daily cap — generate as much content as possible
 
     // Fetch all RSS in parallel (title+link only)
     const headlines = [];
@@ -110,11 +101,11 @@ export default async (req, context) => {
     for (const [sig, group] of Object.entries(sigGroups)) {
       if (!sig) continue;
       // Dedup check
-      const existing = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 48 * 36e5).toISOString()}&limit=1`);
+      const existing = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}&limit=1`);
       if (existing.length) continue;
 
       const score = scoreStory(group.titles[0], group.regions.size);
-      if (score < 7) continue;
+      if (score < 5) continue;
 
       // Insert signature
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] });
