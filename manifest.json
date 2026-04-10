@@ -1,0 +1,20 @@
+{
+  "name": "GridFeed — F1",
+  "short_name": "GridFeed",
+  "description": "Live F1 timing, picks, news. Free.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1B1F2A",
+  "theme_color": "#1B1F2A",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["sports", "news"],
+  "shortcuts": [
+    { "name": "Live Timing", "url": "/?tab=results", "description": "Live race timing" },
+    { "name": "Picks", "url": "/?tab=picks", "description": "Race betting picks" },
+    { "name": "News", "url": "/?tab=news", "description": "F1 news" }
+  ]
+}
