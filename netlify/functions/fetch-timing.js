@@ -79,10 +79,14 @@ export default async (req, context) => {
       totalRecords = rows.length;
     }
 
-    // Set race status
-    if (session.isLive) {
+    // Set race status — only if the race_date in our DB is actually past
+    const raceRow = await sb(`races?id=eq.${raceId}&select=race_date,status`);
+    const raceDate = raceRow[0]?.race_date ? new Date(raceRow[0].race_date) : null;
+    const raceDatePast = raceDate && raceDate < new Date();
+
+    if (session.isLive && raceDatePast) {
       await sb(`races?id=eq.${raceId}`, 'PATCH', { status: 'in_progress' });
-    } else if (sessionType === 'race' && session.date_end && new Date(session.date_end) < new Date()) {
+    } else if (sessionType === 'race' && raceDatePast && session.date_end && new Date(session.date_end) < new Date()) {
       const winner = rows.find(r => r.position === 1);
       await sb(`races?id=eq.${raceId}`, 'PATCH', { status: 'completed', winner_name: winner?.driver_name, winner_team: winner?.team_name });
     }

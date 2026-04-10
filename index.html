@@ -865,43 +865,23 @@ document.getElementById('articleModal').addEventListener('click',e=>{if(e.target
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeArticleModal()});
 
 /* ═══════ RESULTS ═══════ */
+function fb(d,t,tc,g){return{pos:0,driver:d,team:t,teamColor:tc,gap:g}}
+function fbGrid(arr){return arr.map((r,i)=>({...r,pos:i+1}))}
+const M='#27F4D2',F='#E8002D',ML='#FF8000',A='#FF87BC',W='#64C4FF',RB='#3671C6',AM='#229971',H='#B6BABD',TB='#6692FF',AU='#52E252',CA='#CC0000';
+
 const FALLBACK_RESULTS={
-  'R1 Australian Grand Prix':{circuit:'Albert Park Circuit',date:'Mar 8',race:[
-    {pos:1,driver:'George Russell',team:'Mercedes',teamColor:'#27F4D2',gap:'Winner'},
-    {pos:2,driver:'Kimi Antonelli',team:'Mercedes',teamColor:'#27F4D2',gap:'+3.2s'},
-    {pos:3,driver:'Charles Leclerc',team:'Ferrari',teamColor:'#E8002D',gap:'+8.1s'},
-    {pos:4,driver:'Lewis Hamilton',team:'Ferrari',teamColor:'#E8002D',gap:'+12.4s'},
-    {pos:5,driver:'Lando Norris',team:'McLaren',teamColor:'#FF8000',gap:'+18.7s'},
-    {pos:6,driver:'Pierre Gasly',team:'Alpine',teamColor:'#FF87BC',gap:'+22.1s'},
-    {pos:7,driver:'Carlos Sainz',team:'Williams',teamColor:'#64C4FF',gap:'+28.3s'},
-    {pos:8,driver:'Max Verstappen',team:'Red Bull Racing',teamColor:'#3671C6',gap:'+31.5s'},
-    {pos:9,driver:'Alexander Albon',team:'Williams',teamColor:'#64C4FF',gap:'+35.2s'},
-    {pos:10,driver:'Esteban Ocon',team:'Haas',teamColor:'#B6BABD',gap:'+38.9s'},
-  ]},
-  'R2 Chinese Grand Prix':{circuit:'Shanghai International Circuit',date:'Mar 15',race:[
-    {pos:1,driver:'Kimi Antonelli',team:'Mercedes',teamColor:'#27F4D2',gap:'Winner'},
-    {pos:2,driver:'George Russell',team:'Mercedes',teamColor:'#27F4D2',gap:'+2.8s'},
-    {pos:3,driver:'Lewis Hamilton',team:'Ferrari',teamColor:'#E8002D',gap:'+7.6s'},
-    {pos:4,driver:'Charles Leclerc',team:'Ferrari',teamColor:'#E8002D',gap:'+9.1s'},
-    {pos:5,driver:'Lando Norris',team:'McLaren',teamColor:'#FF8000',gap:'+14.3s'},
-    {pos:6,driver:'Pierre Gasly',team:'Alpine',teamColor:'#FF87BC',gap:'+19.8s'},
-    {pos:7,driver:'Fernando Alonso',team:'Aston Martin',teamColor:'#229971',gap:'+24.1s'},
-    {pos:8,driver:'Max Verstappen',team:'Red Bull Racing',teamColor:'#3671C6',gap:'+27.4s'},
-    {pos:9,driver:'Liam Lawson',team:'Racing Bulls',teamColor:'#6692FF',gap:'+31.0s'},
-    {pos:10,driver:'Oliver Bearman',team:'Haas',teamColor:'#B6BABD',gap:'+33.5s'},
-  ]},
-  'R3 Japanese Grand Prix':{circuit:'Suzuka Circuit',date:'Mar 29',race:[
-    {pos:1,driver:'Kimi Antonelli',team:'Mercedes',teamColor:'#27F4D2',gap:'Winner'},
-    {pos:2,driver:'Oscar Piastri',team:'McLaren',teamColor:'#FF8000',gap:'+4.1s'},
-    {pos:3,driver:'Charles Leclerc',team:'Ferrari',teamColor:'#E8002D',gap:'+6.7s'},
-    {pos:4,driver:'George Russell',team:'Mercedes',teamColor:'#27F4D2',gap:'+9.2s'},
-    {pos:5,driver:'Lando Norris',team:'McLaren',teamColor:'#FF8000',gap:'+13.8s'},
-    {pos:6,driver:'Lewis Hamilton',team:'Ferrari',teamColor:'#E8002D',gap:'+17.3s'},
-    {pos:7,driver:'Pierre Gasly',team:'Alpine',teamColor:'#FF87BC',gap:'+21.6s'},
-    {pos:8,driver:'Max Verstappen',team:'Red Bull Racing',teamColor:'#3671C6',gap:'+25.0s'},
-    {pos:9,driver:'Liam Lawson',team:'Racing Bulls',teamColor:'#6692FF',gap:'+28.4s'},
-    {pos:10,driver:'Oliver Bearman',team:'Haas',teamColor:'#B6BABD',gap:'+31.8s'},
-  ]},
+  'R1 Australian Grand Prix':{circuit:'Albert Park Circuit',date:'Mar 8',sessions:{
+    qualifying:fbGrid([fb('George Russell','Mercedes',M,'1:15.421'),fb('Kimi Antonelli','Mercedes',M,'+0.112s'),fb('Charles Leclerc','Ferrari',F,'+0.287s'),fb('Lewis Hamilton','Ferrari',F,'+0.334s'),fb('Lando Norris','McLaren',ML,'+0.498s'),fb('Pierre Gasly','Alpine',A,'+0.612s'),fb('Max Verstappen','Red Bull Racing',RB,'+0.701s'),fb('Carlos Sainz','Williams',W,'+0.823s'),fb('Oliver Bearman','Haas',H,'+0.891s'),fb('Alexander Albon','Williams',W,'+0.945s')]),
+    race:fbGrid([fb('George Russell','Mercedes',M,'Winner'),fb('Kimi Antonelli','Mercedes',M,'+3.2s'),fb('Charles Leclerc','Ferrari',F,'+8.1s'),fb('Lewis Hamilton','Ferrari',F,'+12.4s'),fb('Lando Norris','McLaren',ML,'+18.7s'),fb('Pierre Gasly','Alpine',A,'+22.1s'),fb('Carlos Sainz','Williams',W,'+28.3s'),fb('Max Verstappen','Red Bull Racing',RB,'+31.5s'),fb('Alexander Albon','Williams',W,'+35.2s'),fb('Esteban Ocon','Haas',H,'+38.9s'),fb('Oliver Bearman','Haas',H,'+41.2s'),fb('Fernando Alonso','Aston Martin',AM,'+44.8s'),fb('Liam Lawson','Racing Bulls',TB,'+47.3s'),fb('Arvid Lindblad','Racing Bulls',TB,'+49.1s'),fb('Jack Doohan','Alpine',A,'+52.6s'),fb('Isack Hadjar','Red Bull Racing',RB,'+55.0s'),fb('Nico Hulkenberg','Audi',AU,'+58.4s'),fb('Gabriel Bortoleto','Audi',AU,'+61.2s'),fb('Yuki Tsunoda','Racing Bulls',TB,'DNF'),fb('Lance Stroll','Aston Martin',AM,'DNF')]),
+  }},
+  'R2 Chinese Grand Prix':{circuit:'Shanghai International Circuit',date:'Mar 15',sessions:{
+    qualifying:fbGrid([fb('Kimi Antonelli','Mercedes',M,'1:33.876'),fb('George Russell','Mercedes',M,'+0.089s'),fb('Charles Leclerc','Ferrari',F,'+0.215s'),fb('Lewis Hamilton','Ferrari',F,'+0.298s'),fb('Lando Norris','McLaren',ML,'+0.412s'),fb('Max Verstappen','Red Bull Racing',RB,'+0.534s'),fb('Pierre Gasly','Alpine',A,'+0.621s'),fb('Oliver Bearman','Haas',H,'+0.743s'),fb('Fernando Alonso','Aston Martin',AM,'+0.812s'),fb('Liam Lawson','Racing Bulls',TB,'+0.901s')]),
+    race:fbGrid([fb('Kimi Antonelli','Mercedes',M,'Winner'),fb('George Russell','Mercedes',M,'+2.8s'),fb('Lewis Hamilton','Ferrari',F,'+7.6s'),fb('Charles Leclerc','Ferrari',F,'+9.1s'),fb('Lando Norris','McLaren',ML,'+14.3s'),fb('Pierre Gasly','Alpine',A,'+19.8s'),fb('Fernando Alonso','Aston Martin',AM,'+24.1s'),fb('Max Verstappen','Red Bull Racing',RB,'+27.4s'),fb('Liam Lawson','Racing Bulls',TB,'+31.0s'),fb('Oliver Bearman','Haas',H,'+33.5s'),fb('Jack Doohan','Alpine',A,'+36.2s'),fb('Arvid Lindblad','Racing Bulls',TB,'+38.7s'),fb('Carlos Sainz','Williams',W,'+41.1s'),fb('Isack Hadjar','Red Bull Racing',RB,'+43.8s'),fb('Alexander Albon','Williams',W,'+46.3s'),fb('Esteban Ocon','Haas',H,'+49.0s'),fb('Nico Hulkenberg','Audi',AU,'+52.4s'),fb('Gabriel Bortoleto','Audi',AU,'+55.1s'),fb('Yuki Tsunoda','Racing Bulls',TB,'DNF'),fb('Lance Stroll','Aston Martin',AM,'DNF')]),
+  }},
+  'R3 Japanese Grand Prix':{circuit:'Suzuka Circuit',date:'Mar 29',sessions:{
+    qualifying:fbGrid([fb('Kimi Antonelli','Mercedes',M,'1:28.234'),fb('George Russell','Mercedes',M,'+0.098s'),fb('Charles Leclerc','Ferrari',F,'+0.201s'),fb('Oscar Piastri','McLaren',ML,'+0.267s'),fb('Lando Norris','McLaren',ML,'+0.345s'),fb('Lewis Hamilton','Ferrari',F,'+0.412s'),fb('Pierre Gasly','Alpine',A,'+0.534s'),fb('Max Verstappen','Red Bull Racing',RB,'+0.623s'),fb('Liam Lawson','Racing Bulls',TB,'+0.712s'),fb('Oliver Bearman','Haas',H,'+0.801s')]),
+    race:fbGrid([fb('Kimi Antonelli','Mercedes',M,'Winner'),fb('Oscar Piastri','McLaren',ML,'+4.1s'),fb('Charles Leclerc','Ferrari',F,'+6.7s'),fb('George Russell','Mercedes',M,'+9.2s'),fb('Lando Norris','McLaren',ML,'+13.8s'),fb('Lewis Hamilton','Ferrari',F,'+17.3s'),fb('Pierre Gasly','Alpine',A,'+21.6s'),fb('Max Verstappen','Red Bull Racing',RB,'+25.0s'),fb('Liam Lawson','Racing Bulls',TB,'+28.4s'),fb('Oliver Bearman','Haas',H,'+31.8s'),fb('Jack Doohan','Alpine',A,'+34.5s'),fb('Arvid Lindblad','Racing Bulls',TB,'+37.1s'),fb('Isack Hadjar','Red Bull Racing',RB,'+39.8s'),fb('Carlos Sainz','Williams',W,'+42.3s'),fb('Gabriel Bortoleto','Audi',AU,'+45.0s'),fb('Esteban Ocon','Haas',H,'+47.6s'),fb('Alexander Albon','Williams',W,'+50.2s'),fb('Nico Hulkenberg','Audi',AU,'+53.1s'),fb('Yuki Tsunoda','Racing Bulls',TB,'DNF'),fb('Fernando Alonso','Aston Martin',AM,'DNF')]),
+  }},
 };
 const RACE_LIST=Object.keys(FALLBACK_RESULTS);
 
@@ -943,12 +923,17 @@ async function selectRace(val){
   const bar=document.getElementById('resultsRefreshBar');
 
   if(val.startsWith('fb:')){
-    // Fallback data
     const key=val.slice(3);
-    const fb=FALLBACK_RESULTS[key];
-    if(sub)sub.textContent=fb.circuit+' \u00b7 '+fb.date+' 2026';
+    const fbd=FALLBACK_RESULTS[key];
+    if(sub)sub.textContent=fbd.circuit+' \u00b7 '+fbd.date+' 2026';
     if(bar)bar.textContent='No live session \u00b7 Next: '+(STATE.nextRace?.name||'Miami GP')+' '+(STATE.nextRace?.dateLabel||'May 1\u20133');
-    STATE.timingData={race:fb.race};
+    STATE.timingData=fbd.sessions||{};
+    // Highlight available session tabs
+    document.querySelectorAll('.session-tab').forEach(t=>{
+      const has=!!STATE.timingData[t.dataset.session];
+      t.style.opacity=has?'1':'0.3';
+      t.style.pointerEvents=has?'auto':'none';
+    });
     renderTimingTable();
     return;
   }
@@ -974,7 +959,7 @@ async function selectRace(val){
     // If DB has no race data, try fallback
     if(!Object.keys(grouped).length){
       const fbKey=RACE_LIST.find(k=>raceInfo&&k.includes(raceInfo.name.replace(' Grand Prix','').split(' ')[0]));
-      if(fbKey){STATE.timingData={race:FALLBACK_RESULTS[fbKey].race};renderTimingTable();return}
+      if(fbKey){STATE.timingData=FALLBACK_RESULTS[fbKey].sessions||{};renderTimingTable();return}
     }
     STATE.timingData=grouped;
   }catch(e){
