@@ -209,6 +209,46 @@ body.mo{overflow:hidden}
 .ib-btn{background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:8px 14px;border-radius:var(--radius)}
 .ib-close{color:var(--muted);font-size:18px;padding:4px}
 
+/* ═══ LIVE HUB ═══ */
+.sc-ban{background:#F5A623;color:#000;text-align:center;padding:7px;font-size:11px;font-weight:700;letter-spacing:1px;animation:scP 2s infinite}
+.rf-ban{background:var(--accent);color:#fff;text-align:center;padding:7px;font-size:11px;font-weight:700;letter-spacing:1px}
+@keyframes scP{0%,100%{opacity:1}50%{opacity:.85}}
+.sess-bar{background:#161B27;padding:7px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);font-size:11px}
+.lap-bar{background:var(--border);height:3px;margin:0}.lap-fill{background:var(--accent);height:3px;transition:width 2s}
+.wx-strip{background:#161B27;border-bottom:1px solid var(--border);padding:6px 16px;display:flex;gap:14px;font-size:10px;color:var(--muted);overflow-x:auto;white-space:nowrap}
+.wx-strip .wv{color:var(--text);font-weight:600}
+.live-split{display:grid;grid-template-columns:1fr 220px;min-height:380px;border-bottom:1px solid var(--border)}
+@media(max-width:640px){.live-split{grid-template-columns:1fr;min-height:auto}.twr-pane{max-height:320px}}
+.map-pane{position:relative;background:#0A0D12;overflow:hidden;min-height:300px}
+.twr-pane{background:#0E1117;border-left:1px solid var(--border);overflow-y:auto}
+.twr-hd{position:sticky;top:0;background:var(--header);padding:6px 8px;display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+.twr-row{display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;padding:6px 8px;border-bottom:1px solid #1C2333;border-left:3px solid transparent;cursor:pointer;align-items:center;transition:background .1s}
+.twr-row:hover{background:rgba(255,255,255,.02)}
+.twr-row.sel{background:rgba(232,0,45,.07);border-left-color:var(--accent)}
+.twr-row.fl .tr-lt{color:#B47FFF}
+.tr-pos{font-size:10px;font-weight:900;color:var(--muted)}.tr-p1{color:#F5A623}.tr-p2{color:#B0B0B0}.tr-p3{color:#CD7F32}
+.tr-bar{width:3px;height:22px;border-radius:2px}
+.tr-nm{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden}
+.tr-ty{width:16px;height:16px;border-radius:50%;font-size:7px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.tr-gp{font-size:9px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.tr-lt{font-size:9px;text-align:right;font-variant-numeric:tabular-nums}
+.tr-ar{font-size:9px}.tr-up{color:#22C55E}.tr-dn{color:var(--accent)}
+.rc-sec{padding:12px 16px;border-bottom:1px solid var(--border)}
+.rc-title,.strat-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.rc-msg{padding:6px 10px;border-radius:4px;margin-bottom:5px;border-left:3px solid var(--border);font-size:11px;background:rgba(255,255,255,.02)}
+.rc-msg .rc-meta{font-size:9px;color:var(--muted);margin-bottom:2px}
+.rc-sc{border-color:#F5A623;background:rgba(245,166,35,.06)}.rc-rf{border-color:var(--accent);background:rgba(232,0,45,.06)}.rc-ot{border-color:#22C55E;background:rgba(34,197,94,.05)}.rc-pen{border-color:#F97316;background:rgba(249,115,22,.05)}.rc-fl{border-color:#B47FFF;background:rgba(180,127,255,.05)}
+.strat-sec{padding:12px 16px}
+.st-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.st-nm{font-size:10px;font-weight:700;min-width:28px;color:var(--text)}
+.st-trk{flex:1;display:flex;gap:2px}
+.st-blk{height:14px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:900;min-width:6px}
+.st-cur{animation:stP 1.5s infinite}@keyframes stP{0%,100%{opacity:1}50%{opacity:.7}}
+.drv-card{position:absolute;background:#1C2333;border:1px solid var(--border);border-radius:4px;padding:10px 12px;min-width:150px;pointer-events:none;z-index:50;border-left:3px solid var(--accent)}
+.dc-name{font-size:12px;font-weight:700;margin-bottom:1px}.dc-team{font-size:10px;color:var(--muted);margin-bottom:6px}
+.dc-r{display:flex;justify-content:space-between;gap:8px;margin-top:3px}.dc-l{font-size:10px;color:var(--muted)}.dc-v{font-size:10px;font-weight:700}
+.dc-tyre{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}.dc-tl{font-size:9px;color:var(--muted);margin-bottom:3px}.dc-tb{background:var(--border);border-radius:2px;height:4px}.dc-tf{height:4px;border-radius:2px}
+
 /* ═══ VIEW TOGGLE ═══ */
 .view-toggle{display:flex;gap:4px;margin-bottom:12px}
 .vt-btn{flex:1;padding:10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);font-family:var(--font);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;transition:all .15s;min-height:44px}
@@ -274,43 +314,65 @@ body.mo{overflow:hidden}
 
 <!-- RESULTS / LIVE -->
 <div class="panel" id="p-results">
-  <!-- View toggle -->
-  <div class="view-toggle" id="viewToggle">
-    <button class="vt-btn active" id="btnTower" onclick="setLiveView('tower')">Timing</button>
-    <button class="vt-btn" id="btnMap" onclick="setLiveView('map')">Track Map</button>
-  </div>
+  <!-- SC/RF banners -->
+  <div class="sc-ban" id="scBan" style="display:none"></div>
+  <div class="rf-ban" id="rfBan" style="display:none"></div>
 
-  <!-- TOWER VIEW (default) -->
-  <div id="towerView">
-    <select id="raceSel" class="race-sel mb-12" onchange="selRace(this.value)"></select>
-    <div id="resSub" class="muted mb-12"></div>
-    <div class="card mb-16">
-      <div class="stabs" id="sTabs">
-        <div class="stab" data-s="qualifying" onclick="selSess('qualifying')">Qualifying</div>
-        <div class="stab act" data-s="race" onclick="selSess('race')">Race</div>
+  <!-- LIVE STATE -->
+  <div id="liveState" style="display:none">
+    <div class="sess-bar"><div style="font-weight:700;color:#fff" id="liveSessName">Loading...</div><div style="color:var(--muted);font-size:10px" id="liveLapInfo"></div></div>
+    <div class="lap-bar"><div class="lap-fill" id="lapFill" style="width:0%"></div></div>
+    <div class="wx-strip" id="wxStrip"><span>Track <span class="wv" id="wxT">—</span></span><span>Air <span class="wv" id="wxA">—</span></span><span>Humidity <span class="wv" id="wxH">—</span></span><span>Rain <span class="wv" id="wxR">—</span></span></div>
+    <div class="live-split">
+      <!-- MAP -->
+      <div class="map-pane" id="mapPane">
+        <svg id="lmSvg" viewBox="0 0 600 460" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+          <rect width="600" height="460" fill="#0A0D12"/>
+          <path id="lmTrack" fill="none" stroke="#1C2333" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d=""/>
+          <path id="lmCentre" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="6,5" d=""/>
+          <g id="lmDots"></g>
+        </svg>
+        <div class="drv-card" id="drvCard" style="display:none">
+          <div class="dc-name" id="dcN"></div><div class="dc-team" id="dcT"></div>
+          <div class="dc-r"><span class="dc-l">Gap</span><span class="dc-v" id="dcG"></span></div>
+          <div class="dc-r"><span class="dc-l">Last Lap</span><span class="dc-v" id="dcL"></span></div>
+          <div class="dc-r"><span class="dc-l">Pit Stops</span><span class="dc-v" id="dcP"></span></div>
+          <div class="dc-tyre"><div class="dc-tl" id="dcTL"></div><div class="dc-tb"><div class="dc-tf" id="dcTF"></div></div></div>
+        </div>
       </div>
-      <div id="timingData"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div><div class="skel" style="width:60%"></div></div></div>
+      <!-- TOWER -->
+      <div class="twr-pane" id="twrPane">
+        <div class="twr-hd"><span>P</span><span></span><span>Driver</span><span>T</span><span style="text-align:right">Gap</span><span style="text-align:right">Lap</span><span></span></div>
+        <div id="twrRows"></div>
+      </div>
     </div>
+    <div class="rc-sec"><div class="rc-title">Race Control</div><div id="rcFeed"></div></div>
+    <div class="strat-sec"><div class="strat-title">Tyre Strategy</div><div id="stratTrack"></div></div>
   </div>
 
-  <!-- MAP VIEW (hidden until selected) -->
-  <div id="mapView" style="display:none;padding:16px;position:relative">
-    <div id="mapHeader" style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;text-align:center"></div>
-    <div id="mapContainer" style="width:100%;max-width:600px;margin:0 auto;position:relative;background:#0E1117;border-radius:8px;border:1px solid var(--border);overflow:hidden;touch-action:none;aspect-ratio:4/3">
-      <svg id="mapSvg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
-        <path id="trackPath" fill="none" stroke="#2A3145" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d=""/>
-        <path id="trackCentre" fill="none" stroke="#1C2333" stroke-width="2" d=""/>
-        <line id="startLine" x1="0" y1="0" x2="0" y2="0" stroke="#E8002D" stroke-width="3"/>
-        <g id="carDots"></g>
-      </svg>
+  <!-- NON-LIVE STATE -->
+  <div id="nonLive">
+    <div class="view-toggle"><button class="vt-btn active" id="btnTower" onclick="setLiveView('tower')">Timing</button><button class="vt-btn" id="btnMap" onclick="setLiveView('map')">Track Map</button></div>
+    <div id="towerView">
+      <select id="raceSel" class="race-sel mb-12" onchange="selRace(this.value)"></select>
+      <div id="resSub" class="muted mb-12"></div>
+      <div class="card mb-16">
+        <div class="stabs" id="sTabs"><div class="stab" data-s="qualifying" onclick="selSess('qualifying')">Qualifying</div><div class="stab act" data-s="race" onclick="selSess('race')">Race</div></div>
+        <div id="timingData"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div></div>
+      </div>
     </div>
-    <div id="mapTooltip" style="display:none;position:absolute;background:#1C2333;border:1px solid var(--border);border-radius:4px;padding:10px 14px;font-size:12px;pointer-events:none;z-index:100;min-width:140px;color:#E8EAF0"></div>
-    <div id="mapOffline" style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px">
-      <div style="font-size:28px;margin-bottom:12px">🗺</div>
-      <div style="font-weight:700;color:var(--text);margin-bottom:6px">Track Map</div>
-      <div>Live car tracking activates when a session begins</div>
-      <div id="mapNextSess" style="margin-top:8px;color:var(--accent);font-weight:600"></div>
-      <button onclick="loadMapDemo()" style="margin-top:16px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:10px 20px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.5px">Load Demo — Miami 2024</button>
+    <div id="mapView" style="display:none;padding:16px;position:relative">
+      <div id="mapContainer" style="width:100%;max-width:600px;margin:0 auto;position:relative;background:#0E1117;border-radius:8px;border:1px solid var(--border);overflow:hidden;touch-action:none;aspect-ratio:4/3">
+        <svg id="mapSvg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block"><path id="trackPath" fill="none" stroke="#2A3145" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d=""/><path id="trackCentre" fill="none" stroke="#1C2333" stroke-width="2" d=""/><g id="carDots"></g></svg>
+      </div>
+      <div id="mapTooltip" style="display:none;position:absolute;background:#1C2333;border:1px solid var(--border);border-radius:4px;padding:10px 14px;font-size:12px;pointer-events:none;z-index:100;min-width:140px;color:#E8EAF0"></div>
+      <div id="mapOffline" style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px">
+        <div style="font-size:28px;margin-bottom:12px">🗺</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:6px">Track Map</div>
+        <div>Live car tracking activates when a session begins</div>
+        <div id="mapNextSess" style="margin-top:8px;color:var(--accent);font-weight:600"></div>
+        <button onclick="loadMapDemo()" style="margin-top:16px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:10px 20px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer">Load Demo — Miami 2024</button>
+      </div>
     </div>
   </div>
 </div>
@@ -825,9 +887,133 @@ function loadMapDemo(){
   demoAnimate();
 }
 
+/* ═══ LIVE SESSION HUB ═══ */
+S.livePoller=null;S.liveLB=[];S.liveRC=[];S.liveStints={};S.liveWx=null;S.prevPos={};S.selDrv=null;S.flNum=null;S.trackBuilt=false;
+
+async function checkLive(){
+  try{
+    const{data:races}=await sbq(s=>s.from('races').select('*').eq('season',2026).eq('status','in_progress').limit(1));
+    const wasLive=S.isLive;S.isLive=!!(races&&races.length);
+    if(S.isLive){
+      S.liveSession=races[0];
+      document.getElementById('liveBadge')?.classList.add('vis');
+      document.getElementById('liveState').style.display='block';
+      document.getElementById('nonLive').style.display='none';
+      document.getElementById('liveSessName').textContent=races[0].name+' \u2014 Race';
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content','#E8002D');
+      if(!S.livePoller){S.livePoller=setInterval(fetchLive,8000);fetchLive()}
+    }else{
+      document.getElementById('liveBadge')?.classList.remove('vis');
+      document.getElementById('liveState').style.display='none';
+      document.getElementById('nonLive').style.display='block';
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content','#1B1F2A');
+      if(S.livePoller){clearInterval(S.livePoller);S.livePoller=null}
+    }
+  }catch(e){console.warn('[GF] Live check:',e.message)}
+}
+
+async function fetchLive(){
+  try{
+    const[lb,rc,st,wx,loc]=await Promise.allSettled([
+      sbq(s=>s.from('leaderboard').select('*').eq('session_type','race').order('position',{ascending:true}).limit(22)),
+      sbq(s=>s.from('race_control').select('*').order('date',{ascending:false}).limit(12)),
+      sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
+      sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
+      sbq(s=>s.from('car_locations').select('driver_number,x,y,date').order('date',{ascending:false}).limit(500)),
+    ]);
+    if(lb.status==='fulfilled'&&lb.value.data)procLB(lb.value.data);
+    if(rc.status==='fulfilled'&&rc.value.data){S.liveRC=rc.value.data;checkBans()}
+    if(st.status==='fulfilled'&&st.value.data)procStints(st.value.data);
+    if(wx.status==='fulfilled'&&wx.value.data?.[0])procWx(wx.value.data[0]);
+    if(loc.status==='fulfilled'&&loc.value.data)processLocs(loc.value.data);
+    S.lastPoll=performance.now();
+    if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap()}
+  }catch(e){console.warn('[GF] Live fetch:',e.message)}
+}
+
+function procLB(data){
+  S.prevPos={};S.liveLB.forEach(d=>{S.prevPos[d.driver_number]=d.position});
+  S.liveLB=data;
+  data.forEach(d=>{if(!S.drvCache[d.driver_number])S.drvCache[d.driver_number]={name:d.driver_name,abbr:(d.driver_name||'').split(' ').pop().slice(0,3).toUpperCase(),team:d.team_name,tc:d.team_color||'#8A8E9A'}});
+  if(data[0])S.p1Num=data[0].driver_number;
+  const laps=data[0]?.lap||0;if(laps>0){const tot=57,pct=Math.min(Math.round(laps/tot*100),100);
+    const li=document.getElementById('liveLapInfo');if(li)li.textContent='Lap '+laps+'/'+tot;
+    const fl=document.getElementById('lapFill');if(fl)fl.style.width=pct+'%'}
+}
+function procStints(data){const st={};data.forEach(s=>{if(!st[s.driver_number])st[s.driver_number]=[];st[s.driver_number].push(s)});S.liveStints=st}
+function procWx(w){S.liveWx=w;const r=w.rainfall||false;
+  const m={wxT:w.track_temp?Math.round(w.track_temp)+'°C':'—',wxA:w.air_temp?Math.round(w.air_temp)+'°C':'—',wxH:w.humidity?Math.round(w.humidity)+'%':'—',wxR:r?'🌧 WET':'DRY'};
+  Object.entries(m).forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=v})}
+
+function checkBans(){
+  const rc=S.liveRC.slice(0,3);
+  const sc=rc.some(m=>(m.message||'').toUpperCase().includes('SAFETY CAR'));
+  const rf=rc.some(m=>(m.message||'').toUpperCase().includes('RED FLAG'));
+  const s=document.getElementById('scBan'),r=document.getElementById('rfBan');
+  if(s){s.style.display=sc?'block':'none';if(sc)s.textContent='\ud83d\udfe1 SAFETY CAR DEPLOYED'}
+  if(r){r.style.display=rf?'block':'none';if(rf)r.textContent='\ud83d\udd34 RED FLAG \u2014 RACE SUSPENDED'}
+}
+
+const TYC={S:'#E8002D',M:'#F5A623',H:'#D0D0D0',I:'#22C55E',W:'#3671C6'};
+const TYT={S:'#fff',M:'#000',H:'#000',I:'#fff',W:'#fff'};
+
+function renderTwr(){
+  const c=document.getElementById('twrRows');if(!c)return;
+  c.innerHTML=S.liveLB.map((e,i)=>{
+    const pp=S.prevPos[e.driver_number];const ch=pp&&pp!==e.position;const up=pp>e.position;
+    const ar=ch?(up?'\u25b2':'\u25bc'):'';const ac=up?'tr-up':'tr-dn';
+    const cp=e.compound||'M';const tc=TYC[cp]||'#888';const tt=TYT[cp]||'#fff';
+    const drv=S.drvCache[e.driver_number]||{};const sel=S.selDrv===e.driver_number;
+    return`<div class="twr-row${sel?' sel':''}" onclick="selDrvNum(${e.driver_number})"><div class="tr-pos${i===0?' tr-p1':i===1?' tr-p2':i===2?' tr-p3':''}">P${i+1}</div><div class="tr-bar" style="background:${drv.tc||'#888'}"></div><div class="tr-nm">${drv.abbr||'D'+e.driver_number}</div><div class="tr-ty" style="background:${tc};color:${tt}">${cp}</div><div class="tr-gp">${i===0?'\u2014':(e.gap_str||'\u2014')}</div><div class="tr-lt">${e.time_str||'\u2014'}</div><div class="tr-ar ${ac}">${ar}</div></div>`;
+  }).join('');
+}
+
+function renderRC(){
+  const f=document.getElementById('rcFeed');if(!f)return;
+  const CLS={'SAFETY CAR':'rc-sc','RED FLAG':'rc-rf','OVERTAKE':'rc-ot','PENALTY':'rc-pen','FASTEST':'rc-fl'};
+  const ICO={'SAFETY CAR':'\ud83d\udfe1','RED FLAG':'\ud83d\udd34','OVERTAKE':'\u2705','PENALTY':'\ud83d\udfe0','FASTEST':'\ud83d\udfe3'};
+  f.innerHTML=S.liveRC.slice(0,8).map(m=>{
+    let cls='',ico='\u26aa';const mu=(m.message||'').toUpperCase();
+    Object.entries(CLS).forEach(([k,v])=>{if(mu.includes(k)){cls=v;ico=ICO[k]}});
+    return`<div class="rc-msg ${cls}"><div class="rc-meta">Lap ${m.lap_number||'\u2014'}</div>${ico} ${m.message||'\u2014'}</div>`;
+  }).join('');
+}
+
+function renderStrat(){
+  const c=document.getElementById('stratTrack');if(!c)return;
+  const cl=S.liveLB[0]?.lap||1,tot=57;
+  c.innerHTML=S.liveLB.slice(0,10).map(e=>{
+    const drv=S.drvCache[e.driver_number]||{};const sts=S.liveStints[e.driver_number]||[];
+    const blocks=sts.map((s,idx)=>{const last=idx===sts.length-1;const le=last?cl:(s.lap_end||s.lap_start+10);
+      const lc=Math.max(le-s.lap_start,1);const wp=Math.max(lc/tot*100,3);const bg=TYC[s.compound]||'#888';const fg=TYT[s.compound]||'#fff';
+      return`<div class="st-blk${last?' st-cur':''}" style="width:${wp.toFixed(1)}%;background:${bg};color:${fg}">${lc>4?s.compound:''}</div>`;
+    }).join('');
+    return`<div class="st-row"><div class="st-nm">${drv.abbr||'\u2014'}</div><div class="st-trk">${blocks}</div></div>`;
+  }).join('');
+}
+
+function selDrvNum(num){
+  if(S.selDrv===num){S.selDrv=null;document.getElementById('drvCard').style.display='none';renderTwr();renderMap();return}
+  S.selDrv=num;
+  const e=S.liveLB.find(d=>d.driver_number===num);const drv=S.drvCache[num]||{};const sts=S.liveStints[num]||[];const cs=sts[sts.length-1];
+  if(e){
+    document.getElementById('dcN').textContent=drv.name||'Driver '+num;
+    document.getElementById('dcT').textContent=(drv.team||'')+' \u00b7 P'+(e.position||'\u2014');
+    document.getElementById('dcG').textContent=e.gap_str||'Leader';
+    document.getElementById('dcL').textContent=e.time_str||'\u2014';
+    document.getElementById('dcP').textContent=sts.length>0?(sts.length-1):'0';
+    if(cs){const cp=cs.compound||'M';const cl=e.lap||1;const ta=cl-(cs.lap_start||1);const mx={S:22,M:35,H:45,I:30,W:25}[cp]||35;
+      document.getElementById('dcTL').textContent=({S:'Soft',M:'Medium',H:'Hard',I:'Inter',W:'Wet'}[cp]||cp)+' \u00b7 '+ta+' laps';
+      document.getElementById('dcTF').style.width=Math.min(ta/mx*100,100)+'%';document.getElementById('dcTF').style.background=TYC[cp]||'#888'}
+    const card=document.getElementById('drvCard');card.style.borderLeftColor=drv.tc||'#E8002D';card.style.display='block';card.style.left='10px';card.style.top='10px';
+  }
+  renderTwr();renderMap();
+}
+
 /* ═══ BOOT ═══ */
-detectNR();initHome();initRoute();checkPush();
+detectNR();initHome();initRoute();checkPush();checkLive();
 setInterval(()=>{if(S.tab==='standings')initSt()},18e5);
+setInterval(checkLive,30000);
 </script>
 </body>
 </html>
