@@ -1,0 +1,13 @@
+{
+  "name": "GridFeed Admin",
+  "short_name": "GridFeed",
+  "description": "GridFeed F1 Draft Review",
+  "start_url": "/gf-admin-drafts",
+  "display": "standalone",
+  "background_color": "#0E1117",
+  "theme_color": "#1B1F2A",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

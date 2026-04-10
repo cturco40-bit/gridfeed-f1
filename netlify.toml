@@ -44,6 +44,12 @@
 [functions."publish-approved"]
   timeout = 30
 
+[functions."save-subscription"]
+  timeout = 10
+
+[functions."send-push"]
+  timeout = 10
+
 [[redirects]]
   from = "/gf-admin-drafts"
   to = "/gf-admin-drafts.html"

@@ -4,6 +4,10 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>GridFeed Admin — Draft Review</title>
+<link rel="manifest" href="/admin-manifest.json"/>
+<meta name="theme-color" content="#1B1F2A"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -223,6 +227,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <div class="hdr-logo"><span class="g">GRID</span><span class="f">FEED</span><span class="hdr-sub">Draft Review</span></div>
   <div class="hdr-center" id="hdrCenter"></div>
   <div class="hdr-pills" id="hdrPills"></div>
+  <button onclick="registerPush()" style="font-size:11px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer" id="pushBtn">&#128276; Notifications</button>
   <button class="hdr-refresh" onclick="refreshAll()" title="Refresh">&#8634;</button>
 </div>
 
@@ -770,6 +775,39 @@ function toast(msg,type='info'){
   el.textContent=msg;
   document.getElementById('toasts').appendChild(el);
   setTimeout(()=>el.remove(),3000);
+}
+
+/* ═══ PUSH NOTIFICATIONS ═══ */
+const VAPID_PUBLIC_KEY='BGiNH3DDw7QMuFmiB_Qxgn4aEPLl4k5MW9T27MzcUCjv5jxi5wy7Bb74Fdn8J2PX1NzL-0bPC2lk3EngE1k4rII';
+
+function urlBase64ToUint8Array(b64){
+  const pad='='.repeat((4-b64.length%4)%4);
+  const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  const arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return arr;
+}
+
+async function registerPush(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){
+    toast('Push not supported on this browser','error');return;
+  }
+  try{
+    const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/gf-admin-drafts'});
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){toast('Permission denied','error');return}
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    }
+    await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
+    toast('Push notifications enabled','success');
+    const btn=document.getElementById('pushBtn');
+    if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}
+  }catch(e){
+    console.error('[Push]',e);
+    toast('Push setup failed: '+e.message,'error');
+  }
 }
 </script>
 </body>
