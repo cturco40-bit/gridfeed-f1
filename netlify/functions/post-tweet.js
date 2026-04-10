@@ -1,97 +1,72 @@
-import { TwitterApi } from 'twitter-api-v2';
-import { getSupabase, logSync, jsonResponse } from './lib/supabase.js';
+import { createHmac, randomBytes } from 'crypto';
+import { fetchWT, sb, logSync, json } from './lib/shared.js';
 
-const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+const TWENTY_FOUR_HOURS = 864e5;
+
+function oauthSign(method, url, params, consumerKey, consumerSecret, tokenKey, tokenSecret) {
+  const nonce = randomBytes(16).toString('hex');
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const oauthParams = {
+    oauth_consumer_key: consumerKey, oauth_nonce: nonce,
+    oauth_signature_method: 'HMAC-SHA1', oauth_timestamp: timestamp,
+    oauth_token: tokenKey, oauth_version: '1.0',
+  };
+  const allParams = { ...oauthParams, ...params };
+  const paramStr = Object.keys(allParams).sort().map(k => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`).join('&');
+  const baseStr = `${method}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
+  const sigKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+  const sig = createHmac('sha1', sigKey).update(baseStr).digest('base64');
+  oauthParams.oauth_signature = sig;
+  const authHeader = 'OAuth ' + Object.keys(oauthParams).sort().map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`).join(', ');
+  return authHeader;
+}
 
 export default async (req, context) => {
   const start = Date.now();
-  const sb = getSupabase();
-
   try {
-    // Validate Twitter credentials
-    if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_API_SECRET ||
-        !process.env.TWITTER_ACCESS_TOKEN || !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-      throw new Error('Twitter API credentials not fully configured');
-    }
+    const ck = process.env.TWITTER_API_KEY, cs = process.env.TWITTER_API_SECRET;
+    const tk = process.env.TWITTER_ACCESS_TOKEN, ts = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+    if (!ck || !cs || !tk || !ts) throw new Error('Twitter creds not set');
 
-    // 1. Get oldest pending tweet
-    const { data: tweets, error: fetchErr } = await sb
-      .from('tweets')
-      .select('*')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: true })
-      .limit(1);
-
-    if (fetchErr) throw new Error(`Fetch tweets: ${fetchErr.message}`);
-    if (!tweets?.length) {
-      await logSync(sb, { functionName: 'post-tweet', status: 'success', recordsAffected: 0, message: 'No approved tweets to post', durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, posted: 0, reason: 'No approved tweets to post' });
+    // Get oldest approved tweet ready to post
+    const tweets = await sb(`tweets?status=eq.approved&or=(scheduled_post_at.is.null,scheduled_post_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=1`);
+    if (!tweets.length) {
+      await logSync('post-tweet', 'success', 0, 'No approved tweets ready', Date.now() - start);
+      return json({ ok: true, posted: 0 });
     }
 
     const tweet = tweets[0];
 
-    // 2. Skip stale tweets (older than 24 hours)
-    const age = Date.now() - new Date(tweet.created_at).getTime();
-    if (age > TWENTY_FOUR_HOURS) {
-      // Mark as failed so it doesn't block the queue
-      await sb.from('tweets').update({ status: 'failed' }).eq('id', tweet.id);
-      await logSync(sb, { functionName: 'post-tweet', status: 'success', recordsAffected: 0, message: `Skipped stale tweet (${Math.round(age / 3600000)}h old): "${tweet.tweet_text.slice(0, 50)}..."`, durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, posted: 0, reason: 'Tweet too old, marked failed' });
+    // Skip stale
+    if (Date.now() - new Date(tweet.created_at).getTime() > TWENTY_FOUR_HOURS) {
+      await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
+      await logSync('post-tweet', 'success', 0, 'Skipped stale tweet', Date.now() - start);
+      return json({ ok: true, posted: 0, reason: 'stale' });
     }
 
-    // 3. Post to Twitter via OAuth 1.0a
-    const client = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY,
-      appSecret: process.env.TWITTER_API_SECRET,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN,
-      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
-    });
+    // Post via OAuth 1.0a
+    const tweetUrl = 'https://api.twitter.com/2/tweets';
+    const body = JSON.stringify({ text: tweet.tweet_text });
+    const auth = oauthSign('POST', tweetUrl, {}, ck, cs, tk, ts);
 
-    const rwClient = client.readWrite;
-    const result = await rwClient.v2.tweet(tweet.tweet_text);
+    const res = await fetchWT(tweetUrl, {
+      method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/json' }, body,
+    }, 15000);
 
-    if (!result?.data?.id) {
-      throw new Error('Twitter API returned no tweet ID');
+    const rData = await res.json();
+    if (!res.ok || !rData?.data?.id) {
+      await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
+      throw new Error('Twitter API: ' + JSON.stringify(rData?.errors || rData?.detail || rData));
     }
 
-    // 5. Mark as posted
-    const { error: updateErr } = await sb.from('tweets').update({
-      status: 'posted',
-      posted_at: new Date().toISOString(),
-    }).eq('id', tweet.id);
+    await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'posted', posted_at: new Date().toISOString() });
 
-    if (updateErr) console.warn('[post-tweet] Failed to update status:', updateErr.message);
-
-    await logSync(sb, {
-      functionName: 'post-tweet',
-      status: 'success',
-      recordsAffected: 1,
-      message: `Posted tweet ${result.data.id}: "${tweet.tweet_text.slice(0, 60)}..."`,
-      durationMs: Date.now() - start,
-    });
-
-    return jsonResponse({ ok: true, posted: 1, tweetId: result.data.id });
-
+    await logSync('post-tweet', 'success', 1, `Posted ${rData.data.id}: "${tweet.tweet_text.slice(0, 60)}..."`, Date.now() - start);
+    return json({ ok: true, posted: 1, tweetId: rData.data.id });
   } catch (err) {
-    // If posting failed, mark the tweet as failed
-    try {
-      const { data: pending } = await sb.from('tweets').select('id').eq('status', 'approved').order('created_at', { ascending: true }).limit(1);
-      if (pending?.length) {
-        await sb.from('tweets').update({ status: 'failed' }).eq('id', pending[0].id);
-      }
-    } catch (_) { /* ignore cleanup errors */ }
-
-    await logSync(sb, {
-      functionName: 'post-tweet',
-      status: 'error',
-      message: err.message,
-      durationMs: Date.now() - start,
-      errorDetail: err.stack,
-    });
-    return jsonResponse({ error: err.message }, 500);
+    await logSync('post-tweet', 'error', 0, err.message, Date.now() - start, err.stack);
+    return json({ error: err.message }, 500);
   }
 };
 
-export const config = {
-  schedule: '20 10 * * *',
-};
+export const config = { schedule: '*/10 * * * *' };

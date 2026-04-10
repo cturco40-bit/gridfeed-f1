@@ -1,18 +1,65 @@
 [build]
   publish = "."
-  command = "npm install"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# ── Redirects ──────────────────────────────────────────────
+[functions."generate-content"]
+  timeout = 60
+
+[functions."monitor-f1"]
+  timeout = 60
+
+[functions."fetch-timing"]
+  timeout = 30
+
+[functions."fetch-race-control"]
+  timeout = 30
+
+[functions."fetch-strategy"]
+  timeout = 30
+
+[functions."fetch-weather"]
+  timeout = 30
+
+[functions."fetch-odds"]
+  timeout = 30
+
+[functions."fetch-historical"]
+  timeout = 60
+
+[functions."generate-picks"]
+  timeout = 60
+
+[functions."blog-scheduler"]
+  timeout = 60
+
+[functions."generate-tweets"]
+  timeout = 60
+
+[functions."post-tweet"]
+  timeout = 30
+
+[functions."publish-approved"]
+  timeout = 30
+
+[[redirects]]
+  from = "/gf-admin-drafts"
+  to = "/gf-admin-drafts.html"
+  status = 200
+
 [[redirects]]
   from = "/admin-login"
   to = "/admin-login.html"
   status = 200
 
 [[redirects]]
-  from = "/gf-admin-drafts"
-  to = "/gf-admin-drafts.html"
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+
+[[redirects]]
+  from = "/article/:slug"
+  to = "/index.html"
   status = 200

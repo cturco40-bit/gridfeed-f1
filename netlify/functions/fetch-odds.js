@@ -1,127 +1,70 @@
-import { getSupabase, logSync, fetchWithTimeout, getNextRace, jsonResponse } from './lib/supabase.js';
+import { fetchWT, sb, logSync, json, getNextRace } from './lib/shared.js';
 
-const ODDS_API = 'https://api.the-odds-api.com/v4/sports';
-const TIMEOUT = 8000;
+const ODDS_KEY = process.env.ODDS_API_KEY;
+const MARKETS = ['motorsport_f1_winner', 'motorsport_f1_constructor_winner'];
+const MARKET_LABELS = { motorsport_f1_winner: 'race_winner', motorsport_f1_constructor_winner: 'constructor_winner' };
+const TRACK_BOOKS = ['DraftKings', 'FanDuel', 'BetMGM'];
 
-const F1_MARKETS = [
-  'motorsport_f1_winner',
-  'motorsport_f1_constructor_winner',
-];
-
-const MARKET_LABELS = {
-  motorsport_f1_winner: 'race_winner',
-  motorsport_f1_constructor_winner: 'constructor_winner',
-};
-
-function americanToDecimal(odds) {
-  return odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
-}
-
-function impliedProb(decimal) {
-  return 1 / decimal;
-}
+function americanToDecimal(odds) { return odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1; }
+function impliedProb(odds) { return odds > 0 ? 100 / (odds + 100) * 100 : Math.abs(odds) / (Math.abs(odds) + 100) * 100; }
 
 export default async (req, context) => {
   const start = Date.now();
-  const sb = getSupabase();
   let totalOdds = 0;
-
   try {
-    if (!process.env.ODDS_API_KEY) {
-      throw new Error('ODDS_API_KEY not set');
-    }
-
-    // Get next upcoming race
-    const nextRace = await getNextRace(sb);
+    if (!ODDS_KEY) throw new Error('ODDS_API_KEY not set');
+    const nextRace = await getNextRace();
     if (!nextRace) {
-      await logSync(sb, { functionName: 'fetch-odds', status: 'success', recordsAffected: 0, message: 'No upcoming race found', durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, totalOdds: 0, message: 'No upcoming race' });
+      await logSync('fetch-odds', 'success', 0, 'No upcoming race', Date.now() - start);
+      return json({ ok: true, totalOdds: 0 });
     }
 
-    for (const sport of F1_MARKETS) {
-      const marketLabel = MARKET_LABELS[sport] || sport;
-
-      let events;
+    for (const market of MARKETS) {
+      const label = MARKET_LABELS[market] || market;
       try {
-        const url = `${ODDS_API}/${sport}/odds/?apiKey=${process.env.ODDS_API_KEY}&regions=us&markets=outrights&oddsFormat=american`;
-        const res = await fetchWithTimeout(url, {}, TIMEOUT);
-        if (!res.ok) {
-          console.warn(`[fetch-odds] ${sport} HTTP ${res.status}`);
-          continue;
-        }
-        events = await res.json();
-      } catch (e) {
-        console.warn(`[fetch-odds] ${sport} fetch error:`, e.message);
-        continue;
-      }
+        const res = await fetchWT(`https://api.the-odds-api.com/v4/sports/${market}/odds/?apiKey=${ODDS_KEY}&regions=us&markets=outrights&oddsFormat=american`);
+        if (!res.ok) continue;
+        const events = await res.json();
+        if (!events?.length) continue;
 
-      if (!events?.length) continue;
-
-      // Collect best odds per driver/constructor across bookmakers
-      for (const event of events) {
-        const bestOdds = {};
-
-        for (const bookmaker of event.bookmakers || []) {
-          for (const market of bookmaker.markets || []) {
-            for (const outcome of market.outcomes || []) {
-              const name = outcome.name;
-              const odds = outcome.price;
-              const decimal = americanToDecimal(odds);
-              const prob = impliedProb(decimal);
-
-              if (!bestOdds[name] || decimal > bestOdds[name].odds_decimal) {
-                bestOdds[name] = {
-                  race_id: nextRace.id,
-                  driver_name: name,
-                  market: marketLabel,
-                  odds_american: odds > 0 ? `+${odds}` : `${odds}`,
-                  odds_decimal: parseFloat(decimal.toFixed(4)),
-                  implied_prob: parseFloat(prob.toFixed(6)),
-                  bookmaker: bookmaker.title,
-                  fetched_at: new Date().toISOString(),
-                };
+        for (const event of events) {
+          const bestOdds = {};
+          for (const bk of event.bookmakers || []) {
+            const isTracked = TRACK_BOOKS.some(tb => bk.title.includes(tb));
+            for (const mkt of bk.markets || []) {
+              for (const o of mkt.outcomes || []) {
+                const dec = americanToDecimal(o.price);
+                const key = `${o.name}-${bk.title}`;
+                if (isTracked || !bestOdds[o.name] || dec > bestOdds[o.name].odds_decimal) {
+                  if (!bestOdds[o.name] || dec > bestOdds[o.name].odds_decimal) {
+                    bestOdds[o.name] = {
+                      race_id: nextRace.id, driver_name: o.name, market: label,
+                      odds_american: o.price > 0 ? `+${o.price}` : `${o.price}`,
+                      odds_decimal: parseFloat(dec.toFixed(4)),
+                      implied_prob: parseFloat((impliedProb(o.price) / 100).toFixed(6)),
+                      bookmaker: bk.title, fetched_at: new Date().toISOString(),
+                    };
+                  }
+                }
               }
             }
           }
+
+          const rows = Object.values(bestOdds);
+          if (!rows.length) continue;
+          await sb(`driver_odds?race_id=eq.${nextRace.id}&market=eq.${label}`, 'DELETE');
+          await sb('driver_odds', 'POST', rows);
+          totalOdds += rows.length;
         }
-
-        const oddsRows = Object.values(bestOdds);
-        if (!oddsRows.length) continue;
-
-        // Replace old odds for this race + market
-        await sb.from('driver_odds').delete().eq('race_id', nextRace.id).eq('market', marketLabel);
-
-        const { error } = await sb.from('driver_odds').insert(oddsRows);
-        if (error) {
-          console.warn(`[fetch-odds] Insert error for ${marketLabel}:`, error.message);
-          continue;
-        }
-        totalOdds += oddsRows.length;
-      }
+      } catch (e) { console.warn(`[fetch-odds] ${market}:`, e.message); }
     }
 
-    await logSync(sb, {
-      functionName: 'fetch-odds',
-      status: 'success',
-      recordsAffected: totalOdds,
-      message: `Synced ${totalOdds} odds for ${nextRace.name}`,
-      durationMs: Date.now() - start,
-    });
-
-    return jsonResponse({ ok: true, totalOdds, race: nextRace.name });
-
+    await logSync('fetch-odds', 'success', totalOdds, `${totalOdds} odds for ${nextRace.name}`, Date.now() - start);
+    return json({ ok: true, totalOdds, race: nextRace.name });
   } catch (err) {
-    await logSync(sb, {
-      functionName: 'fetch-odds',
-      status: 'error',
-      message: err.message,
-      durationMs: Date.now() - start,
-      errorDetail: err.stack,
-    });
-    return jsonResponse({ error: err.message }, 500);
+    await logSync('fetch-odds', 'error', 0, err.message, Date.now() - start, err.stack);
+    return json({ error: err.message }, 500);
   }
 };
 
-export const config = {
-  schedule: '0 */6 * * *',
-};
+export const config = { schedule: '0 */6 * * *' };

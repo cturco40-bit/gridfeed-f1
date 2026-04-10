@@ -1,80 +1,45 @@
-import { getSupabase, logSync, jsonResponse } from './lib/supabase.js';
-
-// Publishes content_drafts that have been marked review_status = 'approved'
-// Moves them into the articles table as published
+import { sb, logSync, json, makeSlug } from './lib/shared.js';
 
 export default async (req, context) => {
   const start = Date.now();
-  const sb = getSupabase();
   let published = 0;
-
   try {
-    // Find approved drafts not yet published
-    const { data: approved, error: fetchErr } = await sb
-      .from('content_drafts')
-      .select('*')
-      .eq('review_status', 'approved')
-      .is('published_article_id', null)
-      .order('created_at', { ascending: true })
-      .limit(10);
+    const drafts = await sb(`content_drafts?review_status=eq.approved&published_article_id=is.null&or=(scheduled_publish_at.is.null,scheduled_publish_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=10`);
 
-    if (fetchErr) throw new Error(`Fetch drafts: ${fetchErr.message}`);
-    if (!approved?.length) {
-      await logSync(sb, { functionName: 'publish-approved', status: 'success', recordsAffected: 0, message: 'No approved drafts to publish', durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, published: 0 });
+    if (!drafts.length) {
+      await logSync('publish-approved', 'success', 0, 'No approved drafts', Date.now() - start);
+      return json({ ok: true, published: 0 });
     }
 
-    for (const draft of approved) {
-      const slug = (draft.title || 'untitled')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 80);
+    for (const draft of drafts) {
+      const slug = makeSlug(draft.title || 'untitled');
 
-      // Insert into articles
-      const { data: article, error: insertErr } = await sb.from('articles').insert({
-        title: draft.title,
-        slug,
-        body: draft.body,
-        excerpt: draft.excerpt,
-        author: 'GridFeed AI',
-        tags: draft.tags || [],
-        race_id: draft.race_id,
-        status: 'published',
-        published_at: new Date().toISOString(),
-      }).select('id').single();
+      // Check slug not taken
+      const existing = await sb(`articles?slug=eq.${encodeURIComponent(slug)}&limit=1`);
+      if (existing.length) continue;
 
-      if (insertErr) {
-        console.warn(`[publish-approved] Insert error for "${draft.title}":`, insertErr.message);
-        continue;
-      }
+      // Insert article FIRST
+      const article = await sb('articles', 'POST', {
+        title: draft.title, slug, body: draft.body, excerpt: draft.excerpt,
+        tags: draft.tags || [], author: 'GridFeed Staff',
+        race_id: draft.race_id || null, status: 'published',
+        published_at: draft.scheduled_publish_at || new Date().toISOString(),
+      });
 
-      // Link draft to published article
-      await sb.from('content_drafts').update({
-        review_status: 'approved',
-        published_article_id: article.id,
-        reviewed_at: new Date().toISOString(),
-      }).eq('id', draft.id);
+      const articleId = Array.isArray(article) ? article[0]?.id : article?.id;
+      if (!articleId) { console.warn('[publish-approved] Insert failed for:', draft.title); continue; }
 
+      // ONLY update draft on success
+      await sb(`content_drafts?id=eq.${draft.id}`, 'PATCH', { review_status: 'published', published_article_id: articleId });
       published++;
     }
 
-    await logSync(sb, {
-      functionName: 'publish-approved',
-      status: 'success',
-      recordsAffected: published,
-      message: `Published ${published} approved drafts`,
-      durationMs: Date.now() - start,
-    });
-
-    return jsonResponse({ ok: true, published });
-
+    await logSync('publish-approved', 'success', published, `Published ${published} drafts`, Date.now() - start);
+    return json({ ok: true, published });
   } catch (err) {
-    await logSync(sb, { functionName: 'publish-approved', status: 'error', message: err.message, durationMs: Date.now() - start, errorDetail: err.stack });
-    return jsonResponse({ error: err.message }, 500);
+    await logSync('publish-approved', 'error', 0, err.message, Date.now() - start, err.stack);
+    return json({ error: err.message }, 500);
   }
 };
 
-export const config = {
-  schedule: '*/5 * * * *',
-};
+export const config = { schedule: '*/5 * * * *' };

@@ -1,158 +1,97 @@
-import { getSupabase, logSync, fetchWithTimeout, matchRace, jsonResponse } from './lib/supabase.js';
-
-const OPENF1 = 'https://api.openf1.org/v1';
-const TIMEOUT = 8000;
-
-const SESSION_TYPE_MAP = {
-  'Practice 1': 'fp1', 'Practice 2': 'fp2', 'Practice 3': 'fp3',
-  'Qualifying': 'qualifying', 'Race': 'race',
-  'Sprint': 'sprint', 'Sprint Qualifying': 'sprint_qualifying',
-  'Sprint Shootout': 'sprint_qualifying',
-};
+import { fetchWT, sb, logSync, json, getLatestSession, matchRaceId, SESSION_TYPE_MAP } from './lib/shared.js';
 
 export default async (req, context) => {
   const start = Date.now();
-  const sb = getSupabase();
   let totalRecords = 0;
-
   try {
-    // 1. Get latest session from OpenF1
-    const sessRes = await fetchWithTimeout(`${OPENF1}/sessions?year=2026`, {}, TIMEOUT);
-    if (!sessRes.ok) throw new Error(`OpenF1 sessions HTTP ${sessRes.status}`);
-    const allSessions = await sessRes.json();
-    if (!allSessions?.length) {
-      await logSync(sb, { functionName: 'fetch-timing', status: 'success', recordsAffected: 0, message: 'No 2026 sessions found', durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, totalRecords: 0, message: 'No sessions' });
+    const session = await getLatestSession();
+    if (!session) {
+      await logSync('fetch-timing', 'success', 0, 'No 2026 sessions', Date.now() - start);
+      return json({ ok: true, totalRecords: 0 });
     }
 
-    const now = Date.now();
-
-    // Find the most recent or currently live session
-    let targetSession = null;
-
-    // Prefer live sessions
-    for (const s of allSessions) {
-      const startMs = s.date_start ? new Date(s.date_start).getTime() : 0;
-      const endMs = s.date_end ? new Date(s.date_end).getTime() : Infinity;
-      if (startMs <= now && now <= endMs) {
-        targetSession = s;
-        break;
-      }
+    const sessionType = SESSION_TYPE_MAP[session.session_name] || 'race';
+    const raceId = await matchRaceId(session.meeting_name || session.circuit_short_name || '');
+    if (!raceId) {
+      await logSync('fetch-timing', 'success', 0, `No race match for "${session.meeting_name}"`, Date.now() - start);
+      return json({ ok: true, totalRecords: 0 });
     }
 
-    // Fallback: most recently ended session
-    if (!targetSession) {
-      const ended = allSessions
-        .filter(s => s.date_end && new Date(s.date_end).getTime() < now)
-        .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
-      if (ended.length) targetSession = ended[0];
-    }
-
-    if (!targetSession) {
-      await logSync(sb, { functionName: 'fetch-timing', status: 'success', recordsAffected: 0, message: 'No active or recent session', durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, totalRecords: 0, message: 'No active session' });
-    }
-
-    const sessionType = SESSION_TYPE_MAP[targetSession.session_name] || targetSession.session_name?.toLowerCase() || 'race';
-    const meetingName = targetSession.meeting_name || targetSession.circuit_short_name || '';
-
-    // Match to race_id
-    const race = await matchRace(sb, meetingName);
-    if (!race) {
-      await logSync(sb, { functionName: 'fetch-timing', status: 'success', recordsAffected: 0, message: `No race match for "${meetingName}"`, durationMs: Date.now() - start });
-      return jsonResponse({ ok: true, totalRecords: 0, message: `No race match for: ${meetingName}` });
-    }
-
-    // 2. Fetch positions + drivers in parallel
-    const [posRes, drvRes] = await Promise.all([
-      fetchWithTimeout(`${OPENF1}/position?session_key=${targetSession.session_key}`, {}, TIMEOUT),
-      fetchWithTimeout(`${OPENF1}/drivers?session_key=${targetSession.session_key}`, {}, TIMEOUT),
+    // Fetch positions + drivers + intervals + stints in parallel
+    const [posRes, drvRes, intRes, stintRes] = await Promise.all([
+      fetchWT(`https://api.openf1.org/v1/position?session_key=${session.session_key}`),
+      fetchWT(`https://api.openf1.org/v1/drivers?session_key=${session.session_key}`),
+      fetchWT(`https://api.openf1.org/v1/intervals?session_key=${session.session_key}`).catch(() => ({ ok: false })),
+      fetchWT(`https://api.openf1.org/v1/stints?session_key=${session.session_key}`).catch(() => ({ ok: false })),
     ]);
 
-    if (!posRes.ok) throw new Error(`OpenF1 positions HTTP ${posRes.status}`);
+    if (!posRes.ok) throw new Error(`Positions HTTP ${posRes.status}`);
     const positions = await posRes.json();
     const drivers = drvRes.ok ? await drvRes.json() : [];
+    const intervals = intRes.ok ? await intRes.json() : [];
+    const stints = stintRes.ok ? await stintRes.json() : [];
 
-    // Build driver lookup
     const driverMap = {};
     drivers.forEach(d => { driverMap[d.driver_number] = d; });
 
-    // Latest position per driver (last timestamp wins)
+    // Latest interval per driver
+    const gapMap = {};
+    intervals.forEach(i => {
+      if (!gapMap[i.driver_number] || i.date > gapMap[i.driver_number].date) gapMap[i.driver_number] = i;
+    });
+
+    // Latest stint per driver
+    const stintMap = {};
+    stints.forEach(s => {
+      if (!stintMap[s.driver_number] || s.stint_number > (stintMap[s.driver_number].stint_number || 0)) stintMap[s.driver_number] = s;
+    });
+
+    // Latest position per driver
     const latestPos = {};
     positions.forEach(p => {
-      if (!latestPos[p.driver_number] || p.date > latestPos[p.driver_number].date) {
-        latestPos[p.driver_number] = p;
-      }
+      if (!latestPos[p.driver_number] || p.date > latestPos[p.driver_number].date) latestPos[p.driver_number] = p;
     });
 
     const sorted = Object.values(latestPos).sort((a, b) => a.position - b.position);
 
-    // 3. Upsert into leaderboard (delete + insert = replace)
-    await sb.from('leaderboard').delete().eq('race_id', race.id).eq('session_type', sessionType);
+    // Delete old + insert
+    await sb(`leaderboard?race_id=eq.${raceId}&session_type=eq.${sessionType}`, 'DELETE');
 
     const rows = sorted.map(p => {
       const d = driverMap[p.driver_number] || {};
+      const gap = gapMap[p.driver_number];
+      const stint = stintMap[p.driver_number];
       return {
-        race_id: race.id,
-        session_type: sessionType,
-        position: p.position,
+        race_id: raceId, session_type: sessionType, session_key: String(session.session_key),
+        position: p.position, driver_number: p.driver_number,
         driver_name: d.full_name || d.broadcast_name || `#${p.driver_number}`,
-        team_name: d.team_name || '',
-        team_color: d.team_colour ? `#${d.team_colour}` : '#8A8E9A',
-        gap_str: p.position === 1 ? 'Leader' : '—',
-        status: 'racing',
-        raw_data: p,
+        team_name: d.team_name || '', team_color: d.team_colour ? `#${d.team_colour}` : '#8A8E9A',
+        gap_str: gap?.gap_to_leader != null ? `+${gap.gap_to_leader}s` : (p.position === 1 ? 'Leader' : '—'),
+        time_str: gap?.interval != null ? `+${gap.interval}s` : '—',
+        compound: stint?.compound || null, stint_number: stint?.stint_number || null,
         fetched_at: new Date().toISOString(),
       };
     });
 
     if (rows.length) {
-      const { error } = await sb.from('leaderboard').insert(rows);
-      if (error) throw new Error(`Leaderboard insert: ${error.message}`);
+      await sb('leaderboard', 'POST', rows);
       totalRecords = rows.length;
     }
 
-    // 4. Check if session is live — mark race as in_progress
-    const startMs = targetSession.date_start ? new Date(targetSession.date_start).getTime() : 0;
-    const endMs = targetSession.date_end ? new Date(targetSession.date_end).getTime() : Infinity;
-    const isLive = startMs <= now && now <= endMs;
-
-    if (isLive) {
-      await sb.from('races').update({ status: 'in_progress' }).eq('id', race.id);
-    }
-
-    // If race session ended, mark completed + record winner
-    if (sessionType === 'race' && targetSession.date_end && new Date(targetSession.date_end).getTime() < now) {
+    // Set race status
+    if (session.isLive) {
+      await sb(`races?id=eq.${raceId}`, 'PATCH', { status: 'in_progress' });
+    } else if (sessionType === 'race' && session.date_end && new Date(session.date_end) < new Date()) {
       const winner = rows.find(r => r.position === 1);
-      await sb.from('races').update({
-        status: 'completed',
-        winner_name: winner?.driver_name || null,
-        winner_team: winner?.team_name || null,
-      }).eq('id', race.id);
+      await sb(`races?id=eq.${raceId}`, 'PATCH', { status: 'completed', winner_name: winner?.driver_name, winner_team: winner?.team_name });
     }
 
-    await logSync(sb, {
-      functionName: 'fetch-timing',
-      status: 'success',
-      recordsAffected: totalRecords,
-      message: `${meetingName} ${targetSession.session_name}: ${totalRecords} positions${isLive ? ' [LIVE]' : ''}`,
-      durationMs: Date.now() - start,
-    });
-
-    return jsonResponse({ ok: true, totalRecords, session: targetSession.session_name, meeting: meetingName, live: isLive });
-
+    await logSync('fetch-timing', 'success', totalRecords, `${session.meeting_name} ${session.session_name}: ${totalRecords} positions${session.isLive ? ' [LIVE]' : ''}`, Date.now() - start);
+    return json({ ok: true, totalRecords, session: session.session_name, live: session.isLive });
   } catch (err) {
-    await logSync(sb, {
-      functionName: 'fetch-timing',
-      status: 'error',
-      message: err.message,
-      durationMs: Date.now() - start,
-      errorDetail: err.stack,
-    });
-    return jsonResponse({ error: err.message }, 500);
+    await logSync('fetch-timing', 'error', 0, err.message, Date.now() - start, err.stack);
+    return json({ error: err.message }, 500);
   }
 };
 
-export const config = {
-  schedule: '*/2 * * * *',
-};
+export const config = { schedule: '*/2 * * * *' };

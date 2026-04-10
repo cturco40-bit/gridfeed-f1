@@ -1,11 +1,10 @@
 {
-  "name": "gridfeed-platform",
+  "name": "gridfeed",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39",
-    "@supabase/supabase-js": "^2",
-    "twitter-api-v2": "^1.29.0",
-    "xml2js": "^0.6"
+    "xml2js": "^0.6.2",
+    "nodemailer": "^6.9.0"
   }
 }
