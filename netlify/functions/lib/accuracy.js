@@ -158,7 +158,11 @@ export function fixEncoding(text) {
     .replace(/\u00c3\u00a0/g, '\u00e0')
     .replace(/\u00c3\u00bc/g, '\u00fc')
     .replace(/\u00c3\u00b6/g, '\u00f6')
-    .replace(/\u00c3\u00b1/g, '\u00f1');
+    .replace(/\u00c3\u00b1/g, '\u00f1')
+    // Strip cite tags from web search
+    .replace(/<cite[^>]*>[^<]*<\/cite>/g, '')
+    .replace(/<cite[^>]*>/g, '')
+    .replace(/<\/cite>/g, '');
 }
 
 export async function buildLiveContext() {

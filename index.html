@@ -1105,9 +1105,11 @@ function renderTicker(items){
 /* ═══════ NEWSLETTER ═══════ */
 function handleNewsletter(){
   const email=document.getElementById('newsletterEmail')?.value?.trim();
-  if(!email||!email.includes('@')){alert('Please enter a valid email.');return}
-  alert("Thanks! You're subscribed to the GridFeed Brief.");
+  const btn=document.querySelector('.newsletter-cta .btn-accent');
+  if(!email||!email.includes('@')){if(btn){btn.textContent='Enter valid email';setTimeout(()=>{btn.textContent='Subscribe'},2000)}return}
+  if(btn){btn.textContent='Subscribed!';btn.style.background='#16A34A'}
   document.getElementById('newsletterEmail').value='';
+  setTimeout(()=>{if(btn){btn.textContent='Subscribe';btn.style.background=''}},3000);
 }
 
 /* ═══════ BOOT ═══════ */

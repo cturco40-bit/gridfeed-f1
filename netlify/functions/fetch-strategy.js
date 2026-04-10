@@ -15,7 +15,10 @@ export default async (req, context) => {
       fetchWT(`https://api.openf1.org/v1/drivers?session_key=${session.session_key}`).catch(() => ({ ok: false })),
     ]);
 
-    if (!stintRes.ok) throw new Error(`Stints HTTP ${stintRes.status}`);
+    if (!stintRes.ok) {
+      await logSync('fetch-strategy', 'success', 0, `No stint data (HTTP ${stintRes.status})`, Date.now() - start);
+      return json({ ok: true, records: 0 });
+    }
     const stints = await stintRes.json();
     const pits = pitRes.ok ? await pitRes.json() : [];
     const drivers = drvRes.ok ? await drvRes.json() : [];

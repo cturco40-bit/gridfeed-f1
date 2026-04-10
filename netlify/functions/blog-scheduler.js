@@ -109,7 +109,7 @@ JSON only.`;
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
         tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
         review_status: 'pending', source_context: { triggered_by: 'blog-scheduler', day: dow, web_search: true },
-        generation_model: 'claude-haiku-4-5-20251001+web_search', race_id: nextRace?.id || null,
+        generation_model: 'GridFeed Pipeline', race_id: nextRace?.id || null,
       });
       generated++;
     }

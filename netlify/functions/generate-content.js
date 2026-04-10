@@ -153,7 +153,7 @@ Target: ${wordTarget} words. Return ONLY valid JSON:
       title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
       tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
       review_status: 'pending', source_context: { topic: topicText, web_search: true, context_length: fullContext.length },
-      priority_score: topic?.priority || 5, generation_model: 'claude-haiku-4-5-20251001+web_search',
+      priority_score: topic?.priority || 5, generation_model: 'GridFeed Pipeline',
       race_id: topic?.race_id || null,
     });
 

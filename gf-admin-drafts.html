@@ -398,7 +398,7 @@ function renderArticleSidebar(el){
         <span class="si-time">${timeAgo(d.created_at)}</span>
       </div>
       <div class="si-title">${esc(d.title||'Untitled')}</div>
-      <div class="si-meta"><div class="si-dot dot-pending"></div>${d.generation_model||''}</div>
+      <div class="si-meta"><div class="si-dot dot-pending"></div>GridFeed Pipeline</div>
     </div>`).join('');
 }
 
@@ -473,7 +473,7 @@ function renderArticleEditor(d){
   main.innerHTML=`
     <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" onfocus="isEditing=true" onblur="isEditing=false"/>
     <div class="tag-row" id="edTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="toggleTag(this,'${t}')">${t}</span>`).join('')}</div>
-    <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 ${d.generation_model||'unknown'} \u00b7 ${d.content_type||'draft'}</div>
+    <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 GridFeed Pipeline \u00b7 ${d.content_type||'draft'}</div>
     <div class="editor-grid">
       <div>
         <textarea class="editor-excerpt" id="edExcerpt" placeholder="Excerpt / lead paragraph..." onfocus="isEditing=true" onblur="isEditing=false">${esc(d.excerpt||'')}</textarea>
