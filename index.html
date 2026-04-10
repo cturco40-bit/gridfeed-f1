@@ -611,12 +611,18 @@ const TEAM_COLORS = {
   aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',
   sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000',
 };
+const TEAM_NAMES = {
+  red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',
+  kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',
+  mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',
+  sauber:'Audi',
+};
 
 /* ═══════ 2026 CALENDAR ═══════ */
 const SCHEDULE = [
   {round:1,  name:'Australian Grand Prix',          circuit:'Albert Park Circuit',            date:'2026-03-08',dateLabel:'Mar 6\u20138',    flag:'\u{1F1E6}\u{1F1FA}',sprint:false,winner:'G. Russell',   status:'done'},
-  {round:2,  name:'Chinese Grand Prix',             circuit:'Shanghai International Circuit', date:'2026-03-15',dateLabel:'Mar 13\u201315',  flag:'\u{1F1E8}\u{1F1F3}',sprint:true, winner:'A. Antonelli', status:'done'},
-  {round:3,  name:'Japanese Grand Prix',            circuit:'Suzuka Circuit',                 date:'2026-03-29',dateLabel:'Mar 27\u201329',  flag:'\u{1F1EF}\u{1F1F5}',sprint:false,winner:'A. Antonelli', status:'done'},
+  {round:2,  name:'Chinese Grand Prix',             circuit:'Shanghai International Circuit', date:'2026-03-15',dateLabel:'Mar 13\u201315',  flag:'\u{1F1E8}\u{1F1F3}',sprint:true, winner:'K. Antonelli', status:'done'},
+  {round:3,  name:'Japanese Grand Prix',            circuit:'Suzuka Circuit',                 date:'2026-03-29',dateLabel:'Mar 27\u201329',  flag:'\u{1F1EF}\u{1F1F5}',sprint:false,winner:'K. Antonelli', status:'done'},
   {round:null,name:'Bahrain Grand Prix',            circuit:'Bahrain International Circuit',  date:'2026-04-12',dateLabel:'Apr 12',          flag:'\u{1F1E7}\u{1F1ED}',sprint:false,winner:null,           status:'cancelled'},
   {round:null,name:'Saudi Arabian Grand Prix',      circuit:'Jeddah Corniche Circuit',        date:'2026-04-19',dateLabel:'Apr 19',          flag:'\u{1F1F8}\u{1F1E6}',sprint:false,winner:null,           status:'cancelled'},
   {round:4,  name:'Miami Grand Prix',               circuit:'Miami International Autodrome',  date:'2026-05-03',dateLabel:'May 1\u20133',    flag:'\u{1F1FA}\u{1F1F8}',sprint:true, winner:null,           status:'upcoming'},
@@ -642,7 +648,7 @@ const SCHEDULE = [
 
 /* ═══════ HELPERS ═══════ */
 function tagClass(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking'}[t]||'tag-analysis'}
-function timeAgo(d){const ms=Date.now()-new Date(d).getTime(),m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);return m<60?m+'m ago':h<24?h+'h ago':dy+'d ago'}
+function timeAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 function fmtDate(d){return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
 
 /* ═══════ TAB SWITCHING ═══════ */
@@ -858,14 +864,28 @@ async function fetchTimingData(){
   const bar=document.getElementById('resultsRefreshBar');
   if(bar)bar.innerHTML='<div class="spinner" style="width:12px;height:12px"></div>';
   try{
-    // Get latest leaderboard data from Supabase
-    const{data:sessions}=await sbq(s=>s.from('leaderboard').select('session_type,race_id').order('fetched_at',{ascending:false}).limit(1));
-    if(!sessions?.length)throw new Error('No timing data');
-
-    const raceId=sessions[0].race_id;
-    const{data:raceInfo}=await sbq(s=>s.from('races').select('name,circuit').eq('id',raceId).single());
+    // Get latest leaderboard for a completed or in_progress race (not future)
+    const{data:completedRaces}=await sbq(s=>s.from('races').select('id,name,circuit,status').in('status',['completed','in_progress']).order('race_date',{ascending:false}).limit(1));
+    let raceId,raceInfo;
+    if(completedRaces?.length){
+      raceInfo=completedRaces[0];raceId=raceInfo.id;
+    }else{
+      // Fallback to whatever leaderboard has
+      const{data:sessions}=await sbq(s=>s.from('leaderboard').select('session_type,race_id').order('fetched_at',{ascending:false}).limit(1));
+      if(!sessions?.length)throw new Error('No timing data');
+      raceId=sessions[0].race_id;
+      const{data:ri}=await sbq(s=>s.from('races').select('name,circuit,status').eq('id',raceId).single());
+      raceInfo=ri;
+    }
     const title=document.getElementById('resultsRaceTitle');
-    if(title&&raceInfo)title.textContent=raceInfo.name;
+    if(title&&raceInfo){
+      const suffix=raceInfo.status==='in_progress'?' \u2014 LIVE':' \u2014 Race Results';
+      title.textContent=raceInfo.name+suffix;
+    }
+    // Show next race note if no live session
+    if(raceInfo?.status!=='in_progress'&&STATE.nextRace){
+      if(bar)bar.textContent='No live session \u00b7 Next: '+STATE.nextRace.name+' '+STATE.nextRace.dateLabel;
+    }
 
     // Fetch all session types for this race
     const{data:allData}=await sbq(s=>s.from('leaderboard').select('*').eq('race_id',raceId).order('position',{ascending:true}));
@@ -1009,10 +1029,11 @@ async function fetchStandings(){
       pos:parseInt(e.position),name:`${e.Driver?.givenName} ${e.Driver?.familyName}`,abbr:e.Driver?.code||'',
       pts:parseFloat(e.points)||0,color:TEAM_COLORS[e.Constructors?.[0]?.constructorId]||'var(--accent)',
     })));
-    renderStandingsTable('constructorStandings',ctorList.map(e=>({
-      pos:parseInt(e.position),name:e.Constructor?.name||'\u2014',abbr:e.Constructor?.constructorId?.toUpperCase()||'',
-      pts:parseFloat(e.points)||0,color:TEAM_COLORS[e.Constructor?.constructorId]||'var(--accent)',
-    })));
+    renderStandingsTable('constructorStandings',ctorList.map(e=>{
+      const cid=e.Constructor?.constructorId||'';
+      return{pos:parseInt(e.position),name:TEAM_NAMES[cid]||e.Constructor?.name||'\u2014',abbr:'',
+      pts:parseFloat(e.points)||0,color:TEAM_COLORS[cid]||'var(--accent)'};
+    }));
   }catch(e){
     console.error('[GridFeed] Standings:',e.message);
     document.getElementById('driverStandings').innerHTML='<div class="empty-state">Standings unavailable.</div>';

@@ -18,6 +18,17 @@ export default async (req, context) => {
       const existing = await sb(`articles?slug=eq.${encodeURIComponent(slug)}&limit=1`);
       if (existing.length) continue;
 
+      // Title similarity dedup — skip if >60% word overlap with recent article from same author
+      const recentArticles = await sb(`articles?select=title&order=published_at.desc&limit=20`);
+      const titleWords = new Set((draft.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
+      const isDupe = recentArticles.some(a => {
+        const aw = new Set((a.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
+        if (!titleWords.size||!aw.size) return false;
+        let overlap=0; for(const w of titleWords) if(aw.has(w)) overlap++;
+        return overlap/Math.max(titleWords.size,aw.size) > 0.6;
+      });
+      if (isDupe) { console.warn('[publish-approved] Skipping near-duplicate:', draft.title); continue; }
+
       // Insert article FIRST
       const article = await sb('articles', 'POST', {
         title: draft.title, slug, body: draft.body, excerpt: draft.excerpt,

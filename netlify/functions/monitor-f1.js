@@ -30,6 +30,15 @@ const RSS_FEEDS = [
   { url: 'https://br.motorsport.com/rss/f1/news/', source: 'Motorsport Brasil', region: '🇧🇷' },
 ];
 
+function wordOverlap(a, b) {
+  const wa = new Set(a.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2));
+  const wb = new Set(b.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2));
+  if (!wa.size || !wb.size) return 0;
+  let overlap = 0;
+  for (const w of wa) if (wb.has(w)) overlap++;
+  return overlap / Math.max(wa.size, wb.size);
+}
+
 function makeSignature(title) {
   const t = title.toLowerCase();
   return [...DRIVERS, ...TEAMS, ...EVENTS].filter(e => t.includes(e.toLowerCase())).sort().join('-');
