@@ -137,12 +137,18 @@ export default async (req, context) => {
       // Re-check queue limit
       if (topicsCreated + recentTopics.length >= 5) break;
 
+      // Breaking news keyword boost
+      const BREAKING_KEYWORDS = ['breaking','confirmed','exclusive','shock','sacked','fired','signed','crash','injured','penalty','disqualified','retires','dies','died'];
+      const titleLower = group.titles[0].toLowerCase();
+      const isBreaking = BREAKING_KEYWORDS.some(k => titleLower.includes(k));
+      const priority = isBreaking ? Math.max(score, 10) : score;
+
       // Insert signature + topic
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
       await sb('content_topics', 'POST', {
         topic: group.titles[0],
-        content_type: score >= 12 ? 'breaking' : 'analysis',
-        priority: score, status: 'pending', triggered_by: 'monitor-f1',
+        content_type: isBreaking || score >= 12 ? 'breaking' : 'analysis',
+        priority, status: 'pending', triggered_by: 'monitor-f1',
       });
       topicsCreated++;
 

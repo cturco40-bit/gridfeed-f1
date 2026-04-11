@@ -47,7 +47,8 @@ export default async (req, context) => {
     }
 
     // Get pending topics (fetch a few for diversity filtering)
-    const allPending = await sb('content_topics?status=eq.pending&order=priority.desc,created_at.asc&limit=5');
+    // Priority DESC first, then fresh topics before retries, then oldest first
+    const allPending = await sb('content_topics?status=eq.pending&order=priority.desc,retry_count.asc,created_at.asc&limit=5');
     if (!allPending.length) {
       await logSync('generate-content', 'success', 0, 'No pending topics', Date.now() - start);
       return json({ ok: true, generated: 0 });
@@ -112,10 +113,17 @@ Avoid vague references like "defending champion's former teammate" — use actua
 Your lead sentence MUST contain a driver surname AND a number. No exceptions.
 BANNED WORDS — using any of these will cause automatic rejection: narrative, trajectory, fascinating, incredible, dominant, stunning, masterclass, wheelhouse, showcase, pivotal, monumental, seismic, sensational, breathtaking, remarkable, unraveling.`;
 
-      const systemPrompt = buildSystemPrompt(
+      let systemPrompt = buildSystemPrompt(
         extraGuards,
         `OUTPUT: Return ONLY valid JSON with no markdown fences:\n{"title":"...","excerpt":"first 150 chars","body":"full article","tags":["RACE"],"content_type":"${contentType}"}`
       );
+
+      // Feed previous validation error back to Claude on retry
+      if (topic.last_error && (topic.retry_count || 0) > 0) {
+        systemPrompt += '\n\nRETRY ATTEMPT ' + topic.retry_count + ' OF 3.';
+        systemPrompt += '\nYour previous draft was REJECTED for this reason: ' + topic.last_error;
+        systemPrompt += '\nFix this exact issue and produce a valid draft. Do NOT repeat the same mistake.';
+      }
 
       const userPrompt = `Write an article about: ${topicText}\nContent type: ${contentType}\nToday: ${TODAY}\n\nUse the context below. Write ${wordTarget} words.\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
 
@@ -136,12 +144,20 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
       parsed.body = fixEncoding(parsed.body);
       parsed.excerpt = fixEncoding(parsed.excerpt);
 
-      // Validation
+      // Validation — retry up to 3 times with error feedback
       const validation = validateArticle(parsed);
       if (!validation.valid) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped' });
-        await logSync('generate-content', 'validation_failed', 0, `${topicText.slice(0,40)}: ${validation.reason}`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: validation.reason });
+        const newRetryCount = (topic.retry_count || 0) + 1;
+        if (topic.id) {
+          if (newRetryCount >= 3) {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', retry_count: newRetryCount, last_error: validation.reason });
+            await logSync('generate-content', 'validation_failed', 0, `Topic failed after 3 retries: ${validation.reason}`, Date.now() - start);
+          } else {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'pending', retry_count: newRetryCount, last_error: validation.reason });
+            await logSync('generate-content', 'validation_retry', 0, `Validation failed (attempt ${newRetryCount}/3): ${topicText.slice(0,40)}: ${validation.reason}`, Date.now() - start);
+          }
+        }
+        return json({ ok: true, generated: 0, reason: validation.reason, retry: newRetryCount });
       }
 
       // Title dedup
