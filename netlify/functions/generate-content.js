@@ -37,8 +37,8 @@ export default async (req, context) => {
   try {
     if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
 
-    // Fetch ALL pending topics (no limit)
-    let topics = await sb('content_topics?status=eq.pending&order=priority.desc&limit=20');
+    // Process 1 topic per run (runs every 10 min, avoids timeout)
+    let topics = await sb('content_topics?status=eq.pending&order=priority.desc&limit=1');
 
     if (!topics.length) {
       const hour = new Date().getUTCHours();
@@ -66,41 +66,23 @@ export default async (req, context) => {
 
       try {
         const systemPrompt = buildSystemPrompt(
-          WEB_SEARCH_INSTRUCTION,
+          null,
           `OUTPUT: Return ONLY valid JSON with no markdown fences:\n{"title":"...","excerpt":"first 150 chars","body":"full article","tags":["RACE"],"content_type":"${contentType}"}`
         );
 
-        const userPrompt = `Topic: ${topicText}\nContent type: ${contentType}\nToday: ${TODAY}\n\nSearch for relevant data then write the article.\n\n${fullContext}\n\nTarget: ${wordTarget} words. JSON only.`;
+        const userPrompt = `Write an article about: ${topicText}\nContent type: ${contentType}\nToday: ${TODAY}\n\nUse the context below. Write ${wordTarget} words.\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"first 150 chars","body":"full article text","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
 
         const response = await fetchWT('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001', max_tokens: 2048,
-            tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-            system: systemPrompt, messages: [{ role: 'user', content: userPrompt }],
-          }),
-        }, 55000);
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2048, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+        }, 45000);
 
-        let rJson = await response.json();
+        const rJson = await response.json();
         let parsed;
         try { parsed = parseAIResponse(rJson); } catch {
           const anyText = (rJson.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
           parsed = { title: topicText, body: anyText || '', excerpt: (anyText || '').slice(0, 150), tags: ['ANALYSIS'], content_type: contentType };
-        }
-
-        // If web search returned empty body, retry WITHOUT web search
-        if (!parsed.body || parsed.body.trim().split(/\s+/).length < 50) {
-          const retryRes = await fetchWT('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2048, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
-          }, 30000);
-          rJson = await retryRes.json();
-          try { parsed = parseAIResponse(rJson); } catch {
-            const t2 = (rJson.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-            parsed = { title: topicText, body: t2 || '', excerpt: (t2 || '').slice(0, 150), tags: ['ANALYSIS'], content_type: contentType };
-          }
         }
 
         parsed.title = fixEncoding(parsed.title);
