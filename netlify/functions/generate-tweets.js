@@ -1,5 +1,5 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
-import { NEVER_REFUSE, SEASON_CONTEXT, DRIVER_TEAM_MAP, HALLUCINATION_RULES } from './lib/accuracy.js';
+import { NEVER_REFUSE, SEASON_CONTEXT, DRIVER_TEAM_MAP, HALLUCINATION_RULES, VOICE_IDENTITY, LEGAL_AND_ETHICS } from './lib/accuracy.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
@@ -31,7 +31,7 @@ export default async (req, context) => {
       const articleUrl = 'gridfeed.co/article/' + urlSlug;
       const maxBody = 270 - articleUrl.length;
 
-      const systemPrompt = `${NEVER_REFUSE}\n\n${HALLUCINATION_RULES}\n\n${SEASON_CONTEXT}\n\n${DRIVER_TEAM_MAP}\n\nWrite a tweet for @GridFeedF1. Max ${maxBody} chars. No hashtags. No em dashes.\nOne specific data point. Conversational. Confident.\nOutput ONLY the tweet text.`;
+      const systemPrompt = `${NEVER_REFUSE}\n\n${HALLUCINATION_RULES}\n\n${SEASON_CONTEXT}\n\n${DRIVER_TEAM_MAP}\n\n${VOICE_IDENTITY}\n\n${LEGAL_AND_ETHICS}\n\nWrite a tweet for @GridFeedF1. Max ${maxBody} chars. No hashtags. No em dashes. Write like a sharp paddock insider texting a friend. One specific fact. One take. One link.\nOutput ONLY the tweet text. Nothing else. No JSON. No labels.`;
 
       try {
         const res = await fetchWT('https://api.anthropic.com/v1/messages', {

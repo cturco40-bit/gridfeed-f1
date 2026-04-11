@@ -1,5 +1,5 @@
 import { fetchWT, sb, logSync, json, getNextRace } from './lib/shared.js';
-import { NEVER_REFUSE, SEASON_CONTEXT, DRIVER_TEAM_MAP, HALLUCINATION_RULES } from './lib/accuracy.js';
+import { NEVER_REFUSE, SEASON_CONTEXT, DRIVER_TEAM_MAP, HALLUCINATION_RULES, LEGAL_AND_ETHICS } from './lib/accuracy.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
