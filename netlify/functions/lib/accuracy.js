@@ -163,7 +163,23 @@ const DRIVER_AGES = {
 const STREET_CIRCUITS = ['monaco', 'singapore', 'baku', 'azerbaijan'];
 const NOT_STREET_CIRCUITS = ['miami', 'las vegas', 'jeddah'];
 
+const HALLUCINATION_PATTERNS = [
+  { pattern: /gpmf[-_]/i, label: 'gpmf- token' },
+  { pattern: /\{[a-z_]+\}/, label: '{variable} placeholder' },
+  { pattern: /\[INSERT[^\]]*\]/i, label: '[INSERT] placeholder' },
+  { pattern: /\bTODO\b/, label: 'TODO marker' },
+  { pattern: /\bxxx\b/i, label: 'xxx placeholder' },
+  { pattern: /lorem ipsum/i, label: 'lorem ipsum' },
+];
+
+const FABRICATED_SOURCING = [
+  'sources confirmed', 'sources told', 'sources said', 'sources revealed',
+  'a source close to', 'speaking on condition of anonymity', 'this reporter',
+  'gridfeed has learned', 'gridfeed understands', 'gridfeed can reveal',
+];
+
 export function validateArticle(article) {
+  console.log('[validateArticle] RUNNING — title:', (article.title || '').slice(0, 60));
   const body = (article.body || '').toLowerCase();
   const title = (article.title || '').toLowerCase();
   const combined = body + ' ' + title;
@@ -171,39 +187,45 @@ export function validateArticle(article) {
   // ── A. BANNED WORDS ──
   for (const word of BANNED_WORDS) {
     if (combined.includes(word.toLowerCase())) {
+      console.log('[validateArticle] REJECTED — Banned word:', word);
       return { valid: false, reason: 'Banned word: ' + word };
     }
   }
+  console.log('[validateArticle] PASSED banned words');
 
   // ── B. DRIVER NAME SPELLING ──
   for (const [wrong, right] of Object.entries(DRIVER_SPELLINGS)) {
     if (combined.includes(wrong)) {
+      console.log('[validateArticle] REJECTED — Misspelled:', wrong);
       return { valid: false, reason: `Misspelled driver: "${wrong}" (should be ${right})` };
     }
   }
+  console.log('[validateArticle] PASSED driver spellings');
 
   // ── C. AGE FACTS ──
   for (const [driver, info] of Object.entries(DRIVER_AGES)) {
-    // Check ages within 50 chars of driver name
     const regex = new RegExp(`(\\d{1,2})-year-old`, 'g');
     let match;
     while ((match = regex.exec(combined)) !== null) {
       const ageNum = parseInt(match[1]);
       const nearby = combined.slice(Math.max(0, match.index - 50), match.index + match[0].length + 50);
       if (nearby.includes(driver) && ageNum !== info.age) {
+        console.log('[validateArticle] REJECTED — Wrong age for', driver, ':', ageNum, 'vs', info.age);
         return { valid: false, reason: `Wrong age for ${driver}: said ${ageNum}, actually ${info.age}` };
       }
     }
   }
+  console.log('[validateArticle] PASSED age facts');
 
   // ── D. CHAMPIONSHIP CLAIMS ──
   if (combined.includes('defending champion')) {
     const defIdx = combined.indexOf('defending champion');
     const nearDef = combined.slice(Math.max(0, defIdx - 60), defIdx + 80);
-    if (nearDef.includes('verstappen')) return { valid: false, reason: 'Hallucination: Verstappen called defending champion (Norris is 2025 champ)' };
-    if (nearDef.includes('russell')) return { valid: false, reason: 'Hallucination: Russell called defending champion (Norris is 2025 champ)' };
-    if (nearDef.includes('hamilton')) return { valid: false, reason: 'Hallucination: Hamilton called defending champion (Norris is 2025 champ)' };
+    if (nearDef.includes('verstappen')) { console.log('[validateArticle] REJECTED — Verstappen defending champ'); return { valid: false, reason: 'Hallucination: Verstappen called defending champion (Norris is 2025 champ)' }; }
+    if (nearDef.includes('russell')) { console.log('[validateArticle] REJECTED — Russell defending champ'); return { valid: false, reason: 'Hallucination: Russell called defending champion (Norris is 2025 champ)' }; }
+    if (nearDef.includes('hamilton')) { console.log('[validateArticle] REJECTED — Hamilton defending champ'); return { valid: false, reason: 'Hallucination: Hamilton called defending champion (Norris is 2025 champ)' }; }
   }
+  console.log('[validateArticle] PASSED championship claims');
 
   // ── E. CIRCUIT TYPE FACTS ──
   for (const circuit of NOT_STREET_CIRCUITS) {
@@ -211,10 +233,12 @@ export function validateArticle(article) {
       const streetIdx = combined.indexOf('street circuit');
       const nearStreet = combined.slice(Math.max(0, streetIdx - 80), streetIdx + 30);
       if (nearStreet.includes(circuit)) {
+        console.log('[validateArticle] REJECTED — Wrong street circuit:', circuit);
         return { valid: false, reason: `${circuit} is NOT a street circuit` };
       }
     }
   }
+  console.log('[validateArticle] PASSED circuit types');
 
   // ── F. LEAD SENTENCE RULE ──
   const firstSentence = (article.body || '').split(/[.!?]/)[0] || '';
@@ -222,33 +246,61 @@ export function validateArticle(article) {
   const hasName = SURNAMES.some(s => firstSentence.includes(s));
   const hasNumber = /\d/.test(firstSentence);
   if (!hasName || !hasNumber) {
+    console.log('[validateArticle] REJECTED — Lead sentence missing name(' + hasName + ') or number(' + hasNumber + '):', firstSentence.slice(0, 80));
     return { valid: false, reason: 'Lead sentence missing driver name or number' };
   }
+  console.log('[validateArticle] PASSED lead sentence');
 
-  // ── EXISTING CHECKS ──
+  // ── G. HALLUCINATED TOKENS ──
+  for (const { pattern, label } of HALLUCINATION_PATTERNS) {
+    if (pattern.test(article.body || '') || pattern.test(article.title || '')) {
+      console.log('[validateArticle] REJECTED — Hallucinated token:', label);
+      return { valid: false, reason: 'Hallucinated token: ' + label };
+    }
+  }
+  console.log('[validateArticle] PASSED hallucination patterns');
+
+  // ── H. FABRICATED SOURCING ──
+  for (const phrase of FABRICATED_SOURCING) {
+    if (body.includes(phrase)) {
+      console.log('[validateArticle] REJECTED — Fabricated sourcing:', phrase);
+      return { valid: false, reason: 'Fabricated sourcing: ' + phrase };
+    }
+  }
+  console.log('[validateArticle] PASSED fabricated sourcing');
+
+  // ── I. FAKE VENUES ──
   const fakeVenues = ['bristol', 'nashville', 'jakarta', 'delhi', 'seoul', 'bangkok', 'cape town', 'new york', 'london grand prix', 'paris grand prix'];
   for (const v of fakeVenues) {
-    if (combined.includes(v)) return { valid: false, reason: `Fake venue: ${v}` };
+    if (combined.includes(v)) { console.log('[validateArticle] REJECTED — Fake venue:', v); return { valid: false, reason: `Fake venue: ${v}` }; }
   }
+  console.log('[validateArticle] PASSED fake venues');
 
+  // ── J. HAMILTON AT MERCEDES ──
   if (combined.includes('hamilton') && (combined.includes('his mercedes') || combined.includes('mercedes team-mate hamilton') || combined.includes('hamilton leads mercedes'))) {
+    console.log('[validateArticle] REJECTED — Hamilton at Mercedes');
     return { valid: false, reason: 'Hallucination: Hamilton placed at Mercedes in 2026' };
   }
 
+  // ── K. ANDREA ANTONELLI ──
   if (combined.includes('andrea antonelli') && !combined.includes('full name')) {
+    console.log('[validateArticle] REJECTED — Andrea Antonelli');
     return { valid: false, reason: 'Wrong name: Andrea Antonelli (should be Kimi Antonelli)' };
   }
 
-  // DRS check — abolished in 2026
+  // ── L. DRS ──
   if (combined.includes('drs') && !combined.includes('replaced') && !combined.includes('abolished') && !combined.includes('no longer') && !combined.includes('old') && !combined.includes('former')) {
+    console.log('[validateArticle] REJECTED — DRS in 2026');
     return { valid: false, reason: 'DRS mentioned in 2026 content — system abolished, use Overtake Mode' };
   }
 
-  if (!article.title || article.title.length < 15) return { valid: false, reason: 'Title too short' };
+  // ── M. TITLE + LENGTH ──
+  if (!article.title || article.title.length < 15) { console.log('[validateArticle] REJECTED — Title too short'); return { valid: false, reason: 'Title too short' }; }
 
   const wc = (article.body || '').trim().split(/\s+/).length;
-  if (wc < 100) return { valid: false, reason: `Too short: ${wc} words` };
+  if (wc < 100) { console.log('[validateArticle] REJECTED — Too short:', wc); return { valid: false, reason: `Too short: ${wc} words` }; }
 
+  console.log('[validateArticle] ALL CHECKS PASSED — title:', (article.title || '').slice(0, 60), '— words:', wc);
   return { valid: true };
 }
 

@@ -145,7 +145,9 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
       parsed.excerpt = fixEncoding(parsed.excerpt);
 
       // Validation — retry up to 3 times with error feedback
+      console.log('[generate-content] Calling validateArticle for:', (parsed.title || '').slice(0, 60));
       const validation = validateArticle(parsed);
+      console.log('[generate-content] validateArticle returned:', JSON.stringify(validation));
       if (!validation.valid) {
         const newRetryCount = (topic.retry_count || 0) + 1;
         if (topic.id) {
@@ -178,6 +180,7 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
       }
 
       // Insert draft
+      console.log('[generate-content] About to insert draft, validation result was:', validation.valid, '— title:', parsed.title.slice(0, 60));
       await sb('content_drafts', 'POST', {
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
         tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
