@@ -1,8 +1,8 @@
 import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
 
-function generateTweet(title, articleBody) {
-  const url = 'gridfeed.co';
+function generateTweet(title, articleBody, slug) {
+  const url = 'gridfeed.co/#/article/' + slug;
   const firstSentence = (articleBody || '').split(/[.!?]/)[0]?.trim() || '';
 
   // Only use first sentence if it's meaningfully different from the title
@@ -57,7 +57,7 @@ export default async (req) => {
 
     // 3. Create tweet draft as pending — needs manual approval before posting
     try {
-      const tweetText = generateTweet(cleanTitle, cleanBody);
+      const tweetText = generateTweet(cleanTitle, cleanBody, slug);
       await sb('tweets', 'POST', {
         article_id: articleId,
         tweet_text: tweetText,
