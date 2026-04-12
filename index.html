@@ -1139,7 +1139,7 @@ function renderRaceContent(){
       </div></div>
       <div class="slabel">Championship Context</div>
       <div class="card mb-16"><div class="card-body" style="font-size:12px;line-height:1.7;color:var(--dim)">
-        Antonelli leads with 72pts \u2014 9 ahead of Russell. Ferrari P3/P4 with Leclerc and Hamilton closing. Red Bull in crisis \u2014 Verstappen P9 with just 12pts. Mercedes have won all 3 races so far.
+        Antonelli leads with 72pts \u2014 9 ahead of Russell (63). Leclerc P3 (49), Hamilton P4 (41). Norris best-of-rest P5 (25). Verstappen P9 with just 12pts after starting R1 from P20. Mercedes have won all 3 races so far.
       </div></div>
       <div class="slabel">Picks</div>
       <div class="card"><div class="card-body" style="text-align:center;color:var(--muted);font-size:12px;padding:24px">\ud83d\udd12 Picks drop when Miami odds go live ~Apr 27</div></div>
@@ -1342,29 +1342,28 @@ function initDark(){if(localStorage.getItem('gf_dark')==='1'||((!localStorage.ge
 
 /* ═══ DRIVER STATS (2026 after R3) ═══ */
 const DSTATS={
-  'Kimi Antonelli':{pts:72,wins:2,pods:3,results:[2,1,1],team:'Mercedes',tc:M,abbr:'ANT',num:12},
-  'George Russell':{pts:63,wins:1,pods:3,results:[1,2,4],team:'Mercedes',tc:M,abbr:'RUS',num:63},
-  'Charles Leclerc':{pts:49,wins:0,pods:3,results:[3,4,3],team:'Ferrari',tc:F,abbr:'LEC',num:16},
-  'Lewis Hamilton':{pts:41,wins:0,pods:1,results:[4,3,6],team:'Ferrari',tc:F,abbr:'HAM',num:44},
-  'Lando Norris':{pts:25,wins:0,pods:0,results:[5,5,5],team:'McLaren',tc:ML,abbr:'NOR',num:4},
-  'Oscar Piastri':{pts:21,wins:0,pods:1,results:['DNF','DNF',2],team:'McLaren',tc:ML,abbr:'PIA',num:81},
-  'Oliver Bearman':{pts:17,wins:0,pods:0,results:[11,10,10],team:'Haas',tc:H,abbr:'BEA',num:87},
-  'Pierre Gasly':{pts:15,wins:0,pods:0,results:[6,6,7],team:'Alpine',tc:A,abbr:'GAS',num:10},
-  'Max Verstappen':{pts:12,wins:0,pods:0,results:[8,8,8],team:'Red Bull',tc:RB,abbr:'VER',num:1},
-  'Liam Lawson':{pts:10,wins:0,pods:0,results:[14,9,9],team:'Racing Bulls',tc:TB,abbr:'LAW',num:30},
-  'Esteban Ocon':{pts:1,wins:0,pods:0,results:[10,12,12],team:'Haas',tc:H,abbr:'OCO',num:31},
-  'Carlos Sainz':{pts:2,wins:0,pods:0,results:[7,11,11],team:'Williams',tc:W,abbr:'SAI',num:55},
-  'Alexander Albon':{pts:2,wins:0,pods:0,results:[9,16,16],team:'Williams',tc:W,abbr:'ALB',num:23},
-  'Fernando Alonso':{pts:0,wins:0,pods:0,results:[13,7,'DNF'],team:'Aston Martin',tc:AM,abbr:'ALO',num:14},
-  'Lance Stroll':{pts:0,wins:0,pods:0,results:[12,13,13],team:'Aston Martin',tc:AM,abbr:'STR',num:18},
-  'Isack Hadjar':{pts:0,wins:0,pods:0,results:[16,14,14],team:'Red Bull',tc:RB,abbr:'HAD',num:20},
-  'Arvid Lindblad':{pts:0,wins:0,pods:0,results:[15,15,15],team:'Racing Bulls',tc:TB,abbr:'LIN',num:40},
-  'Isack Hadjar':{pts:0,wins:0,pods:0,results:[16,14,14],team:'Red Bull',tc:RB,abbr:'HAD',num:20},
-  'Franco Colapinto':{pts:0,wins:0,pods:0,results:[15,11,'DNF'],team:'Alpine',tc:A,abbr:'COL',num:43},
-  'Nico Hulkenberg':{pts:0,wins:0,pods:0,results:[18,18,18],team:'Audi',tc:AU,abbr:'HUL',num:27},
-  'Gabriel Bortoleto':{pts:0,wins:0,pods:0,results:[17,17,17],team:'Audi',tc:AU,abbr:'BOR',num:5},
-  'Valtteri Bottas':{pts:0,wins:0,pods:0,results:[19,19,19],team:'Cadillac',tc:CA,abbr:'BOT',num:77},
-  'Sergio Perez':{pts:0,wins:0,pods:0,results:[20,20,20],team:'Cadillac',tc:CA,abbr:'PER',num:11},
+  'Kimi Antonelli':{pts:72,wins:2,pods:3,results:[2,1,1],avgFinish:1.3,team:'Mercedes',tc:M,abbr:'ANT',num:12},
+  'George Russell':{pts:63,wins:1,pods:2,results:[1,2,4],avgFinish:2.3,team:'Mercedes',tc:M,abbr:'RUS',num:63},
+  'Charles Leclerc':{pts:49,wins:0,pods:2,results:[3,4,3],avgFinish:3.3,team:'Ferrari',tc:F,abbr:'LEC',num:16},
+  'Lewis Hamilton':{pts:41,wins:0,pods:1,results:[4,3,6],avgFinish:4.3,team:'Ferrari',tc:F,abbr:'HAM',num:44},
+  'Lando Norris':{pts:25,wins:0,pods:0,results:[5,5,5],avgFinish:5.0,team:'McLaren',tc:ML,abbr:'NOR',num:4},
+  'Oscar Piastri':{pts:21,wins:0,pods:1,results:['DNS','DNF',2],avgFinish:2.0,team:'McLaren',tc:ML,abbr:'PIA',num:81},
+  'Oliver Bearman':{pts:17,wins:0,pods:0,results:[7,10,10],avgFinish:9.0,team:'Haas',tc:H,abbr:'BEA',num:87},
+  'Pierre Gasly':{pts:15,wins:0,pods:0,results:[10,6,7],avgFinish:7.7,team:'Alpine',tc:A,abbr:'GAS',num:10},
+  'Max Verstappen':{pts:12,wins:0,pods:0,results:[6,8,8],avgFinish:7.3,team:'Red Bull',tc:RB,abbr:'VER',num:1},
+  'Liam Lawson':{pts:10,wins:0,pods:0,results:['DNF',9,9],avgFinish:9.0,team:'Racing Bulls',tc:TB,abbr:'LAW',num:30},
+  'Arvid Lindblad':{pts:6,wins:0,pods:0,results:[8,'DNF','DNF'],avgFinish:8.0,team:'Racing Bulls',tc:TB,abbr:'LIN',num:40},
+  'Gabriel Bortoleto':{pts:4,wins:0,pods:0,results:[9,19,15],avgFinish:14.3,team:'Audi',tc:AU,abbr:'BOR',num:5},
+  'Fernando Alonso':{pts:4,wins:0,pods:0,results:['DNF',7,'DNF'],avgFinish:7.0,team:'Aston Martin',tc:AM,abbr:'ALO',num:14},
+  'Carlos Sainz':{pts:0,wins:0,pods:0,results:[13,11,14],avgFinish:12.7,team:'Williams',tc:W,abbr:'SAI',num:55},
+  'Alexander Albon':{pts:0,wins:0,pods:0,results:[9,15,17],avgFinish:13.7,team:'Williams',tc:W,abbr:'ALB',num:23},
+  'Esteban Ocon':{pts:0,wins:0,pods:0,results:[10,12,16],avgFinish:12.7,team:'Haas',tc:H,abbr:'OCO',num:31},
+  'Isack Hadjar':{pts:0,wins:0,pods:0,results:[11,14,13],avgFinish:12.7,team:'Red Bull',tc:RB,abbr:'HAD',num:20},
+  'Nico Hulkenberg':{pts:0,wins:0,pods:0,results:['DNS',17,18],avgFinish:17.5,team:'Audi',tc:AU,abbr:'HUL',num:27},
+  'Lance Stroll':{pts:0,wins:0,pods:0,results:['DNF',13,12],avgFinish:12.5,team:'Aston Martin',tc:AM,abbr:'STR',num:18},
+  'Franco Colapinto':{pts:0,wins:0,pods:0,results:[15,11,'DNF'],avgFinish:13.0,team:'Alpine',tc:A,abbr:'COL',num:43},
+  'Sergio Perez':{pts:0,wins:0,pods:0,results:[20,20,20],avgFinish:20.0,team:'Cadillac',tc:CA,abbr:'PER',num:11},
+  'Valtteri Bottas':{pts:0,wins:0,pods:0,results:['DNF',19,19],avgFinish:19.0,team:'Cadillac',tc:CA,abbr:'BOT',num:77},
 };
 
 /* ═══ DRIVER SHEET ═══ */
