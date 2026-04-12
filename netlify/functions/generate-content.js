@@ -93,6 +93,55 @@ export default async (req, context) => {
     if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'processing' });
 
     try {
+      // ── Fetch source article content ──
+      let sourceContent = '';
+      let sourcePublication = '';
+
+      if (topic.source_url) {
+        try {
+          const srcRes = await fetchWT(topic.source_url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GridFeedBot/1.0; +https://gridfeed.co)' },
+          }, 10000);
+          if (srcRes.ok) {
+            const html = await srcRes.text();
+            sourceContent = html
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+              .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+              .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 6000);
+
+            const url = new URL(topic.source_url);
+            const host = url.hostname.replace('www.', '');
+            const PUB_MAP = {
+              'autosport.com': 'Autosport', 'motorsport.com': 'Motorsport.com',
+              'the-race.com': 'The Race', 'racefans.net': 'RaceFans',
+              'planetf1.com': 'PlanetF1', 'skysports.com': 'Sky Sports F1',
+              'bbc.co.uk': 'BBC Sport', 'bbc.com': 'BBC Sport',
+              'formula1.com': 'Formula1.com', 'espn.com': 'ESPN',
+              'gpblog.com': 'GPblog', 'wtf1.com': 'WTF1',
+              'crash.net': 'Crash.net', 'gpfans.com': 'GPFans',
+              'gptoday.net': 'GPToday', 'f1chronicle.com': 'F1 Chronicle',
+            };
+            sourcePublication = PUB_MAP[host] || host;
+            console.log('[generate-content] Source fetched from', sourcePublication, '—', sourceContent.length, 'chars');
+          }
+        } catch (e) {
+          console.warn('[generate-content] Source fetch failed:', e.message);
+        }
+      }
+
+      // Skip breaking/analysis topics with no source — too high risk of hallucination
+      if (!sourceContent && ['breaking', 'analysis'].includes(contentType)) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped' });
+        await logSync('generate-content', 'success', 0, `Skipping ${contentType} — no source content available`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'no_source_content' });
+      }
+
       // Build context
       const picks = await sb('betting_picks?status=eq.active&order=created_at.desc&limit=10');
       const picksContext = picks.length ? 'CURRENT PICKS:\n' + picks.map(p => `${p.pick_type}: ${p.driver_name} ${p.odds} — ${p.analysis || ''}`).join('\n') : '';
@@ -125,7 +174,13 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
         systemPrompt += '\nFix this exact issue and produce a valid draft. Do NOT repeat the same mistake.';
       }
 
-      const userPrompt = `Write an article about: ${topicText}\nContent type: ${contentType}\nToday: ${TODAY}\n\nUse the context below. Write ${wordTarget} words.\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
+      // Build user prompt — source-grounded when available, conservative fallback otherwise
+      let userPrompt;
+      if (sourceContent) {
+        userPrompt = `Source article from ${sourcePublication}:\n"""\n${sourceContent}\n"""\n\nRewrite this story in GridFeed voice for our readers.\n\nCRITICAL RULES:\n- Only use facts that appear in the source above\n- Only quote text that appears verbatim in the source above\n- Every direct quote MUST be attributed: "Speaking to ${sourcePublication}, [driver] said..."\n- Do not invent quotes, briefings, or statements\n- Do not add analysis that is not grounded in the source facts\n- If the source mentions specific numbers, use those exact numbers\n- Lead sentence must contain a specific driver name AND a specific number\n- Match the GridFeed voice (sharp, authoritative, data-backed)\n- Word count: ${wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
+      } else {
+        userPrompt = `Topic: ${topicText}\n\nWrite a brief F1 news update on this topic in GridFeed voice.\n\nCRITICAL RULES:\n- Do NOT include any direct quotes — no source available\n- Do NOT invent statements or briefings\n- Stick to verifiable facts about the 2026 season from the context below\n- Lead sentence must contain a specific driver name AND a specific number\n- Maximum 200 words\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
+      }
 
       const response = await fetchWT('https://api.anthropic.com/v1/messages', {
         method: 'POST',

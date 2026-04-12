@@ -160,12 +160,16 @@ export default async (req, context) => {
       const isBreaking = BREAKING_KEYWORDS.some(k => titleLower.includes(k));
       const priority = isBreaking ? Math.max(score, 10) : score;
 
+      // Pick best source URL (prefer first source with a link)
+      const sourceUrl = group.sources.find(s => s.link)?.link || null;
+
       // Insert signature + topic
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
       await sb('content_topics', 'POST', {
         topic: group.titles[0],
         content_type: isBreaking || score >= 12 ? 'breaking' : 'analysis',
         priority, status: 'pending', triggered_by: 'monitor-f1',
+        source_url: sourceUrl,
       });
       topicsCreated++;
 
