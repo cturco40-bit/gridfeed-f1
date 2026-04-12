@@ -70,6 +70,19 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
   .hdr-in{height:52px}
 }
 
+/* ═══ iOS PWA STANDALONE SAFE AREA ═══ */
+@media all and (display-mode:standalone){
+  html{background:var(--header)}
+  body{padding-top:constant(safe-area-inset-top);padding-top:env(safe-area-inset-top,0)}
+  body::before{display:none}
+  .hdr{padding-top:0}
+}
+@supports(-webkit-touch-callout:none){
+  @media all and (display-mode:standalone){
+    body{min-height:-webkit-fill-available}
+  }
+}
+
 /* ═══ LAYOUT ═══ */
 .wrap{max-width:var(--max-w);margin:0 auto;padding:16px 16px 80px}
 @media(min-width:769px){.wrap{padding:28px 20px 60px}}
