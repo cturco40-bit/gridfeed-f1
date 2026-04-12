@@ -56,7 +56,7 @@ export default async (req, context) => {
 
     // ── Subject dedup: check drafts AND published articles ──
     const DRIVER_NAMES = ['Antonelli','Russell','Leclerc','Hamilton','Norris','Piastri','Verstappen','Hadjar','Alonso','Stroll','Gasly','Colapinto','Sainz','Albon','Ocon','Bearman','Lawson','Lindblad','Hulkenberg','Bortoleto','Perez','Bottas'];
-    const SUBJECT_KEYWORDS = ['contract','transfer','penalty','crash','engine','retirement','regulation','budget cap','wind tunnel','sprint','qualifying','practice','safety car','red flag','overtake mode','active aero','miami','monaco','silverstone','monza','spa'];
+    const SUBJECT_KEYWORDS = ['contract','transfer','penalty','crash','engine','retirement','regulation','budget cap','wind tunnel','sprint','qualifying','practice','safety car','red flag','overtake mode','active aero','aduo','rookie','test','launch','livery','setup','strategy','tyre','pit stop','dnf','points','championship','title','win','podium','pole','fastest lap','australia','china','japan','bahrain','saudi','miami','imola','monaco','spain','canada','austria','britain','silverstone','hungary','belgium','spa','netherlands','italy','monza','azerbaijan','baku','singapore','usa','austin','mexico','brazil','interlagos','vegas','qatar','abu dhabi','f2','f1 academy','fia','crash','injury','sacked','signed','fired'];
     function extractDrivers(text) { return DRIVER_NAMES.filter(d => text.toLowerCase().includes(d.toLowerCase())); }
     function extractSubjects(text) { const t = text.toLowerCase(); return SUBJECT_KEYWORDS.filter(k => t.includes(k)); }
     function topicOverlaps(titleA, titleB) {
@@ -236,12 +236,24 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         return json({ ok: true, generated: 0, reason: validation.reason, retry: newRetryCount });
       }
 
-      // Title dedup
+      // Title dedup (exact match)
       const titleCheck = await sb(`content_drafts?title=eq.${encodeURIComponent(parsed.title)}&limit=1`);
       if (titleCheck.length) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
         await logSync('generate-content', 'success', 0, 'Duplicate title skipped: ' + parsed.title.slice(0, 50), Date.now() - start);
         return json({ ok: true, generated: 0, reason: 'duplicate_title' });
+      }
+
+      // Subject-level dedup on the GENERATED title — re-check against all recent content
+      // (catches case where Claude wrote about same subject from a different topic)
+      const freshDrafts = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+      const freshArticles = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+      const freshTitles = [...freshDrafts, ...freshArticles].map(r => r.title || '');
+      const overlapMatch = freshTitles.find(t => topicOverlaps(parsed.title, t));
+      if (overlapMatch && !parsed.title.toLowerCase().startsWith('update')) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped', last_error: 'Subject already covered: ' + overlapMatch.slice(0, 60) });
+        await logSync('generate-content', 'success', 0, `Subject overlap skipped: "${parsed.title.slice(0, 40)}" vs "${overlapMatch.slice(0, 40)}"`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'subject_overlap', existing: overlapMatch });
       }
 
       // Content hash dedup
