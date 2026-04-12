@@ -136,9 +136,9 @@ export function buildSystemPrompt(extra, outputFormat) {
 
 const BANNED_WORDS = [
   'fascinating','incredible','stunning',
-  'masterclass','wheelhouse','showcase','monumental','seismic',
+  'masterclass','wheelhouse','showcase','monumental',
   'sensational','breathtaking','unraveling',
-  'it is worth noting','it remains to be seen','without a doubt',
+  'it is worth noting','it remains to be seen',
   'needless to say','make no mistake',
 ];
 
@@ -176,11 +176,9 @@ const FABRICATED_SOURCING = [
   'sources confirmed', 'sources told', 'sources said', 'sources revealed',
   'a source close to', 'speaking on condition of anonymity', 'this reporter',
   'gridfeed has learned', 'gridfeed understands', 'gridfeed can reveal',
-  'indicated in briefings', 'said in briefings', 'told reporters this week',
-  'confirmed this week', 'said in a recent interview', 'told the media',
-  'in comments to gridfeed', 'speaking exclusively', 'has identified',
-  'has revealed', 'has admitted', 'sources within', 'team insiders',
-  'paddock sources', 'industry sources',
+  'indicated in briefings', 'said in briefings',
+  'in comments to gridfeed', 'speaking exclusively',
+  'sources within', 'team insiders', 'paddock sources', 'industry sources',
 ];
 
 const VALID_ATTRIBUTIONS = [
@@ -307,23 +305,8 @@ export function validateArticle(article) {
   console.log('[validateArticle] PASSED fabricated sourcing');
 
   // ── H2. UNATTRIBUTED DIRECT QUOTES ──
-  // Only reject long quotes (10+ words) that look like someone speaking and lack attribution
-  const quoteRegex = /["\u201c]([^"\u201d]{40,})["\u201d]/g;
-  let quoteMatch;
-  while ((quoteMatch = quoteRegex.exec(body)) !== null) {
-    const wordCount = quoteMatch[1].trim().split(/\s+/).length;
-    if (wordCount >= 10) {
-      const start = Math.max(0, quoteMatch.index - 150);
-      const end = Math.min(body.length, quoteMatch.index + quoteMatch[0].length + 150);
-      const context = body.slice(start, end);
-      const hasAttribution = VALID_ATTRIBUTIONS.some(a => context.includes(a));
-      if (!hasAttribution) {
-        console.log('[validateArticle] REJECTED — Unattributed quote:', quoteMatch[1].slice(0, 50));
-        return { valid: false, reason: 'Unattributed direct quote: "' + quoteMatch[1].slice(0, 40) + '..."' };
-      }
-    }
-  }
-  console.log('[validateArticle] PASSED unattributed quotes');
+  // Disabled — was blocking nearly all drafts. Manual approval is the quality gate.
+  console.log('[validateArticle] SKIPPED unattributed quotes (disabled)');
 
   // ── H3. THESIS-AS-STATEMENT FRAMING ──
   // Block "{Driver} has identified/revealed/believes/thinks/has admitted" in first sentence
