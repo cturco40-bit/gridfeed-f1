@@ -38,8 +38,8 @@ button{cursor:pointer;border:none;background:none;font-family:var(--font);-webki
 img{display:block;max-width:100%}
 
 /* ═══ HEADER ═══ */
-.hdr{position:sticky;top:0;z-index:100;background:var(--header);border-bottom:2px solid var(--accent)}
-.hdr-in{max-width:var(--max-w);margin:0 auto;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;height:48px}
+.hdr{position:sticky;top:0;z-index:100;background:var(--header);border-bottom:2px solid var(--accent);padding-top:env(safe-area-inset-top,0)}
+.hdr-in{max-width:var(--max-w);margin:0 auto;padding:6px 16px;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));display:flex;align-items:center;justify-content:space-between;height:48px}
 .hdr-logo{height:32px;width:auto}
 .hdr-right{display:flex;align-items:center;gap:10px}
 .live-badge{display:none;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:1px;color:#fff;background:rgba(232,0,45,.2);border:1px solid var(--accent);padding:3px 8px;border-radius:3px}
