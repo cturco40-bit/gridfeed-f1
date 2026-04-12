@@ -277,8 +277,13 @@ export function validateArticle(article) {
   const firstSentence = (article.body || '').split(/[.!?]/)[0] || '';
   const hasName = SURNAMES.some(s => firstSentence.includes(s));
   const hasNumber = /\d/.test(firstSentence);
-  if (!hasName || !hasNumber) {
+  const isRaceContent = ['race_recap','qualifying_recap','practice_analysis'].includes(article.content_type);
+  if (isRaceContent && (!hasName || !hasNumber)) {
     console.log('[validateArticle] REJECTED — Lead sentence missing name(' + hasName + ') or number(' + hasNumber + '):', firstSentence.slice(0, 80));
+    return { valid: false, reason: 'Lead sentence missing driver name or number' };
+  }
+  if (!isRaceContent && !hasName && !hasNumber) {
+    console.log('[validateArticle] REJECTED — Lead sentence has no name or number at all:', firstSentence.slice(0, 80));
     return { valid: false, reason: 'Lead sentence missing driver name or number' };
   }
   console.log('[validateArticle] PASSED lead sentence');
