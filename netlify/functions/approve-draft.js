@@ -55,18 +55,15 @@ export default async (req) => {
       published_article_id: articleId, title: cleanTitle, body: cleanBody, excerpt: cleanExcerpt, tags,
     });
 
-    // 3. Create tweet as approved + immediately trigger post-tweet to send it
+    // 3. Create tweet draft as pending — needs manual approval before posting
     try {
       const tweetText = generateTweet(cleanTitle, cleanBody);
       await sb('tweets', 'POST', {
         article_id: articleId,
         tweet_text: tweetText,
-        status: 'approved',
+        status: 'pending',
       });
-      // Fire post-tweet immediately (non-blocking)
-      const siteUrl = process.env.URL || 'https://gridfeed.co';
-      fetchWT(siteUrl + '/.netlify/functions/post-tweet', { method: 'POST' }, 15000).catch(() => {});
-      await logSync('approve-draft', 'success', 1, `Published + tweet queued: "${cleanTitle}"`, Date.now() - start);
+      await logSync('approve-draft', 'success', 1, `Published + tweet draft created: "${cleanTitle}"`, Date.now() - start);
     } catch (tweetErr) {
       console.warn('[approve-draft] Tweet creation failed:', tweetErr.message);
       await logSync('approve-draft', 'success', 1, `Published (tweet failed): "${cleanTitle}"`, Date.now() - start);

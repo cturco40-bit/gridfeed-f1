@@ -1,5 +1,4 @@
 import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
-import { createAndPostTweet } from './lib/twitter.js';
 
 const LIVE_TWEET_EVENTS = {
   SafetyCar: { emoji: '🟡', prefix: 'SAFETY CAR' },
@@ -60,8 +59,11 @@ export default async (req, context) => {
       const liveEvent = shouldLiveTweet(m);
       if (liveEvent) {
         const tweetText = buildLiveTweet(liveEvent, m, session);
-        createAndPostTweet(tweetText, null).catch(e => console.warn('[race-control] Live tweet failed:', e.message));
-        fetchWT('/.netlify/functions/send-push', {
+        // Live race events tweet immediately — no approval needed
+        await sb('tweets', 'POST', { tweet_text: tweetText, status: 'approved' });
+        const siteUrl = process.env.URL || 'https://gridfeed.co';
+        fetchWT(siteUrl + '/.netlify/functions/post-tweet', { method: 'POST' }, 15000).catch(() => {});
+        fetchWT(siteUrl + '/.netlify/functions/send-push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: `${liveEvent.emoji} ${liveEvent.prefix}`, body: msg, url: '/?tab=live', tag: 'race-control-' + Date.now(), audience: 'public' }),
         }, 5000).catch(() => {});
