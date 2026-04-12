@@ -305,6 +305,16 @@ body.mo{overflow:hidden}
 .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
 .tm-drv{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer}
 .tm-drv:hover{border-color:var(--accent)}
+.hist-yr{display:inline-block;padding:8px 16px;margin:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--head);font-weight:900;font-size:16px;cursor:pointer;color:var(--text);text-decoration:none}
+.hist-yr:hover,.hist-yr.act{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hist-race{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.hist-race:hover{background:rgba(255,255,255,.03)}
+.hist-rnd{min-width:28px;font-weight:900;color:var(--muted);font-size:12px}
+.hist-info{flex:1}
+.hist-name{font-weight:700;font-size:13px}
+.hist-cir{font-size:11px;color:var(--muted)}
+.hist-win{font-size:11px;font-weight:600;color:var(--gold)}
+.winner-card{display:flex;align-items:center;gap:10px;padding:14px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:var(--radius);margin:16px 0;font-weight:700}
 </style>
 </head>
 <body>
@@ -352,10 +362,11 @@ body.mo{overflow:hidden}
     </div>
   </div>
   <div class="slabel" style="margin-top:20px">Tools</div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('compare')"><div style="font-size:20px;margin-bottom:6px">VS</div><div style="font-size:11px;font-weight:700">Compare</div><div style="font-size:9px;color:var(--muted)">Driver vs driver</div></div>
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('predict')"><div style="font-size:20px;margin-bottom:6px">?</div><div style="font-size:11px;font-weight:700">Predict</div><div style="font-size:9px;color:var(--muted)">Pick your podium</div></div>
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('simulator')"><div style="font-size:20px;margin-bottom:6px">+/-</div><div style="font-size:11px;font-weight:700">Simulator</div><div style="font-size:9px;color:var(--muted)">What if?</div></div>
+    <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="showHistory()"><div style="font-size:20px;margin-bottom:6px">&boxbox;</div><div style="font-size:11px;font-weight:700">Archive</div><div style="font-size:9px;color:var(--muted)">2020\u20132025 results</div></div>
   </div>
   <div class="install-cta" id="installCta" style="display:none">
     <div><h3>Get the GridFeed App</h3><p>Live timing, picks and news. Free. Add to home screen.</p></div>
@@ -477,6 +488,10 @@ body.mo{overflow:hidden}
 
 <div class="panel" id="p-team">
   <div id="teamProfile"></div>
+</div>
+
+<div class="panel" id="p-history">
+  <div id="historyView"></div>
 </div>
 
 <!-- ARTICLE VIEW -->
@@ -1362,7 +1377,7 @@ function showDrv(abbr){const entry=Object.entries(DSTATS).find(([_,d])=>d.abbr==
 async function showArtView(slug){go('article');history.replaceState({},'','/#/article/'+slug);const el=document.getElementById('articleView');if(!el)return;el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';const{data}=await sbq(s=>s.from('articles').select('*').eq('slug',slug).single());if(!data){el.innerHTML='<div class="empty">Article not found</div>';return}const tag=(data.tags||['ANALYSIS'])[0];document.title='GridFeed | '+data.title;el.innerHTML=`<button onclick="history.back();go('news')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">< Back</button><span class="art-tag ${tagCl(tag)}" style="margin-bottom:12px;display:inline-block">${tag}</span><h1 style="font-family:var(--head);font-size:28px;font-weight:900;line-height:1.15;text-transform:uppercase;margin-bottom:8px">${data.title}</h1><div style="font-size:12px;color:var(--muted);margin-bottom:16px">GridFeed Staff | ${new Date(data.published_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div><div style="height:1px;background:var(--border);margin-bottom:20px"></div><div style="font-size:15px;line-height:1.75;white-space:pre-wrap">${data.body||''}</div><div style="margin-top:24px;display:flex;gap:8px"><button onclick="navigator.clipboard?.writeText(location.href);this.textContent='Copied!'" style="padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);color:var(--text)">Copy Link</button></div>`}
 
 /* ═══ HASH ROUTING ═══ */
-function checkHash(){const h=location.hash;if(h.startsWith('#/article/')){showArtView(h.slice(10));return true}if(h.startsWith('#/driver/')){showDrv(h.slice(9));return true}if(h.startsWith('#/team/')){showTeam(h.slice(7));return true}return false}
+function checkHash(){const h=location.hash;if(h.startsWith('#/article/')){showArtView(h.slice(10));return true}if(h.startsWith('#/driver/')){showDrv(h.slice(9));return true}if(h.startsWith('#/team/')){showTeam(h.slice(7));return true}if(h.startsWith('#/results')){const p=h.slice(10).split('/');showHistory(p[0]?parseInt(p[0]):null,p[1]?parseInt(p[1]):null);return true}return false}
 window.addEventListener('hashchange',checkHash);
 
 /* ═══ DARK MODE ═══ */
@@ -1419,6 +1434,34 @@ function showTeam(slug){
   const raceLabels=['R1','R2','R3'];
   const results=raceLabels.map((r,i)=>{const rows=t.drivers.map(num=>{const entry=Object.entries(DSTATS).find(([_,d])=>d.num===num);if(!entry)return'';const[name,d]=entry;const res=d.results[i];const isDnf=res==='DNF'||res==='DNS';return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:600">${name.split(' ').pop()}</span><span style="font-size:12px;font-weight:800;color:${isDnf?'var(--accent)':res<=3?'var(--gold)':'var(--text)'}">${isDnf?res:'P'+res}</span></div>`}).join('');return`<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${r}</div>${rows}</div>`}).join('');
   el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div class="team-header" style="border-left:4px solid ${t.color}"><h1>${t.name}</h1><div class="team-meta">${t.hq} \u00b7 Est. ${t.founded}</div></div><div class="stats-grid">${[['P'+t.pos,'POS'],[t.pts,'PTS'],[t.wins,'WINS'],[t.podiums,'PODS']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Drivers</div><div style="margin-bottom:20px">${drvCards}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${results}</div><div class="slabel">Team Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Principal</span><span style="font-weight:600">${t.principal}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Power Unit</span><span style="font-weight:600">${t.engine}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">World Championships</span><span style="font-weight:600">${t.titles}</span></div></div></div>`;
+}
+
+/* ═══ HISTORICAL RESULTS ═══ */
+const HIST_SEASONS=[2025,2024,2023,2022,2021,2020];
+async function showHistory(year,round){
+  go('history');
+  const el=document.getElementById('historyView');if(!el)return;
+  if(year&&round){history.replaceState({},'','/#/results/'+year+'/'+round);await renderHistRace(el,year,round)}
+  else if(year){history.replaceState({},'','/#/results/'+year);await renderHistSeason(el,year)}
+  else{history.replaceState({},'','/#/results');renderHistHome(el)}
+}
+function renderHistHome(el){
+  el.innerHTML=`<div class="slabel">Historical Results</div><div style="margin-bottom:20px">${HIST_SEASONS.map(y=>`<a class="hist-yr" onclick="showHistory(${y})">${y}</a>`).join('')}</div><div style="color:var(--muted);font-size:12px;padding:16px">Select a season to browse race results from 2020\u20132025.</div>`;
+}
+async function renderHistSeason(el,year){
+  el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
+  const{data}=await sbq(s=>s.from('historical_races').select('round,race_name,circuit_name,country,winner_driver,winner_team,race_date').eq('season',year).order('round',{ascending:true}));
+  if(!data?.length){el.innerHTML=`<button onclick="showHistory()" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div class="slabel">${year} Season</div><div class="empty">No data yet. Run the historical import first.</div>`;return}
+  el.innerHTML=`<button onclick="showHistory()" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 All Seasons</button><div class="slabel">${year} Season \u00b7 ${data.length} Races</div><div style="margin-bottom:12px">${HIST_SEASONS.map(y=>`<a class="hist-yr${y===year?' act':''}" onclick="showHistory(${y})">${y}</a>`).join('')}</div><div class="card" style="overflow:hidden">${data.map(r=>`<div class="hist-race" onclick="showHistory(${year},${r.round})"><div class="hist-rnd">R${r.round}</div><div class="hist-info"><div class="hist-name">${r.race_name}</div><div class="hist-cir">${r.circuit_name||''} \u00b7 ${r.country||''}</div></div><div class="hist-win">\ud83c\udfc6 ${(r.winner_driver||'').split(' ').pop()}</div></div>`).join('')}</div>`;
+}
+async function renderHistRace(el,year,round){
+  el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
+  const{data}=await sbq(s=>s.from('historical_races').select('*').eq('season',year).eq('round',round).single());
+  if(!data){el.innerHTML=`<button onclick="showHistory(${year})" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div class="empty">Race not found.</div>`;return}
+  const results=data.results||[];
+  const TC_ID={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',haas:'#B6BABD',alphatauri:'#6692FF',alfa:'#52E252',sauber:'#52E252',rb:'#6692FF',racing_point:'#FF87BC',toro_rosso:'#6692FF'};
+  function teamColor(tid){return TC_ID[tid]||TC_ID[(tid||'').replace(/\s/g,'_').toLowerCase()]||'var(--accent)'}
+  el.innerHTML=`<button onclick="showHistory(${year})" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 ${year} Season</button><div style="margin-bottom:20px"><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${data.race_name}</div><div style="font-size:12px;color:var(--muted)">${data.circuit_name||''} \u00b7 ${data.country||''} \u00b7 ${data.race_date||''}</div></div><div class="winner-card">\ud83c\udfc6 ${data.winner_driver} (${data.winner_team})</div>${data.pole_driver?`<div style="font-size:12px;color:var(--muted);margin-bottom:4px">\ud83c\udfc1 Pole: ${data.pole_driver}</div>`:''} ${data.fastest_lap_driver?`<div style="font-size:12px;color:var(--muted);margin-bottom:16px">\u23f1 Fastest Lap: ${data.fastest_lap_driver} ${data.fastest_lap_time||''}</div>`:''}<div class="slabel">Race Classification</div><table class="tt"><thead><tr><th style="width:36px">Pos</th><th style="width:36px">Grid</th><th>Driver</th><th>Team</th><th>Time/Status</th><th style="width:36px">Pts</th></tr></thead><tbody>${results.map(r=>{const c=teamColor(r.teamId);return`<tr><td><span class="pn ${r.pos<=3?'p'+r.pos:''}">P${r.pos}</span></td><td style="color:var(--muted)">P${r.grid}</td><td><div style="display:flex;align-items:center;gap:6px"><span class="cdot" style="background:${c}"></span><span class="dn">${r.driver}</span></div></td><td style="font-size:11px;color:var(--dim)">${r.team}</td><td style="font-size:11px;color:var(--dim)">${r.time||r.status||''}</td><td style="font-weight:700">${r.points||''}</td></tr>`}).join('')}</tbody></table>`;
 }
 
 /* ═══ DRIVER SHEET ═══ */
