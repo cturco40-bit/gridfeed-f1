@@ -423,15 +423,6 @@ body.mo{overflow:hidden}
 <!-- NEWS -->
 <div class="panel" id="p-news">
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">News</h2><div class="spacer"></div><span class="muted" id="newsCt"></span></div>
-  <div class="nf" id="newsF">
-    <button class="nfb act" onclick="fNews('ALL',this)">All</button>
-    <button class="nfb" onclick="fNews('RACE',this)">Race</button>
-    <button class="nfb" onclick="fNews('QUALIFYING',this)">Qualifying</button>
-    <button class="nfb" onclick="fNews('BETTING',this)">Betting</button>
-    <button class="nfb" onclick="fNews('ANALYSIS',this)">Analysis</button>
-    <button class="nfb" onclick="fNews('BREAKING',this)">Breaking</button>
-    <button class="nfb" onclick="fNews('RUMOUR',this)">Rumour</button>
-  </div>
   <div id="newsArts"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:70%"></div></div></div>
 </div>
 
@@ -725,9 +716,8 @@ async function initNews(){
   if(S.arts.length<7){const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url').eq('status','published').order('published_at',{ascending:false}).limit(30));S.arts=data||[]}
   renderNews();
 }
-function fNews(t,btn){S.nf=t;document.querySelectorAll('#newsF .nfb').forEach(b=>b.classList.toggle('act',b===btn));renderNews()}
 function renderNews(){
-  let arts=S.arts;if(S.nf!=='ALL')arts=arts.filter(a=>(a.tags||[]).includes(S.nf));
+  const arts=S.arts;
   document.getElementById('newsCt').textContent=arts.length+' articles';
   document.getElementById('newsArts').innerHTML=arts.length?arts.map(a=>artCard(a)).join(''):'<div class="empty">No articles.</div>';
 }
