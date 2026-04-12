@@ -54,40 +54,55 @@ export default async (req, context) => {
       return json({ ok: true, generated: 0 });
     }
 
-    // Topic diversity: check recent drafts and pick a topic that covers a different subject
+    // ── Subject dedup: check drafts AND published articles ──
     const DRIVER_NAMES = ['Antonelli','Russell','Leclerc','Hamilton','Norris','Piastri','Verstappen','Hadjar','Alonso','Stroll','Gasly','Colapinto','Sainz','Albon','Ocon','Bearman','Lawson','Lindblad','Hulkenberg','Bortoleto','Perez','Bottas'];
+    const SUBJECT_KEYWORDS = ['contract','transfer','penalty','crash','engine','retirement','regulation','budget cap','wind tunnel','sprint','qualifying','practice','safety car','red flag','overtake mode','active aero','miami','monaco','silverstone','monza','spa'];
     function extractDrivers(text) { return DRIVER_NAMES.filter(d => text.toLowerCase().includes(d.toLowerCase())); }
+    function extractSubjects(text) { const t = text.toLowerCase(); return SUBJECT_KEYWORDS.filter(k => t.includes(k)); }
+    function topicOverlaps(titleA, titleB) {
+      const drA = extractDrivers(titleA), drB = extractDrivers(titleB);
+      const subA = extractSubjects(titleA), subB = extractSubjects(titleB);
+      const sharedDrivers = drA.filter(d => drB.includes(d));
+      const sharedSubjects = subA.filter(s => subB.includes(s));
+      // Same driver AND same subject = duplicate topic
+      if (sharedDrivers.length > 0 && sharedSubjects.length > 0) return true;
+      // No drivers but same subject keywords (2+) = duplicate
+      if (drA.length === 0 && drB.length === 0 && sharedSubjects.length >= 2) return true;
+      return false;
+    }
 
-    const recentDraftTitles = await sb(`content_drafts?select=title&order=created_at.desc&limit=3&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
-    const recentDrivers = new Set();
-    recentDraftTitles.forEach(d => extractDrivers(d.title || '').forEach(dr => recentDrivers.add(dr)));
+    const recentDrafts24h = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+    const recentArticles24h = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+    const allRecentTitles = [...recentDrafts24h, ...recentArticles24h].map(r => r.title || '');
 
-    // Pick a topic that doesn't overlap with recent draft subjects
-    let topic = allPending[0]; // default to highest priority
+    // Pick a topic that doesn't duplicate existing content
+    let topic = null;
+    let isUpdate = false;
+    let priorTitle = null;
     for (const candidate of allPending) {
-      const candidateDrivers = extractDrivers(candidate.topic || '');
-      const overlaps = candidateDrivers.some(d => recentDrivers.has(d));
-      if (!overlaps) { topic = candidate; break; }
+      const cText = candidate.topic || '';
+      const match = allRecentTitles.find(t => topicOverlaps(cText, t));
+      if (!match) {
+        topic = candidate;
+        break;
+      }
+      // If this is high priority (breaking), allow as UPDATE
+      if (!topic && (candidate.priority || 0) >= 8) {
+        topic = candidate;
+        isUpdate = true;
+        priorTitle = match;
+      }
+    }
+    if (!topic) {
+      // All topics overlap — skip lowest priority ones, take highest as update
+      topic = allPending[0];
+      const match = allRecentTitles.find(t => topicOverlaps(topic.topic || '', t));
+      if (match) { isUpdate = true; priorTitle = match; }
     }
 
     const contentType = topic.content_type || 'analysis';
     const topicText = topic.topic || 'F1 2026 Season Analysis';
     const wordTarget = WORD_TARGETS[contentType] || '400-500';
-
-    // Subject-level dedup: check if a draft about the same subject exists in last 24h
-    const topicDrivers = extractDrivers(topicText);
-    if (topicDrivers.length > 0) {
-      const recentSameSubject = recentDraftTitles.some(d => {
-        const dDrivers = extractDrivers(d.title || '');
-        return topicDrivers.some(td => dDrivers.includes(td));
-      });
-      if (recentSameSubject && allPending.length > 1) {
-        // Skip this topic — mark as skipped, try next run with different topic
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped' });
-        await logSync('generate-content', 'success', 0, `Subject already covered: ${topicText.slice(0, 50)}`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'subject_covered' });
-      }
-    }
 
     // Mark topic as processing immediately to prevent re-pick
     if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'processing' });
@@ -156,7 +171,7 @@ Miami is a semi-permanent circuit at Hard Rock Stadium, NOT a street circuit.
 The only true street circuits in 2026 are Monaco, Singapore, and Baku.
 Avoid vague references like "defending champion's former teammate" — use actual names.
 Your lead sentence MUST contain a driver surname AND a number. No exceptions.
-BANNED WORDS — using any of these will cause automatic rejection: narrative, trajectory, fascinating, incredible, dominant, stunning, masterclass, wheelhouse, showcase, pivotal, monumental, seismic, sensational, breathtaking, remarkable, unraveling.`;
+BANNED WORDS — using any of these will cause automatic rejection: fascinating, incredible, stunning, masterclass, wheelhouse, showcase, monumental, seismic, sensational, breathtaking, unraveling.`;
 
       let systemPrompt = buildSystemPrompt(
         extraGuards,
@@ -168,6 +183,14 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
         systemPrompt += '\n\nRETRY ATTEMPT ' + topic.retry_count + ' OF 3.';
         systemPrompt += '\nYour previous draft was REJECTED for this reason: ' + topic.last_error;
         systemPrompt += '\nFix this exact issue and produce a valid draft. Do NOT repeat the same mistake.';
+      }
+
+      // If this is an UPDATE to a prior article, instruct Claude
+      if (isUpdate && priorTitle) {
+        systemPrompt += '\n\nUPDATE ARTICLE: We already published "' + priorTitle + '" on this subject.';
+        systemPrompt += '\nYour title MUST start with "UPDATE:" — e.g. "UPDATE: New Development in..."';
+        systemPrompt += '\nOpen with a one-sentence summary of the original story, then explain what is new.';
+        systemPrompt += '\nDo NOT repeat the same analysis. Focus on what changed since the prior article.';
       }
 
       // Build user prompt — source-grounded when available, conservative fallback otherwise
