@@ -718,9 +718,10 @@ async function initSt(){
     const dj=dr.ok?await dr.json():null,cj=cr.ok?await cr.json():null;
     const dl=dj?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings||[];
     const cl=cj?.MRData?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings||[];
-    renderST('drvSt',dl.map(e=>({pos:parseInt(e.position),name:`${e.Driver?.givenName} ${e.Driver?.familyName}`,pts:parseFloat(e.points)||0,color:TC[e.Constructors?.[0]?.constructorId]||'var(--accent)'})));
+    if(dl.length){renderST('drvSt',dl.map(e=>{const fn=`${e.Driver?.givenName} ${e.Driver?.familyName}`;const local=DSTATS[fn];const apiPts=parseFloat(e.points)||0;return{pos:parseInt(e.position),name:fn,pts:local?Math.max(apiPts,local.pts):apiPts,color:TC[e.Constructors?.[0]?.constructorId]||'var(--accent)'}}))}
+    else{const loc=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([n,d],i)=>({pos:i+1,name:n,pts:d.pts,color:d.tc}));renderST('drvSt',loc)}
     renderST('ctorSt',cl.map(e=>{const cid=e.Constructor?.constructorId||'';return{pos:parseInt(e.position),name:TN[cid]||e.Constructor?.name||'',pts:parseFloat(e.points)||0,color:TC[cid]||'var(--accent)'}}));
-  }catch{document.getElementById('drvSt').innerHTML='<div class="empty">Unavailable.</div>'}
+  }catch{const loc=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([n,d],i)=>({pos:i+1,name:n,pts:d.pts,color:d.tc}));renderST('drvSt',loc)}
   if(bar)bar.textContent='Updated '+new Date().toLocaleTimeString();
 }
 function renderST(id,entries){
