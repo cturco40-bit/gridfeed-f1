@@ -714,14 +714,15 @@ async function initPicks(){
 /* ═══ STANDINGS ═══ */
 async function initSt(){
   const bar=document.getElementById('stBar');if(bar)bar.textContent='Loading...';
+  const drvLocal=()=>Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([n,d],i)=>({pos:i+1,name:n,pts:d.pts,color:d.tc}));
   try{const[dr,cr]=await Promise.all([fetchWT(JOLPICA+'/2026/driverStandings.json'),fetchWT(JOLPICA+'/2026/constructorStandings.json')]);
     const dj=dr.ok?await dr.json():null,cj=cr.ok?await cr.json():null;
     const dl=dj?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings||[];
     const cl=cj?.MRData?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings||[];
-    if(dl.length){renderST('drvSt',dl.map(e=>{const fn=`${e.Driver?.givenName} ${e.Driver?.familyName}`;const local=DSTATS[fn];const apiPts=parseFloat(e.points)||0;return{pos:parseInt(e.position),name:fn,pts:local?Math.max(apiPts,local.pts):apiPts,color:TC[e.Constructors?.[0]?.constructorId]||'var(--accent)'}}))}
-    else{const loc=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([n,d],i)=>({pos:i+1,name:n,pts:d.pts,color:d.tc}));renderST('drvSt',loc)}
+    if(dl.length){const seen=new Set();const merged=dl.map(e=>{const fn=`${e.Driver?.givenName} ${e.Driver?.familyName}`;seen.add(fn);const local=DSTATS[fn];const apiPts=parseFloat(e.points)||0;return{name:fn,pts:local?Math.max(apiPts,local.pts):apiPts,color:TC[e.Constructors?.[0]?.constructorId]||local?.tc||'var(--accent)'}});Object.entries(DSTATS).forEach(([n,d])=>{if(!seen.has(n))merged.push({name:n,pts:d.pts,color:d.tc})});merged.sort((a,b)=>b.pts-a.pts);merged.forEach((e,i)=>e.pos=i+1);renderST('drvSt',merged)}
+    else{renderST('drvSt',drvLocal())}
     renderST('ctorSt',cl.map(e=>{const cid=e.Constructor?.constructorId||'';return{pos:parseInt(e.position),name:TN[cid]||e.Constructor?.name||'',pts:parseFloat(e.points)||0,color:TC[cid]||'var(--accent)'}}));
-  }catch{const loc=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([n,d],i)=>({pos:i+1,name:n,pts:d.pts,color:d.tc}));renderST('drvSt',loc)}
+  }catch{renderST('drvSt',drvLocal())}
   if(bar)bar.textContent='Updated '+new Date().toLocaleTimeString();
 }
 function renderST(id,entries){
