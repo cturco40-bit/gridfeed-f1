@@ -268,7 +268,8 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
 
       // Notify
-      fetchWT('/.netlify/functions/notify-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title, content_type: contentType, priority_score: topic.priority || 5, excerpt: (parsed.excerpt || '').slice(0, 200) }) }, 5000).catch(() => {});
+      const siteUrl = process.env.URL || 'https://gridfeed.co';
+      fetchWT(siteUrl + '/.netlify/functions/notify-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title, content_type: contentType, priority_score: topic.priority || 5, excerpt: (parsed.excerpt || '').slice(0, 200) }) }, 5000).catch(() => {});
 
       await logSync('generate-content', 'success', 1, `Draft: "${parsed.title}"`, Date.now() - start);
       return json({ ok: true, generated: 1, title: parsed.title });
