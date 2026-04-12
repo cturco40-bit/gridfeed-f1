@@ -862,39 +862,45 @@ function urlBase64ToUint8Array(b64){
   return arr;
 }
 
+function updateAdminPushBtn(on){
+  const btn=document.getElementById('pushBtn');if(!btn)return;
+  if(on){btn.textContent='Notifications ON';btn.style.background='var(--green)'}
+  else{btn.textContent='Notifications OFF';btn.style.background='var(--accent)'}
+}
 async function registerPush(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)){
     toast('Push not supported on this browser','error');return;
   }
   try{
     const reg=await navigator.serviceWorker.register('/sw.js');
-    let sub=await reg.pushManager.getSubscription();
-    if(!sub){
-      const perm=await Notification.requestPermission();
-      if(perm!=='granted'){toast('Permission denied','error');return}
-      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
-      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'admin'})});
-      toast('Admin push notifications enabled','success');
+    const existing=await reg.pushManager.getSubscription();
+    if(existing){
+      const ep=existing.endpoint;
+      await existing.unsubscribe();
+      await fetch('/.netlify/functions/delete-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:ep,audience:'admin'})}).catch(()=>{});
+      updateAdminPushBtn(false);
+      toast('Admin notifications disabled','success');
+      return;
     }
-    const btn=document.getElementById('pushBtn');
-    if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){toast('Permission denied','error');return}
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'admin'})});
+    updateAdminPushBtn(true);
+    toast('Admin notifications enabled','success');
   }catch(e){
     console.error('[Push]',e);
     toast('Push setup failed: '+e.message,'error');
   }
 }
 
-// Auto-check push status on page load (after login)
 async function checkPushStatus(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
   try{
     const reg=await navigator.serviceWorker.getRegistration('/sw.js');
     if(!reg)return;
     const sub=await reg.pushManager.getSubscription();
-    if(sub){
-      const btn=document.getElementById('pushBtn');
-      if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}
-    }
+    updateAdminPushBtn(!!sub);
   }catch(e){}
 }
 </script>

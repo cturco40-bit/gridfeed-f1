@@ -295,7 +295,7 @@ body.mo{overflow:hidden}
   <div class="hdr-right">
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
     <button class="notif-btn" id="darkBtn" onclick="toggleDark()" style="font-size:13px">D</button>
-    <button class="notif-btn" id="notifBtn" onclick="regPush()">🔔</button>
+    <button class="notif-btn" id="notifBtn" onclick="regPush()">OFF</button>
   </div>
 </div></header>
 
@@ -731,21 +731,33 @@ function initSched(){
 /* ═══ PUSH NOTIFICATIONS ═══ */
 const VAPID_PK='BGiNH3DDw7QMuFmiB_Qxgn4aEPLl4k5MW9T27MzcUCjv5jxi5wy7Bb74Fdn8J2PX1NzL-0bPC2lk3EngE1k4rII';
 function b64toUint8(b){const p='='.repeat((4-b.length%4)%4);const r=atob((b+p).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a}
+function updateNotifBtn(on){
+  const btn=document.getElementById('notifBtn');if(!btn)return;
+  if(on){btn.textContent='ON';btn.classList.add('subscribed')}
+  else{btn.textContent='OFF';btn.classList.remove('subscribed')}
+}
 async function regPush(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
   try{
     const reg=await navigator.serviceWorker.register('/app-sw.js');
-    let sub=await reg.pushManager.getSubscription();
-    if(!sub){const p=await Notification.requestPermission();if(p!=='granted')return;
-      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64toUint8(VAPID_PK)});
-      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'public'})})}
-    const btn=document.getElementById('notifBtn');if(btn){btn.textContent='\u2705';btn.classList.add('subscribed')}
+    const existing=await reg.pushManager.getSubscription();
+    if(existing){
+      const ep=existing.endpoint;
+      await existing.unsubscribe();
+      await fetch('/.netlify/functions/delete-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:ep,audience:'public'})}).catch(()=>{});
+      updateNotifBtn(false);
+      return;
+    }
+    const p=await Notification.requestPermission();if(p!=='granted')return;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64toUint8(VAPID_PK)});
+    await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'public'})});
+    updateNotifBtn(true);
   }catch(e){console.warn('[Push]',e)}
 }
 async function checkPush(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
   try{const reg=await navigator.serviceWorker.getRegistration('/app-sw.js');if(!reg)return;
-    const sub=await reg.pushManager.getSubscription();if(sub){const btn=document.getElementById('notifBtn');if(btn){btn.textContent='\u2705';btn.classList.add('subscribed')}}}catch(e){}
+    const sub=await reg.pushManager.getSubscription();updateNotifBtn(!!sub)}catch(e){}
 }
 function triggerInstall(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(r=>{if(r.outcome==='accepted')localStorage.setItem('gf_i','1');deferredPrompt=null});document.getElementById('installCta').style.display='none';document.getElementById('installBanner').classList.remove('vis')}}
 
