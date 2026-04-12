@@ -8,13 +8,16 @@ export default async (req) => {
       return json({ error: 'Invalid subscription' }, 400);
     }
 
-    // UPSERT: delete existing then insert (Supabase REST doesn't support ON CONFLICT easily)
-    await sb(`push_subscriptions?endpoint=eq.${encodeURIComponent(sub.endpoint)}`, 'DELETE').catch(() => {});
+    const audience = sub.audience || 'public';
+
+    // UPSERT: delete existing for same endpoint+audience, then insert
+    await sb(`push_subscriptions?endpoint=eq.${encodeURIComponent(sub.endpoint)}&audience=eq.${audience}`, 'DELETE').catch(() => {});
     await sb('push_subscriptions', 'POST', {
       endpoint: sub.endpoint,
       p256dh: sub.keys.p256dh,
       auth: sub.keys.auth,
       device_label: sub.label || 'Device',
+      audience,
     });
     return json({ success: true });
   } catch (e) {

@@ -35,6 +35,7 @@ export default async (req, context) => {
           body: `${raceName} -- GridFeed live timing ready`,
           url: '/?tab=results',
           tag: 'session-' + sess.id,
+          audience: 'public',
         }),
       }, 8000).catch(() => {});
 

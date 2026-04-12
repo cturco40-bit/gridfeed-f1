@@ -738,7 +738,7 @@ async function regPush(){
     let sub=await reg.pushManager.getSubscription();
     if(!sub){const p=await Notification.requestPermission();if(p!=='granted')return;
       sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64toUint8(VAPID_PK)});
-      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)})}
+      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'public'})})}
     const btn=document.getElementById('notifBtn');if(btn){btn.textContent='\u2705';btn.classList.add('subscribed')}
   }catch(e){console.warn('[Push]',e)}
 }

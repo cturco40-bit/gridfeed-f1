@@ -19,6 +19,7 @@ export default async (req, context) => {
         body: body.title || 'New draft ready for review',
         url: '/gf-admin-drafts',
         tag: 'draft-' + Date.now(),
+        audience: 'admin',
       }),
     }, 8000);
 

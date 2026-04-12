@@ -17,7 +17,8 @@ export default async (req) => {
     let body;
     try { body = await req.json(); } catch { body = {}; }
 
-    const subs = await sb('push_subscriptions?select=*');
+    const audience = body.audience || 'public';
+    const subs = await sb(`push_subscriptions?select=*&audience=eq.${audience}`);
     if (!subs.length) {
       await logSync('send-push', 'success', 0, 'No subscribers', Date.now() - start);
       return json({ skipped: 'No subscribers' });

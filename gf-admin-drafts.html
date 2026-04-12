@@ -873,8 +873,8 @@ async function registerPush(){
       const perm=await Notification.requestPermission();
       if(perm!=='granted'){toast('Permission denied','error');return}
       sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
-      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
-      toast('Push notifications enabled','success');
+      await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'admin'})});
+      toast('Admin push notifications enabled','success');
     }
     const btn=document.getElementById('pushBtn');
     if(btn){btn.textContent='\u2705 Enabled';btn.style.background='var(--green)'}

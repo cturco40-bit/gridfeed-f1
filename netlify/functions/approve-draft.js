@@ -74,6 +74,7 @@ export default async (req) => {
         body: cleanTitle,
         url: '/#/article/' + slug,
         tag: 'article-' + articleId,
+        audience: 'public',
       }),
     }, 8000).catch(() => {});
 
