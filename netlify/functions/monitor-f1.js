@@ -46,7 +46,15 @@ const RSS_FEEDS = [
 
 function makeSignature(title) {
   const t = title.toLowerCase();
-  return [...DRIVERS, ...TEAMS, ...EVENTS].filter(e => t.includes(e.toLowerCase())).sort().join('-');
+  return [...DRIVERS, ...TEAMS, ...EVENTS]
+    .filter(e => t.includes(e.toLowerCase()))
+    .map(e => e.toLowerCase())
+    .sort()
+    .join('-');
+}
+
+function normalizeTitle(title) {
+  return (title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
 }
 
 function extractEntities(title) {
@@ -122,13 +130,18 @@ export default async (req, context) => {
       sigGroups[sig].regions.add(h.region);
     }
 
-    // Load existing pending topics for subject-level dedup
-    const pendingTopics = await sb('content_topics?select=topic,id&status=in.(pending,processing,drafted)&created_at=gt.' + new Date(Date.now() - 24 * 36e5).toISOString());
+    // Load existing topics from last 24h for title-level dedup (any status)
+    const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 24 * 36e5).toISOString());
+    const recentTitleNorm = new Set(pendingTopics.map(t => normalizeTitle(t.topic)));
 
     for (const [sig, group] of Object.entries(sigGroups)) {
       if (!sig) continue;
 
-      // Signature dedup (6h window)
+      // Title-level dedup: skip if exact same headline already created as topic in 24h
+      const titleNorm = normalizeTitle(group.titles[0]);
+      if (recentTitleNorm.has(titleNorm)) continue;
+
+      // Signature dedup (2h window)
       const sigExists = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 2 * 36e5).toISOString()}&limit=1`);
       if (sigExists.length) continue;
 
@@ -175,8 +188,9 @@ export default async (req, context) => {
       });
       topicsCreated++;
 
-      // Add to pending list for dedup in this run
+      // Add to dedup set for this run
       pendingTopics.push({ topic: group.titles[0], id: null });
+      recentTitleNorm.add(titleNorm);
 
       if (score >= 12) {
         fetchWT('/.netlify/functions/generate-content', { method: 'POST' }, 5000).catch(() => {});

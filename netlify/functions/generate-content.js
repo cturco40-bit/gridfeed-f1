@@ -267,9 +267,14 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
 
       // Insert draft
       console.log('[generate-content] About to insert draft, validation result was:', validation.valid, '— title:', parsed.title.slice(0, 60));
+      // Force BREAKING tag for breaking content type so it shows in article cards
+      let finalTags = parsed.tags || ['ANALYSIS'];
+      if (contentType === 'breaking' && !finalTags.includes('BREAKING')) {
+        finalTags = ['BREAKING', ...finalTags.filter(t => t !== 'ANALYSIS')];
+      }
       await sb('content_drafts', 'POST', {
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
-        tags: parsed.tags || ['ANALYSIS'], content_type: parsed.content_type || contentType,
+        tags: finalTags, content_type: parsed.content_type || contentType,
         review_status: 'pending', source_context: { topic: topicText },
         priority_score: topic.priority || 5, generation_model: 'GridFeed Pipeline',
         race_id: topic.race_id || null,
