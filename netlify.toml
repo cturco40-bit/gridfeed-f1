@@ -6,11 +6,11 @@
   node_bundler = "esbuild"
 
 [functions.monitor-f1]
-  schedule = "*/5 * * * *"
+  schedule = "*/3 * * * *"
   timeout = 60
 
 [functions.generate-content]
-  schedule = "*/10 * * * *"
+  schedule = "*/5 * * * *"
   timeout = 60
 
 [functions.fetch-timing]

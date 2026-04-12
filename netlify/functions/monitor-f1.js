@@ -77,7 +77,7 @@ export default async (req, context) => {
   try {
     // Check recent topic count — max 5 in last hour
     const recentTopics = await sb(`content_topics?select=id&created_at=gt.${new Date(Date.now() - 36e5).toISOString()}`);
-    if (recentTopics.length >= 5) {
+    if (recentTopics.length >= 15) {
       await logSync('monitor-f1', 'success', 0, `Topic queue full (${recentTopics.length} in last hour)`, Date.now() - start);
       return json({ ok: true, skipped: 'queue_full' });
     }
@@ -129,11 +129,11 @@ export default async (req, context) => {
       if (!sig) continue;
 
       // Signature dedup (6h window)
-      const sigExists = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}&limit=1`);
+      const sigExists = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 2 * 36e5).toISOString()}&limit=1`);
       if (sigExists.length) continue;
 
       const score = scoreStory(group.titles[0], group.regions.size);
-      if (score < 5) continue;
+      if (score < 3) continue;
 
       // Subject-level dedup: check if same driver+circuit already pending
       const entities = extractEntities(group.titles[0]);
@@ -152,12 +152,14 @@ export default async (req, context) => {
       }
 
       // Re-check queue limit
-      if (topicsCreated + recentTopics.length >= 5) break;
+      if (topicsCreated + recentTopics.length >= 15) break;
 
       // Breaking news keyword boost
       const BREAKING_KEYWORDS = ['breaking','confirmed','exclusive','shock','sacked','fired','signed','crash','injured','penalty','disqualified','retires','dies','died'];
+      const RUMOUR_KEYWORDS = ['rumour','rumor','could','may','might','considering','set to','expected','reportedly','sources say','talks','negotiations','interested in','linked'];
       const titleLower = group.titles[0].toLowerCase();
       const isBreaking = BREAKING_KEYWORDS.some(k => titleLower.includes(k));
+      const isRumour = RUMOUR_KEYWORDS.some(k => titleLower.includes(k));
       const priority = isBreaking ? Math.max(score, 10) : score;
 
       // Pick best source URL (prefer first source with a link)
@@ -167,7 +169,7 @@ export default async (req, context) => {
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
       await sb('content_topics', 'POST', {
         topic: group.titles[0],
-        content_type: isBreaking || score >= 12 ? 'breaking' : 'analysis',
+        content_type: isBreaking || score >= 12 ? 'breaking' : isRumour ? 'analysis' : 'analysis',
         priority, status: 'pending', triggered_by: 'monitor-f1',
         source_url: sourceUrl,
       });
@@ -195,4 +197,4 @@ export default async (req, context) => {
   }
 };
 
-export const config = { schedule: '*/5 * * * *' };
+export const config = { schedule: '*/3 * * * *' };

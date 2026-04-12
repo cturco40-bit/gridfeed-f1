@@ -41,7 +41,7 @@ export default async (req, context) => {
 
     // Rate limit: max 3 drafts per hour
     const recentDrafts = await sb(`content_drafts?select=id&created_at=gt.${new Date(Date.now() - 36e5).toISOString()}`);
-    if (recentDrafts.length >= 3) {
+    if (recentDrafts.length >= 8) {
       await logSync('generate-content', 'success', 0, `Rate limit: ${recentDrafts.length} drafts in last hour`, Date.now() - start);
       return json({ ok: true, generated: 0, reason: 'rate_limit' });
     }
@@ -58,7 +58,7 @@ export default async (req, context) => {
     const DRIVER_NAMES = ['Antonelli','Russell','Leclerc','Hamilton','Norris','Piastri','Verstappen','Hadjar','Alonso','Stroll','Gasly','Colapinto','Sainz','Albon','Ocon','Bearman','Lawson','Lindblad','Hulkenberg','Bortoleto','Perez','Bottas'];
     function extractDrivers(text) { return DRIVER_NAMES.filter(d => text.toLowerCase().includes(d.toLowerCase())); }
 
-    const recentDraftTitles = await sb(`content_drafts?select=title&order=created_at.desc&limit=3&created_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+    const recentDraftTitles = await sb(`content_drafts?select=title&order=created_at.desc&limit=3&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
     const recentDrivers = new Set();
     recentDraftTitles.forEach(d => extractDrivers(d.title || '').forEach(dr => recentDrivers.add(dr)));
 
@@ -135,12 +135,8 @@ export default async (req, context) => {
         }
       }
 
-      // Skip breaking/analysis topics with no source — too high risk of hallucination
-      if (!sourceContent && ['breaking', 'analysis'].includes(contentType)) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped' });
-        await logSync('generate-content', 'success', 0, `Skipping ${contentType} — no source content available`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'no_source_content' });
-      }
+      // No source: still write but keep it short and fact-based to avoid hallucination
+      const noSource = !sourceContent && ['breaking', 'analysis'].includes(contentType);
 
       // Build context
       const picks = await sb('betting_picks?status=eq.active&order=created_at.desc&limit=10');
@@ -179,7 +175,7 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
       if (sourceContent) {
         userPrompt = `Source article from ${sourcePublication}:\n"""\n${sourceContent}\n"""\n\nRewrite this story in GridFeed voice for our readers.\n\nCRITICAL RULES:\n- Only use facts that appear in the source above\n- Only quote text that appears verbatim in the source above\n- Every direct quote MUST be attributed: "Speaking to ${sourcePublication}, [driver] said..."\n- Do not invent quotes, briefings, or statements\n- Do not add analysis that is not grounded in the source facts\n- If the source mentions specific numbers, use those exact numbers\n- Lead sentence must contain a specific driver name AND a specific number\n- Match the GridFeed voice (sharp, authoritative, data-backed)\n- Word count: ${wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
       } else {
-        userPrompt = `Topic: ${topicText}\n\nWrite a brief F1 news update on this topic in GridFeed voice.\n\nCRITICAL RULES:\n- Do NOT include any direct quotes — no source available\n- Do NOT invent statements or briefings\n- Stick to verifiable facts about the 2026 season from the context below\n- Lead sentence must contain a specific driver name AND a specific number\n- Maximum 200 words\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
+        userPrompt = `Topic: ${topicText}\n\nWrite an F1 ${noSource ? 'hot take' : 'news update'} on this topic in GridFeed voice.\n\nCRITICAL RULES:\n- Do NOT include any direct quotes — no source available\n- Do NOT invent statements or briefings\n- Stick to verifiable facts about the 2026 season from the context below\n- You CAN speculate and give opinions — frame as analysis ("This suggests...", "The numbers point to...")\n- Lead sentence must contain a specific driver name AND a specific number\n- ${noSource ? 'Maximum 200 words' : 'Word count: ' + wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
       }
 
       const response = await fetchWT('https://api.anthropic.com/v1/messages', {
@@ -266,4 +262,4 @@ BANNED WORDS — using any of these will cause automatic rejection: narrative, t
   }
 };
 
-export const config = { schedule: '*/10 * * * *' };
+export const config = { schedule: '*/5 * * * *' };
