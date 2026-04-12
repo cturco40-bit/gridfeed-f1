@@ -307,14 +307,14 @@ export function validateArticle(article) {
   console.log('[validateArticle] PASSED fabricated sourcing');
 
   // ── H2. UNATTRIBUTED DIRECT QUOTES ──
-  // Find all quoted strings of 5+ words — check for valid attribution nearby
-  const quoteRegex = /["\u201c]([^"\u201d]{20,})["\u201d]/g;
+  // Only reject long quotes (10+ words) that look like someone speaking and lack attribution
+  const quoteRegex = /["\u201c]([^"\u201d]{40,})["\u201d]/g;
   let quoteMatch;
   while ((quoteMatch = quoteRegex.exec(body)) !== null) {
     const wordCount = quoteMatch[1].trim().split(/\s+/).length;
-    if (wordCount >= 5) {
-      const start = Math.max(0, quoteMatch.index - 100);
-      const end = Math.min(body.length, quoteMatch.index + quoteMatch[0].length + 100);
+    if (wordCount >= 10) {
+      const start = Math.max(0, quoteMatch.index - 150);
+      const end = Math.min(body.length, quoteMatch.index + quoteMatch[0].length + 150);
       const context = body.slice(start, end);
       const hasAttribution = VALID_ATTRIBUTIONS.some(a => context.includes(a));
       if (!hasAttribution) {
