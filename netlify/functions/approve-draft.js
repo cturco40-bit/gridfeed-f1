@@ -1,6 +1,5 @@
 import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
-import { createAndPostTweet } from './lib/twitter.js';
 
 function generateTweet(title, articleBody) {
   const url = 'gridfeed.co';
@@ -56,17 +55,20 @@ export default async (req) => {
       published_article_id: articleId, title: cleanTitle, body: cleanBody, excerpt: cleanExcerpt, tags,
     });
 
-    // 3. Post tweet immediately
+    // 3. Create tweet as approved + immediately trigger post-tweet to send it
     try {
       const tweetText = generateTweet(cleanTitle, cleanBody);
-      const tweetResult = await createAndPostTweet(tweetText, articleId);
-      if (tweetResult.posted) {
-        await logSync('approve-draft', 'success', 1, `Published + tweeted: "${cleanTitle}"`, Date.now() - start);
-      } else {
-        await logSync('approve-draft', 'success', 1, `Published, tweet queued: "${cleanTitle}" — ${tweetResult.error}`, Date.now() - start);
-      }
+      await sb('tweets', 'POST', {
+        article_id: articleId,
+        tweet_text: tweetText,
+        status: 'approved',
+      });
+      // Fire post-tweet immediately (non-blocking)
+      const siteUrl = process.env.URL || 'https://gridfeed.co';
+      fetchWT(siteUrl + '/.netlify/functions/post-tweet', { method: 'POST' }, 15000).catch(() => {});
+      await logSync('approve-draft', 'success', 1, `Published + tweet queued: "${cleanTitle}"`, Date.now() - start);
     } catch (tweetErr) {
-      console.warn('[approve-draft] Tweet failed:', tweetErr.message);
+      console.warn('[approve-draft] Tweet creation failed:', tweetErr.message);
       await logSync('approve-draft', 'success', 1, `Published (tweet failed): "${cleanTitle}"`, Date.now() - start);
     }
 
