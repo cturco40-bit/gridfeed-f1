@@ -1,4 +1,28 @@
 import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
+import { createAndPostTweet } from './lib/twitter.js';
+
+const LIVE_TWEET_EVENTS = {
+  SafetyCar: { emoji: '🟡', prefix: 'SAFETY CAR' },
+  Flag: { emoji: '🔴', prefix: 'RED FLAG' },
+  OvertakeMode: { emoji: '⚡', prefix: 'OVERTAKE MODE' },
+};
+
+function shouldLiveTweet(m) {
+  if (m.category === 'SafetyCar') return LIVE_TWEET_EVENTS.SafetyCar;
+  if (m.flag === 'RED') return LIVE_TWEET_EVENTS.Flag;
+  const msg = (m.message || '').toUpperCase();
+  if (msg.includes('PENALTY') || msg.includes('BLACK AND WHITE') || msg.includes('DISQUALIF')) return { emoji: '⚠️', prefix: 'PENALTY' };
+  if (msg.includes('RETIRE') || msg.includes('STOPPED ON TRACK')) return { emoji: '🏁', prefix: 'RETIREMENT' };
+  return null;
+}
+
+function buildLiveTweet(event, m, session) {
+  const meetingName = session.meeting_name || session.circuit_short_name || '';
+  const lap = m.lap_number ? `Lap ${m.lap_number}` : '';
+  const parts = [`${event.emoji} ${event.prefix}`, m.message || '', lap, meetingName, '', 'gridfeed.co'].filter(Boolean);
+  const tweet = parts.join('\n');
+  return tweet.length <= 280 ? tweet : tweet.slice(0, 276) + '...';
+}
 
 export default async (req, context) => {
   const start = Date.now();
@@ -32,11 +56,14 @@ export default async (req, context) => {
       });
       inserted++;
 
-      // Alert on safety car / red flag
-      if (m.category === 'SafetyCar' || m.flag === 'RED') {
-        fetchWT('/.netlify/functions/notify-draft', {
+      // Live tweet + push for big events (safety car, red flag, penalties, retirements)
+      const liveEvent = shouldLiveTweet(m);
+      if (liveEvent) {
+        const tweetText = buildLiveTweet(liveEvent, m, session);
+        createAndPostTweet(tweetText, null).catch(e => console.warn('[race-control] Live tweet failed:', e.message));
+        fetchWT('/.netlify/functions/send-push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: `🚨 ${m.category}: ${m.message}`, content_type: 'race_control_alert', priority_score: 15 }),
+          body: JSON.stringify({ title: `${liveEvent.emoji} ${liveEvent.prefix}`, body: msg, url: '/?tab=live', tag: 'race-control-' + Date.now(), audience: 'public' }),
         }, 5000).catch(() => {});
       }
     }

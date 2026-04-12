@@ -1,5 +1,6 @@
 import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
+import { createAndPostTweet } from './lib/twitter.js';
 
 function generateTweet(title, articleBody) {
   const url = 'gridfeed.co';
@@ -55,17 +56,17 @@ export default async (req) => {
       published_article_id: articleId, title: cleanTitle, body: cleanBody, excerpt: cleanExcerpt, tags,
     });
 
-    // 3. Auto-generate tweet draft (non-blocking — article publishes even if this fails)
+    // 3. Post tweet immediately
     try {
       const tweetText = generateTweet(cleanTitle, cleanBody);
-      await sb('tweets', 'POST', {
-        article_id: articleId,
-        tweet_text: tweetText,
-        status: 'pending',
-      });
-      await logSync('approve-draft', 'success', 1, `Published + tweet draft: "${cleanTitle}"`, Date.now() - start);
+      const tweetResult = await createAndPostTweet(tweetText, articleId);
+      if (tweetResult.posted) {
+        await logSync('approve-draft', 'success', 1, `Published + tweeted: "${cleanTitle}"`, Date.now() - start);
+      } else {
+        await logSync('approve-draft', 'success', 1, `Published, tweet queued: "${cleanTitle}" — ${tweetResult.error}`, Date.now() - start);
+      }
     } catch (tweetErr) {
-      console.warn('[approve-draft] Tweet creation failed:', tweetErr.message);
+      console.warn('[approve-draft] Tweet failed:', tweetErr.message);
       await logSync('approve-draft', 'success', 1, `Published (tweet failed): "${cleanTitle}"`, Date.now() - start);
     }
 
