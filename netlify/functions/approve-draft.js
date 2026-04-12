@@ -1,19 +1,24 @@
 import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
 
-function generateTweet(title, excerpt) {
+function generateTweet(title, articleBody) {
   const url = 'gridfeed.co';
-  const firstSentence = (excerpt || '').split(/[.!?]/)[0]?.trim() || '';
+  const firstSentence = (articleBody || '').split(/[.!?]/)[0]?.trim() || '';
 
-  // Try title + first sentence + URL
-  let tweet = `${title}\n\n${firstSentence}\n\n${url}`;
+  // Only use first sentence if it's meaningfully different from the title
+  const titleLower = (title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sentLower = firstSentence.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isDuplicate = !firstSentence || sentLower.includes(titleLower) || titleLower.includes(sentLower);
+
+  if (!isDuplicate) {
+    const tweet = `${title}\n\n${firstSentence}.\n\n${url}`;
+    if (tweet.length <= 270) return tweet;
+  }
+
+  // Fallback: title + URL only
+  const tweet = `${title}\n\n${url}`;
   if (tweet.length <= 270) return tweet;
 
-  // Try title + URL only
-  tweet = `${title}\n\n${url}`;
-  if (tweet.length <= 270) return tweet;
-
-  // Truncate title
   return title.slice(0, 240) + '...\n\n' + url;
 }
 
@@ -52,7 +57,7 @@ export default async (req) => {
 
     // 3. Auto-generate tweet draft (non-blocking — article publishes even if this fails)
     try {
-      const tweetText = generateTweet(cleanTitle, cleanExcerpt);
+      const tweetText = generateTweet(cleanTitle, cleanBody);
       await sb('tweets', 'POST', {
         article_id: articleId,
         tweet_text: tweetText,
