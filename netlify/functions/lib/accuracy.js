@@ -190,6 +190,13 @@ const VALID_ATTRIBUTIONS = [
   'via press release', 'on the official f1 broadcast', 'told crash.net',
   'told gpfans', 'speaking to sky', 'speaking to autosport',
   'speaking to the race', 'speaking to motorsport',
+  'told media', 'told reporters', 'said after', 'said before', 'said during',
+  'said ahead', 'said following', 'according to', 'speaking after',
+  'speaking before', 'speaking during', 'speaking ahead', 'speaking following',
+  'told channel 4', 'told viaplay', 'told dazn', 'told f1 tv',
+  'told gpblog', 'told gazzetta', 'told marca', 'told bild',
+  'told rtl', 'told servus tv', 'said in', 'said at', 'said on',
+  'post-race', 'pre-race', 'press conference',
 ];
 
 const THESIS_VERBS = ['has identified', 'has revealed', 'believes', 'thinks', 'has admitted'];
