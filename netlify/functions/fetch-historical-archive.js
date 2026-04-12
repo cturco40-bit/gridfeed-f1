@@ -8,17 +8,31 @@ export default async (req) => {
   let total = 0;
   try {
     for (const season of SEASONS) {
-      // Check if season already imported
-      const existing = await sb(`historical_races?season=eq.${season}&limit=1`);
-      if (existing.length) { console.log(`Season ${season} already imported, skipping`); continue; }
+      const existingRounds = await sb(`historical_races?season=eq.${season}&select=round`);
+      const doneRounds = new Set(existingRounds.map(r => r.round));
 
-      const r = await fetchWT(`${JOLPICA}/${season}/results.json?limit=600`, {}, 30000);
-      if (!r.ok) { console.warn(`Failed to fetch ${season}: ${r.status}`); continue; }
-      const data = await r.json();
-      const races = data?.MRData?.RaceTable?.Races || [];
+      // Paginate through all races — API returns ~6 races per page (~120 results)
+      let offset = 0;
+      let allRaces = [];
+      while (true) {
+        const r = await fetchWT(`${JOLPICA}/${season}/results.json?limit=100&offset=${offset}`, {}, 30000);
+        if (!r.ok) { console.warn(`Failed ${season} offset ${offset}: ${r.status}`); break; }
+        const data = await r.json();
+        const races = data?.MRData?.RaceTable?.Races || [];
+        if (!races.length) break;
+        allRaces.push(...races);
+        const totalResults = parseInt(data?.MRData?.total || '0');
+        offset += 100;
+        if (offset >= totalResults) break;
+      }
 
-      for (const race of races) {
+      console.log(`Season ${season}: ${allRaces.length} races from API, ${doneRounds.size} already imported`);
+
+      for (const race of allRaces) {
         if (!race.Results?.length) continue;
+        const rnd = parseInt(race.round);
+        if (doneRounds.has(rnd)) continue;
+
         const results = race.Results.map(r => ({
           pos: parseInt(r.position),
           driver: `${r.Driver.givenName} ${r.Driver.familyName}`,
@@ -38,7 +52,7 @@ export default async (req) => {
 
         await sb('historical_races', 'POST', {
           season: parseInt(race.season),
-          round: parseInt(race.round),
+          round: rnd,
           race_name: race.raceName,
           circuit_name: race.Circuit.circuitName,
           country: race.Circuit.Location.country,
@@ -51,7 +65,6 @@ export default async (req) => {
           results,
         });
         total++;
-        console.log(`Imported ${race.raceName} ${season} (${results.length} drivers)`);
       }
     }
 
