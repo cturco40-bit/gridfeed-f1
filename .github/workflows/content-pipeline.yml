@@ -1,0 +1,42 @@
+name: Content Pipeline
+
+on:
+  schedule:
+    # Every 5 minutes - GitHub Actions minimum interval
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor-and-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan F1 news (monitor-f1)
+        run: curl -sf https://gridfeed.co/.netlify/functions/monitor-f1 || echo "monitor-f1 failed"
+        timeout-minutes: 2
+
+      - name: Generate draft (generate-content)
+        run: curl -sf https://gridfeed.co/.netlify/functions/generate-content || echo "generate-content failed"
+        timeout-minutes: 2
+
+      - name: Post pending tweets (post-tweet)
+        run: curl -sf https://gridfeed.co/.netlify/functions/post-tweet || echo "post-tweet failed"
+        timeout-minutes: 1
+
+  live-race-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Race control messages
+        run: curl -sf https://gridfeed.co/.netlify/functions/fetch-race-control || echo "fetch-race-control failed"
+        timeout-minutes: 1
+
+      - name: Live timing
+        run: curl -sf https://gridfeed.co/.netlify/functions/fetch-timing || echo "fetch-timing failed"
+        timeout-minutes: 1
+
+      - name: Intervals
+        run: curl -sf https://gridfeed.co/.netlify/functions/fetch-intervals || echo "fetch-intervals failed"
+        timeout-minutes: 1
+
+      - name: Laps
+        run: curl -sf https://gridfeed.co/.netlify/functions/fetch-laps || echo "fetch-laps failed"
+        timeout-minutes: 1
