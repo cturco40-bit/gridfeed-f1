@@ -135,9 +135,9 @@ export function buildSystemPrompt(extra, outputFormat) {
 /* ═══ VALIDATION CONSTANTS ═══ */
 
 const BANNED_WORDS = [
-  'narrative','trajectory','fascinating','incredible','dominant','stunning',
-  'masterclass','wheelhouse','showcase','pivotal','monumental','seismic',
-  'sensational','breathtaking','remarkable','unraveling',
+  'fascinating','incredible','stunning',
+  'masterclass','wheelhouse','showcase','monumental','seismic',
+  'sensational','breathtaking','unraveling',
   'it is worth noting','it remains to be seen','without a doubt',
   'needless to say','make no mistake',
 ];
