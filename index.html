@@ -237,6 +237,7 @@ body.mo{overflow:hidden}
 .wx-strip{background:#161B27;border-bottom:1px solid var(--border);padding:6px 16px;display:flex;gap:14px;font-size:10px;color:var(--muted);overflow-x:auto;white-space:nowrap}
 .wx-strip .wv{color:var(--text);font-weight:600}
 .live-split{display:grid;grid-template-columns:280px 1fr;min-height:380px;border-bottom:1px solid var(--border)}
+.live-split.map-hidden{grid-template-columns:1fr;min-height:auto}
 @media(max-width:768px){.live-split{grid-template-columns:1fr;min-height:auto}}
 .map-pane{position:relative;background:#0A0D12;overflow:hidden;min-height:300px}
 .twr-pane{background:#0E1117;border-right:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:420px}
@@ -277,8 +278,8 @@ body.mo{overflow:hidden}
 .dc-tyre{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}.dc-tl{font-size:9px;color:var(--muted);margin-bottom:3px}.dc-tb{background:var(--border);border-radius:2px;height:4px}.dc-tf{height:4px;border-radius:2px}
 
 /* ═══ MAP TOGGLE ═══ */
-.map-pane{transition:max-height .3s ease,opacity .3s ease,margin .3s ease,padding .3s ease;overflow:hidden}
-.map-pane.collapsed{max-height:0 !important;opacity:0;margin:0 !important;padding:0 !important;border:none !important}
+.map-pane{transition:max-height .3s ease,opacity .3s ease,margin .3s ease,padding .3s ease,min-height .3s ease;overflow:hidden}
+.map-pane.collapsed{max-height:0 !important;min-height:0 !important;height:0 !important;opacity:0;margin:0 !important;padding:0 !important;border:none !important;display:none}
 .map-toggle-btn{width:100%;background:#0A0D12;border:none;border-bottom:1px solid var(--border);border-top:1px solid var(--border);padding:7px;cursor:pointer;text-align:center;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;transition:color .15s;font-family:var(--font)}
 .map-toggle-btn:hover{color:var(--text)}
 .map-toggle-btn .toggle-arrow{font-size:12px;transition:transform .3s ease}
@@ -1837,6 +1838,8 @@ S._mapVis=true;
 function toggleMap(){
   S._mapVis=!S._mapVis;
   document.querySelectorAll('.map-pane').forEach(p=>p.classList.toggle('collapsed',!S._mapVis));
+  // Also collapse the grid parent so its column reflows single-column with no min-height
+  document.querySelectorAll('.live-split').forEach(s=>s.classList.toggle('map-hidden',!S._mapVis));
   document.querySelectorAll('.map-toggle-btn').forEach(b=>{
     b.classList.toggle('collapsed',!S._mapVis);
     const lbl=b.querySelector('.toggle-label');if(lbl)lbl.textContent=S._mapVis?'Hide Map':'Show Map';
