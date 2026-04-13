@@ -84,7 +84,21 @@ export default async (req, context) => {
     }
 
     // ── 7. POST ──
-    const { tweetId } = await postTweetNow(tweet.tweet_text);
+    let tweetId;
+    try {
+      ({ tweetId } = await postTweetNow(tweet.tweet_text));
+    } catch (postErr) {
+      const msg = (postErr.message || '').toLowerCase();
+      // Twitter rejects near-duplicates and content rule violations indefinitely
+      // — mark the row failed so we stop retrying it every cron tick
+      const isPermanent = msg.includes('duplicate') || msg.includes('not allowed') || msg.includes('forbidden') || msg.includes('403');
+      if (isPermanent) {
+        await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
+        await logSync('post-tweet', 'success', 0, `Twitter rejected (marked failed): ${postErr.message.slice(0, 200)} — "${tweet.tweet_text.slice(0,40)}"`, Date.now() - start);
+        return json({ ok: true, posted: 0, reason: 'twitter_rejected', error: postErr.message });
+      }
+      throw postErr;
+    }
     await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'posted', posted_at: new Date().toISOString() });
 
     await logSync('post-tweet', 'success', 1, `Posted ${tweetId} (${dayPosted.length+1}/${DAILY_CAP} today): "${tweet.tweet_text.slice(0, 60)}..."`, Date.now() - start);
