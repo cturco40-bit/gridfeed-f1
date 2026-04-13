@@ -1,9 +1,29 @@
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sb, fetchWT, logSync, json } from './lib/shared.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// Register bundled DM Sans TTFs. Without this, @napi-rs/canvas' fillText
+// silently renders nothing on Netlify's Linux runtime (no system fonts).
+let _fontsLoaded = false;
+function ensureFonts() {
+  if (_fontsLoaded) return;
+  const candidates = [
+    path.join(HERE, '..', '..', 'fonts'),
+    path.join(process.cwd(), 'fonts'),
+    path.join(HERE, 'fonts'),
+  ];
+  for (const dir of candidates) {
+    try {
+      GlobalFonts.registerFromPath(path.join(dir, 'DMSans-Bold.ttf'), 'DMSans');
+      GlobalFonts.registerFromPath(path.join(dir, 'DMSans-Black.ttf'), 'DMSans Black');
+      _fontsLoaded = true;
+      return;
+    } catch {}
+  }
+}
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -164,7 +184,7 @@ function wrapText(ctx, text, maxWidth) {
 }
 
 function drawTagBanner(ctx, tag, tagColor, W, bannerY) {
-  ctx.font = '800 18px sans-serif';
+  ctx.font = '800 18px DMSans';
   const tagW = ctx.measureText(tag).width;
   const bannerH = 44;
   const skew = 14;
@@ -200,7 +220,7 @@ function drawTagBanner(ctx, tag, tagColor, W, bannerY) {
   ctx.fill();
 
   // Tag text
-  ctx.font = '900 18px sans-serif';
+  ctx.font = '900 18px DMSans';
   ctx.fillStyle = '#FFFFFF';
   ctx.textAlign = 'left';
   ctx.fillText(tag, padL, bannerY + bannerH / 2 + 7);
@@ -275,14 +295,14 @@ async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor
       ctx.fillRect(logoX + c * sq, logoY - 22 + r * sq, sq, sq);
     }
   }
-  ctx.font = '900 36px sans-serif';
+  ctx.font = '900 36px DMSans';
   ctx.textAlign = 'left';
   const gridW = ctx.measureText('GRID').width;
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText('GRID', logoX + 28, logoY);
   ctx.fillStyle = '#E8002D';
   ctx.fillText('FEED', logoX + 28 + gridW, logoY);
-  ctx.font = '700 12px sans-serif';
+  ctx.font = '700 12px DMSans';
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.fillText('YOUR DAILY F1 FIX', logoX + 28, logoY + 22);
 
@@ -294,7 +314,7 @@ async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor
   let fontSize = hasPhoto ? 42 : 56;
   let lines = [];
   while (fontSize >= 24) {
-    ctx.font = `900 ${fontSize}px sans-serif`;
+    ctx.font = `900 ${fontSize}px DMSans`;
     // Word wrap
     const words = headline.split(' ');
     lines = [];
@@ -309,7 +329,7 @@ async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor
     if (textStartY + totalH < SH - 60) break;
     fontSize -= 3;
   }
-  ctx.font = `900 ${fontSize}px sans-serif`;
+  ctx.font = `900 ${fontSize}px DMSans`;
   ctx.fillStyle = '#FFFFFF';
   ctx.textAlign = hasPhoto ? 'left' : 'center';
   const lineH = fontSize * 1.1;
@@ -320,7 +340,7 @@ async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor
 
   // Team name pill (small label under headline)
   if (primaryTeam) {
-    ctx.font = '900 16px sans-serif';
+    ctx.font = '900 16px DMSans';
     const pillLabel = primaryTeam.toUpperCase();
     const pillW = ctx.measureText(pillLabel).width + 28;
     const pillY = textStartY + (lines.length + 1) * lineH + 12;
@@ -349,6 +369,7 @@ export default async (req) => {
   if (req.method !== 'POST') {
     return new Response('POST only', { status: 405 });
   }
+  ensureFonts();
   try {
     const body = await req.json();
     const articleId = body.article_id;
@@ -402,14 +423,14 @@ export default async (req) => {
         ctx.fillRect(logoX + c * sq, logoY - 16 + r * sq, sq, sq);
       }
     }
-    ctx.font = '900 26px sans-serif';
+    ctx.font = '900 26px DMSans';
     ctx.textAlign = 'left';
     const gridW = ctx.measureText('GRID').width;
     ctx.fillStyle = '#FFFFFF';
     ctx.fillText('GRID', logoX + 22, logoY);
     ctx.fillStyle = '#E8002D';
     ctx.fillText('FEED', logoX + 22 + gridW, logoY);
-    ctx.font = '700 10px sans-serif';
+    ctx.font = '700 10px DMSans';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText('YOUR DAILY F1 FIX', logoX + 22, logoY + 18);
 
@@ -490,10 +511,10 @@ export default async (req) => {
       const subLabel = (primaryTeam || 'FORMULA 1').toUpperCase();
       ctx.save();
       let subSize = 64;
-      ctx.font = `900 ${subSize}px sans-serif`;
+      ctx.font = `900 ${subSize}px DMSans`;
       while (ctx.measureText(subLabel).width > W - 100 && subSize > 32) {
         subSize -= 4;
-        ctx.font = `900 ${subSize}px sans-serif`;
+        ctx.font = `900 ${subSize}px DMSans`;
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
