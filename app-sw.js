@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gridfeed-v35';
+const CACHE_NAME = 'gridfeed-v36';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

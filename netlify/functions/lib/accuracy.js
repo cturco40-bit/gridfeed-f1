@@ -32,19 +32,20 @@ P12 Isack Hadjar (Red Bull) 4 pts
 P13 Gabriel Bortoleto (Audi) 2 pts
 P14 Carlos Sainz (Williams) 2 pts
 P15 Esteban Ocon (Haas) 1 pt
+P16 Franco Colapinto (Alpine) 1 pt
 
 VERIFIED CONSTRUCTORS CHAMPIONSHIP after R3:
 P1 Mercedes 135 pts
 P2 Ferrari 90 pts
 P3 McLaren 46 pts
 P4 Haas 18 pts
-P5 Red Bull 16 pts
-P6 Alpine 15 pts
+P5 Alpine 16 pts
+P6 Red Bull Racing 16 pts
 P7 Racing Bulls 14 pts
 P8 Audi 2 pts
 P9 Williams 2 pts
-P10 Aston Martin 0 pts
-P11 Cadillac 0 pts`;
+P10 Cadillac 0 pts
+P11 Aston Martin 0 pts`;
 
 export const DRIVER_TEAM_MAP = `
 2026 F1 DRIVER-TEAM PAIRS — NEVER GET THESE WRONG:
