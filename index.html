@@ -60,6 +60,8 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
 .live-badge.vis{display:flex}
 .live-dot{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+#moreSheet{animation:slideUp .2s}
 
 /* ═══ TOP NAV (desktop) ═══ */
 .top-nav{background:var(--header);border-bottom:1px solid rgba(255,255,255,.08)}
@@ -92,6 +94,10 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px}
 @media(max-width:768px){.two-col{grid-template-columns:1fr}}
+.home-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.home-main{order:1}
+.home-sidebar{order:2}
+@media(max-width:768px){.home-grid{grid-template-columns:1fr}.home-sidebar{order:-1}.home-main{order:1}}
 
 /* ═══ CARDS ═══ */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -150,10 +156,10 @@ body.mo{overflow:hidden}
 
 /* ═══ TIMING TABLE ═══ */
 .race-sel{background:var(--header);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:var(--radius);padding:8px 32px 8px 12px;font-family:var(--font);font-size:13px;font-weight:600;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;cursor:pointer;width:100%;max-width:320px}
-.stabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);gap:0}
+.stabs{display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border)}
 .stabs::-webkit-scrollbar{display:none}
-.stab{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:10px 14px;white-space:nowrap;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;min-height:44px;display:flex;align-items:center}
-.stab.act{color:#fff;background:var(--header);border-bottom-color:var(--accent)}
+.stab{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:7px 14px;white-space:nowrap;color:var(--muted);cursor:pointer;border:1px solid var(--border);border-radius:20px;background:transparent;min-height:36px;display:flex;align-items:center;transition:all .15s}
+.stab.act{color:#fff;background:var(--accent);border-color:var(--accent)}
 .tt{width:100%;border-collapse:collapse;font-size:13px}
 .tt th{text-align:left;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border)}
 .tt td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -420,20 +426,20 @@ body.mo{overflow:hidden}
 <!-- HOME -->
 <div class="panel act" id="p-home">
   <div id="homeHero"></div>
-  <div class="two-col">
-    <div>
-      <div class="slabel">Latest</div>
-      <div id="homeArts"><div class="skel-row"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:40%"></div></div></div>
-    </div>
-    <div>
+  <div class="home-grid">
+    <div class="home-sidebar">
       <div class="slabel">Race Weekend</div>
       <div class="card" id="homeSched"><div class="card-body"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:70%"></div></div></div></div>
       <div style="height:12px"></div>
-      <div class="slabel">Quick Picks</div>
-      <div id="homePicks"></div>
-      <div style="height:12px"></div>
       <div class="slabel">Championship</div>
       <div class="card" id="homeMini"><div class="card-body"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div></div></div>
+      <div style="height:12px"></div>
+      <div class="slabel">Quick Picks</div>
+      <div id="homePicks"></div>
+    </div>
+    <div class="home-main">
+      <div class="slabel">Latest</div>
+      <div id="homeArts"><div class="skel-row"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:40%"></div></div></div>
     </div>
   </div>
   <div class="slabel" style="margin-top:20px">Tools</div>
@@ -528,6 +534,7 @@ body.mo{overflow:hidden}
 
 <!-- DRIVER COMPARISON -->
 <div class="panel" id="p-compare">
+  <button onclick="go('home')" style="font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">&larr; Back</button>
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">Driver vs Driver</h2></div>
   <div style="display:flex;gap:10px;margin-bottom:16px">
     <select id="cmpA" class="race-sel" style="flex:1" onchange="renderCompare()"><option value="">Select driver...</option></select>
@@ -539,12 +546,14 @@ body.mo{overflow:hidden}
 
 <!-- PREDICTIONS -->
 <div class="panel" id="p-predict">
+  <button onclick="go('home')" style="font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">&larr; Back</button>
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">Your Predictions</h2></div>
   <div id="predictContent"></div>
 </div>
 
 <!-- SIMULATOR -->
 <div class="panel" id="p-simulator">
+  <button onclick="go('home')" style="font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">&larr; Back</button>
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">Championship Simulator</h2><div class="spacer"></div><button class="nfb" onclick="resetSim()">Reset</button></div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:12px">What if... Select Miami GP finish positions to see championship impact</div>
   <div id="simTable"></div>
@@ -568,6 +577,7 @@ body.mo{overflow:hidden}
 </div>
 
 <div class="panel" id="p-telemetry">
+  <button onclick="go('home')" style="font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">&larr; Back</button>
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">Telemetry Comparison</h2></div>
   <div class="card"><div class="card-body">
     <div class="telem-session">
@@ -602,7 +612,7 @@ body.mo{overflow:hidden}
   <button class="bn" data-t="results"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Live</span></button>
   <button class="bn" data-t="news"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/></svg><span>News</span></button>
   <button class="bn" data-t="picks"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Picks</span></button>
-  <button class="bn" data-t="standings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg><span>More</span></button>
+  <button class="bn" id="moreBtn" onclick="toggleMore()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg><span>More</span></button>
 </div></nav>
 
 <!-- ARTICLE MODAL -->
@@ -618,6 +628,19 @@ body.mo{overflow:hidden}
 <!-- DRIVER SHEET -->
 <div id="drvSheetOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199" onclick="closeSheet()"></div>
 <div id="drvSheet" style="position:fixed;bottom:0;left:0;right:0;background:#1C2333;border-top:2px solid var(--accent);border-radius:12px 12px 0 0;padding:20px;z-index:200;transform:translateY(100%);transition:transform .3s ease;max-height:55vh;overflow-y:auto"><div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px"></div><div id="drvSheetBody"></div></div>
+
+<!-- MORE MENU (slide-up sheet) -->
+<div id="moreOverlay" onclick="closeMore()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:189"></div>
+<div id="moreSheet" style="display:none;position:fixed;bottom:64px;left:0;right:0;background:var(--header);z-index:190;border-top:2px solid var(--accent);border-radius:12px 12px 0 0;padding:8px 0;padding-bottom:env(safe-area-inset-bottom,0)">
+  <div style="width:32px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:4px auto 12px"></div>
+  <div onclick="go('standings');closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Standings</div>
+  <div onclick="go('schedule');closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Schedule</div>
+  <div onclick="go('compare');closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Compare Drivers</div>
+  <div onclick="go('predict');closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Predictions</div>
+  <div onclick="go('simulator');closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Simulator</div>
+  <div onclick="go('telemetry');initTelemetry();closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)">Telemetry</div>
+  <div onclick="showHistory();closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer">Archive 2020\u20132025</div>
+</div>
 
 <!-- INSTALL BANNER -->
 <div class="install-banner" id="installBanner">
@@ -639,7 +662,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null};
+const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification'};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour'}[t]||'tag-analysis'}
 function tAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 
@@ -680,9 +703,10 @@ const SCH=[
 
 /* ═══ NAV ═══ */
 function go(t){
+  closeMore();
   S.tab=t;
   document.querySelectorAll('.tn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
-  document.querySelectorAll('.bn').forEach(b=>b.classList.toggle('act',b.dataset.t===t||(t==='schedule'&&b.dataset.t==='standings')));
+  document.querySelectorAll('.bn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('act',p.id==='p-'+t));
   history.replaceState({tab:t},'','?tab='+t);
   if(t==='results')initRes();if(t==='news')initNews();if(t==='picks')initPicks();
@@ -747,7 +771,7 @@ async function loadArts(){
   el.innerHTML='<div class="art-grid">'+data.map(a=>artCard(a)).join('')+'</div>';
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:1/1;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:1/1;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="showArtView('${a.slug||a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
@@ -1225,7 +1249,7 @@ function renderRaceContent(){
     const sessOrder=['fp1','fp2','fp3','sprint_quali','sprint','qualifying','race'];
     const orderedSess=sessOrder.filter(s=>availSessions.includes(s));
 
-    const sessTabs=orderedSess.map(s=>`<div class="stab${S._raceSess===s?' act':''}" onclick="S._raceSess='${s}';renderRaceContent()" style="cursor:pointer">${sessNames[s]||s}</div>`).join('');
+    const sessTabs=orderedSess.map(s=>`<div class="stab${S._raceSess===s?' act':''}" onclick="S._raceSess='${s}';S._raceSubTab='classification';renderRaceContent()" style="cursor:pointer">${sessNames[s]||s}</div>`).join('');
 
     // Auto-fill to 22 drivers — add any missing drivers at the bottom
     const FULL_GRID=[{d:'Kimi Antonelli',t:'Mercedes',tc:M},{d:'George Russell',t:'Mercedes',tc:M},{d:'Charles Leclerc',t:'Ferrari',tc:F},{d:'Lewis Hamilton',t:'Ferrari',tc:F},{d:'Lando Norris',t:'McLaren',tc:ML},{d:'Oscar Piastri',t:'McLaren',tc:ML},{d:'Max Verstappen',t:'Red Bull',tc:RB},{d:'Isack Hadjar',t:'Red Bull',tc:RB},{d:'Fernando Alonso',t:'Aston Martin',tc:AM},{d:'Lance Stroll',t:'Aston Martin',tc:AM},{d:'Pierre Gasly',t:'Alpine',tc:A},{d:'Franco Colapinto',t:'Alpine',tc:A},{d:'Carlos Sainz',t:'Williams',tc:W},{d:'Alexander Albon',t:'Williams',tc:W},{d:'Esteban Ocon',t:'Haas',tc:H},{d:'Oliver Bearman',t:'Haas',tc:H},{d:'Arvid Lindblad',t:'Racing Bulls',tc:TB},{d:'Liam Lawson',t:'Racing Bulls',tc:TB},{d:'Nico Hulkenberg',t:'Audi',tc:AU},{d:'Gabriel Bortoleto',t:'Audi',tc:AU},{d:'Valtteri Bottas',t:'Cadillac',tc:CA},{d:'Sergio Perez',t:'Cadillac',tc:CA}];
@@ -1249,17 +1273,29 @@ function renderRaceContent(){
       mapSvg=`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${circPath}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${circPath}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/></svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">${rd.circuit} \u00b7 Live GPS tracking during sessions</div></div>`;
     }
 
-    el.innerHTML=`
-      <div class="sess-bar"><div style="font-weight:700;color:#fff">${rd.name} \u2014 ${sessNames[S._raceSess]||'Race'}</div><div style="color:var(--muted);font-size:10px">${rd.circuit} \u00b7 ${rd.date}</div></div>
-      <div class="stabs" style="overflow-x:auto;scrollbar-width:none">${sessTabs}</div>
-      <div class="wx-strip"><span>${rd.wx}</span></div>
-      ${rd.sprint?`<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> ${rd.sprint}</div>`:''}
-      ${mapSvg}
-      <button class="map-toggle-btn${S._mapVis===false?' collapsed':''}" onclick="toggleMap()"><span class="toggle-arrow">\u2303</span><span class="toggle-label">${S._mapVis===false?'Show Map':'Hide Map'}</span></button>
-      <div style="background:#0E1117;max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="padding:0">${res}</div></div>
-      <div class="rc-sec"><div class="rc-title">Key Moments</div>${rcHtml}</div>
-      <div class="strat-sec"><div class="strat-title">Tyre Strategy</div>${stratHtml}</div>
-    `;
+    // Sub-tab navigation (Results / Strategy / Moments / Circuit)
+    const subTabs=[{k:'classification',l:'Results'},{k:'strategy',l:'Strategy'},{k:'moments',l:'Key Moments'},{k:'circuit',l:'Circuit'}];
+    const subTabHtml='<div class="stabs" style="margin-top:2px;border-top:1px solid var(--border)">'+
+      subTabs.map(st=>'<div class="stab'+(S._raceSubTab===st.k?' act':'')+'" onclick="S._raceSubTab=\''+st.k+'\';renderRaceContent()" style="cursor:pointer;font-size:10px;padding:8px 14px">'+st.l+'</div>').join('')+'</div>';
+
+    let subContent='';
+    if(S._raceSubTab==='classification'){
+      subContent='<div style="background:#0E1117;max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch"><div style="padding:0">'+res+'</div></div>';
+    }else if(S._raceSubTab==='strategy'){
+      subContent='<div class="strat-sec"><div class="strat-title">Tyre Strategy</div>'+stratHtml+'</div>';
+    }else if(S._raceSubTab==='moments'){
+      subContent='<div class="rc-sec"><div class="rc-title">Key Moments</div>'+rcHtml+'</div>';
+    }else if(S._raceSubTab==='circuit'){
+      subContent=mapSvg||'<div class="empty" style="padding:32px">No circuit data</div>';
+    }
+
+    el.innerHTML=
+      '<div class="sess-bar"><div style="font-weight:700;color:#fff">'+rd.name+' \u2014 '+(sessNames[S._raceSess]||'Race')+'</div><div style="color:var(--muted);font-size:10px">'+rd.circuit+' \u00b7 '+rd.date+'</div></div>'+
+      '<div class="stabs" style="overflow-x:auto;scrollbar-width:none">'+sessTabs+'</div>'+
+      (['qualifying','race','sprint'].includes(S._raceSess)?'<div class="wx-strip"><span>'+rd.wx+'</span></div>':'')+
+      (rd.sprint&&S._raceSess==='race'?'<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> '+rd.sprint+'</div>':'')+
+      subTabHtml+
+      subContent;
     return;
   }
 
@@ -1512,7 +1548,56 @@ function resetSim(){S._simR={};initSim()}
 function showDrv(abbr){const entry=Object.entries(DSTATS).find(([_,d])=>d.abbr===abbr);if(!entry)return;const[name,d]=entry;go('driver');history.replaceState({},'','/#/driver/'+abbr);const el=document.getElementById('driverProfile');if(!el)return;const pos=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).findIndex(([n])=>n===name)+1;el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">< Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><img class="drv-img-xl" src="${driverImg(d.num)}" style="border:3px solid ${d.tc}" loading="lazy" alt="${name}" onerror="drvFallback(this,${d.num})"><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${name}</div><div style="font-size:13px;color:var(--muted)">${d.team} | #${d.num}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">${[['POS','P'+pos],['PTS',d.pts],['WINS',d.wins],['PODS',d.pods]].map(([l,v])=>`<div class="card" style="padding:12px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--gold)">${v}</div><div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:2px">${l}</div></div>`).join('')}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${['R1','R2','R3'].map((r,i)=>{const res=d.results[i];const isDnf=res==='DNF';return`<div style="flex:1;text-align:center;background:${isDnf?'rgba(232,0,45,.1)':'var(--card)'};border:1px solid var(--border);border-radius:6px;padding:10px"><div style="font-size:9px;color:var(--muted);margin-bottom:4px">${r}</div><div style="font-size:18px;font-weight:900;color:${isDnf?'var(--accent)':res<=3?'var(--gold)':'var(--text)'}">${isDnf?'DNF':'P'+res}</div></div>`}).join('')}</div>`}
 
 /* ═══ ARTICLE VIEW (Phase 4) ═══ */
-async function showArtView(slug){go('article');history.replaceState({},'','/#/article/'+slug);const el=document.getElementById('articleView');if(!el)return;el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';const{data}=await sbq(s=>s.from('articles').select('*').eq('slug',slug).single());if(!data){el.innerHTML='<div class="empty">Article not found</div>';return}window.gtag&&gtag('event','article_read',{article_title:data.title,article_slug:data.slug});S.curArt=data;const tag=(data.tags||['ANALYSIS'])[0];document.title='GridFeed | '+data.title;el.innerHTML=`<button onclick="history.back();go('news')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">< Back</button><span class="art-tag ${tagCl(tag)}" style="margin-bottom:12px;display:inline-block">${tag}</span><h1 style="font-family:var(--head);font-size:28px;font-weight:900;line-height:1.15;text-transform:uppercase;margin-bottom:8px">${data.title}</h1><div style="font-size:12px;color:var(--muted);margin-bottom:16px">GridFeed Staff | ${new Date(data.published_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div><div style="height:1px;background:var(--border);margin-bottom:20px"></div><div style="font-size:15px;line-height:1.75;white-space:pre-wrap">${data.body||''}</div><div class="reactions"><button class="reaction" data-r="fire" onclick="toggleReaction('fire')">\u{1F525} <span class="reaction-count" id="r-fire">0</span></button><button class="reaction" data-r="car" onclick="toggleReaction('car')">\u{1F3CE}\u{FE0F} <span class="reaction-count" id="r-car">0</span></button><button class="reaction" data-r="skull" onclick="toggleReaction('skull')">\u{1F480} <span class="reaction-count" id="r-skull">0</span></button><button class="reaction" data-r="chart" onclick="toggleReaction('chart')">\u{1F4C8} <span class="reaction-count" id="r-chart">0</span></button><button class="reaction" data-r="sleep" onclick="toggleReaction('sleep')">\u{1F634} <span class="reaction-count" id="r-sleep">0</span></button></div><div style="margin-top:16px;display:flex;gap:8px"><button onclick="navigator.clipboard?.writeText(location.href);window.gtag&&gtag('event','share',{content_type:'article',item_id:'${data.slug}'});this.textContent='Copied!'" style="padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);color:var(--text)">Copy Link</button></div>`;loadReactions(data.id)}
+async function showArtView(slugOrId){
+  go('article');history.replaceState({},'','/#/article/'+slugOrId);
+  const el=document.getElementById('articleView');if(!el)return;
+  el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
+  // Try slug first, fall back to id (artCard passes a.slug||a.id)
+  let{data}=await sbq(s=>s.from('articles').select('*').eq('slug',slugOrId).maybeSingle());
+  if(!data){const r=await sbq(s=>s.from('articles').select('*').eq('id',slugOrId).maybeSingle());data=r.data}
+  if(!data){el.innerHTML='<div class="empty">Article not found</div>';return}
+  window.gtag&&gtag('event','article_read',{article_title:data.title,article_slug:data.slug});
+  S.curArt=data;
+  const tag=(data.tags||['ANALYSIS'])[0];
+  document.title='GridFeed | '+data.title;
+  el.innerHTML=`<button onclick="history.back();go('news')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">\u2190 Back</button>
+${data.image_url?`<div style="height:180px;border-radius:8px;margin-bottom:16px;background:url('${data.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:''}
+<span class="art-tag ${tagCl(tag)}" style="margin-bottom:12px;display:inline-block">${tag}</span>
+<h1 style="font-family:var(--head);font-size:28px;font-weight:900;line-height:1.15;text-transform:uppercase;margin-bottom:8px">${data.title}</h1>
+<div style="font-size:12px;color:var(--muted);margin-bottom:16px">${data.author||'GridFeed Staff'} | ${new Date(data.published_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+<div style="height:1px;background:var(--border);margin-bottom:20px"></div>
+<div id="artBodyText"></div>
+${data.source_url?`<div style="padding:16px 0;margin-top:20px;border-top:1px solid var(--border)"><div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">SOURCE</div><a href="${data.source_url}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);text-decoration:none;font-weight:600">Read original article \u2192</a></div>`:''}
+<div id="artRelated" style="margin-top:24px"></div>
+<div class="reactions"><button class="reaction" data-r="fire" onclick="toggleReaction('fire')">\u{1F525} <span class="reaction-count" id="r-fire">0</span></button><button class="reaction" data-r="car" onclick="toggleReaction('car')">\u{1F3CE}\u{FE0F} <span class="reaction-count" id="r-car">0</span></button><button class="reaction" data-r="skull" onclick="toggleReaction('skull')">\u{1F480} <span class="reaction-count" id="r-skull">0</span></button><button class="reaction" data-r="chart" onclick="toggleReaction('chart')">\u{1F4C8} <span class="reaction-count" id="r-chart">0</span></button><button class="reaction" data-r="sleep" onclick="toggleReaction('sleep')">\u{1F634} <span class="reaction-count" id="r-sleep">0</span></button></div>
+<div style="margin-top:16px;display:flex;gap:8px"><button onclick="navigator.clipboard?.writeText(location.href);window.gtag&&gtag('event','share',{content_type:'article',item_id:'${data.slug}'});this.textContent='Copied!'" style="padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);color:var(--text)">Copy Link</button></div>`;
+  // Render body as paragraphs / blockquotes
+  const bodyEl=document.getElementById('artBodyText');
+  if(bodyEl&&data.body){
+    const paras=data.body.split(/\n\n+/).filter(p=>p.trim());
+    bodyEl.innerHTML=paras.map(p=>{
+      const t=p.trim();
+      const isQuote=t.startsWith('"')||t.startsWith('\u201C');
+      if(isQuote){
+        return'<blockquote style="border-left:3px solid var(--accent);padding:12px 16px;margin:20px 0;font-style:italic;color:var(--dim);background:rgba(232,0,45,0.04);border-radius:0 4px 4px 0;line-height:1.7;font-size:15px">'+t+'</blockquote>';
+      }
+      return'<p style="margin-bottom:18px;line-height:1.8;font-size:15px;color:var(--dim)">'+t+'</p>';
+    }).join('');
+  }
+  // Related articles by shared tag
+  const relEl=document.getElementById('artRelated');
+  if(relEl){
+    const related=(S.arts||[]).filter(x=>x.slug!==data.slug&&x.id!==data.id&&(x.tags||[]).some(t=>(data.tags||[]).includes(t))).slice(0,3);
+    if(related.length){
+      relEl.innerHTML='<div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">More from GridFeed</div>'+
+        related.map(r=>'<div onclick="showArtView(\''+(r.slug||r.id)+'\')" style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">'+
+          (r.image_url?'<div style="width:80px;height:56px;border-radius:4px;background:url('+r.image_url+') top/cover;flex-shrink:0;background-color:#12151E"></div>':'')+
+          '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;line-height:1.3">'+r.title+'</div><div style="font-size:10px;color:var(--muted);margin-top:4px">'+tAgo(r.published_at)+'</div></div></div>'
+        ).join('');
+    }
+  }
+  loadReactions(data.id);
+}
 
 function getDeviceId(){let did=localStorage.getItem('gf_did');if(!did){did=crypto.randomUUID();localStorage.setItem('gf_did',did)}return did}
 async function loadReactions(aid){
@@ -1587,6 +1672,8 @@ window.addEventListener('hashchange',checkHash);
 
 /* ═══ DARK MODE ═══ */
 function showToast(msg){let t=document.getElementById('gfToast');if(!t){t=document.createElement('div');t.id='gfToast';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1B1F2A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-family:var(--font);z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:300px;text-align:center;border:1px solid var(--border)';document.body.appendChild(t)}t.textContent=msg;t.style.opacity='1';clearTimeout(t._to);t._to=setTimeout(()=>t.style.opacity='0',3000)}
+function toggleMore(){const s=document.getElementById('moreSheet'),o=document.getElementById('moreOverlay');const vis=s.style.display!=='none';s.style.display=vis?'none':'block';o.style.display=vis?'none':'block'}
+function closeMore(){const s=document.getElementById('moreSheet'),o=document.getElementById('moreOverlay');if(s)s.style.display='none';if(o)o.style.display='none'}
 function toggleDark(){const d=!document.body.classList.contains('dark');document.body.classList.toggle('dark',d);localStorage.setItem('gf_dark',d?'1':'0');document.getElementById('darkBtn').textContent=d?'\u2600\uFE0F':'\u{1F319}';window.gtag&&gtag('event','dark_mode',{enabled:d})}
 function initDark(){if(localStorage.getItem('gf_dark')==='1'||((!localStorage.getItem('gf_dark'))&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.body.classList.add('dark');const b=document.getElementById('darkBtn');if(b)b.textContent='\u2600\uFE0F'}}
 
