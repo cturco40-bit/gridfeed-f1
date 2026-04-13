@@ -49,42 +49,41 @@ const TAG_COLORS = {
   'RUMOUR': '#EA580C', 'CHAMPIONSHIP': '#E8002D'
 };
 
-// Look at title first (most relevant subject), then body. Title hits get priority.
-function extractDrivers(title, body) {
-  const found = [];
-  const seen = new Set();
-  const inTitle = (name, last) => (title || '').includes(name) || (title || '').includes(last);
-  const inBody = (name, last) => (body || '').includes(name) || (body || '').includes(last);
-
-  // Pass 1: drivers in the title (ordered by first occurrence position in title)
-  const titleHits = [];
+// STRICT: only match drivers explicitly named in the TITLE. Never scan body.
+// If no driver in title, returns null and the image uses a typography layout.
+function findFocusDriver(title) {
+  const t = title || '';
+  let best = null;
+  let bestIdx = Infinity;
   for (const name of Object.keys(DRIVER_FILE)) {
     const last = name.split(' ').pop();
-    const idx = (title || '').indexOf(last);
-    if (idx >= 0 || (title || '').includes(name)) {
-      titleHits.push({ name, idx: idx >= 0 ? idx : (title || '').indexOf(name) });
+    let idx = t.indexOf(last);
+    if (idx < 0) idx = t.indexOf(name);
+    if (idx >= 0 && idx < bestIdx) {
+      best = name;
+      bestIdx = idx;
     }
   }
-  titleHits.sort((a, b) => a.idx - b.idx);
-  for (const t of titleHits) {
-    if (found.length >= 2) break;
-    found.push(t.name);
-    seen.add(t.name);
-  }
+  return best;
+}
 
-  // Pass 2: fill remaining slots from body
-  if (found.length < 2) {
-    for (const name of Object.keys(DRIVER_FILE)) {
-      if (seen.has(name)) continue;
-      const last = name.split(' ').pop();
-      if (inBody(name, last)) {
-        found.push(name);
-        seen.add(name);
-        if (found.length >= 2) break;
-      }
+// Detect a team mentioned in the title — used when no specific driver is named
+const TEAM_NAMES_IN_TITLE = [
+  'Mercedes', 'Ferrari', 'McLaren', 'Red Bull', 'Aston Martin',
+  'Alpine', 'Williams', 'Haas', 'Racing Bulls', 'Audi', 'Cadillac',
+];
+function findFocusTeam(title) {
+  const t = title || '';
+  let best = null;
+  let bestIdx = Infinity;
+  for (const team of TEAM_NAMES_IN_TITLE) {
+    const idx = t.indexOf(team);
+    if (idx >= 0 && idx < bestIdx) {
+      best = team;
+      bestIdx = idx;
     }
   }
-  return found;
+  return best;
 }
 
 // Returns { image, isReal } — isReal = false when we only have a small
@@ -212,9 +211,12 @@ export default async (req) => {
 
     const tag = (article.tags || ['ANALYSIS'])[0];
     const tagColor = TAG_COLORS[tag] || TAG_COLORS['ANALYSIS'];
-    const drivers = extractDrivers(article.title, article.body);
-    const primaryDriver = drivers[0] || null;
-    const primaryTeam = primaryDriver ? DRIVER_TEAMS[primaryDriver] : null;
+    // STRICT matching: driver must be in the TITLE
+    const primaryDriver = findFocusDriver(article.title);
+    const titleTeam = findFocusTeam(article.title);
+    // Team color comes from the title-mentioned team if present, else the
+    // primary driver's team, else the GridFeed accent
+    const primaryTeam = titleTeam || (primaryDriver ? DRIVER_TEAMS[primaryDriver] : null);
     const teamColor = primaryTeam ? TEAM_COLORS[primaryTeam] : '#E8002D';
 
     const W = 1080, H = 1080;
@@ -262,90 +264,64 @@ export default async (req) => {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText('YOUR DAILY F1 FIX', logoX + 22, logoY + 18);
 
-    // Primary driver — real photo or typography fallback
+    // Primary driver photo OR typography fallback when title has no driver
+    // STRICT RULE: image only shows the driver named in the title, never anyone else
     let primaryHeadshot = null;
-    if (primaryDriver) {
-      primaryHeadshot = await loadHeadshot(primaryDriver);
-    }
+    if (primaryDriver) primaryHeadshot = await loadHeadshot(primaryDriver);
+
+    // Image area ends roughly at the tag banner (set further down)
+    const imageBottom = H * 0.5;
 
     if (primaryHeadshot && primaryHeadshot.image && primaryHeadshot.isReal) {
-      // REAL PHOTO: draw rectangular with soft fade, no hard circle
-      const headshot = primaryHeadshot.image;
-      const imgSize = 320;
-      const imgX = (W - imgSize) / 2 + 30;
-      const imgY = 60;
-      const cx = imgX + imgSize / 2;
-      const cy = imgY + imgSize / 2;
-      const scale = Math.max(imgSize / headshot.width, imgSize / headshot.height);
-      const w = headshot.width * scale;
-      const h = headshot.height * scale;
-      const yOff = -h * 0.12;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, imgSize / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(headshot, cx - w / 2, cy - h / 2 + yOff, w, h);
-      ctx.restore();
-      // Soft bottom fade into bg
-      const fade = ctx.createLinearGradient(0, imgY + imgSize * 0.6, 0, imgY + imgSize + 20);
+      // REAL PHOTO LAYOUT — rectangular, top-anchored, no circle clip
+      // F1 hero shots are tall portraits with the face in the upper third
+      const img = primaryHeadshot.image;
+      // Scale so image fills the canvas width OR fills the image area height
+      // We anchor to the TOP so the face is always visible
+      const targetH = imageBottom - 90; // image area from y=90 to ~y=540
+      const scale = Math.max(W / img.width, targetH / img.height);
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
+      const drawX = (W - drawW) / 2;
+      const drawY = 90; // top-anchored — face at the top of the canvas image area
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      // Strong gradient fade from transparent at ~60% of image area to solid bg
+      // This hides the chest/body and blends the photo into the background
+      const fadeStart = imageBottom - 220;
+      const fadeEnd = imageBottom + 40;
+      const fade = ctx.createLinearGradient(0, fadeStart, 0, fadeEnd);
       fade.addColorStop(0, 'rgba(18,21,30,0)');
+      fade.addColorStop(0.6, 'rgba(18,21,30,0.7)');
       fade.addColorStop(1, 'rgba(18,21,30,1)');
       ctx.fillStyle = fade;
-      ctx.fillRect(0, imgY + imgSize * 0.6, W, imgSize * 0.4 + 30);
-    } else if (primaryDriver) {
-      // TYPOGRAPHY FALLBACK: big team-colored last name centered upper area
-      const lastName = primaryDriver.split(' ').pop().toUpperCase();
+      ctx.fillRect(0, fadeStart, W, fadeEnd - fadeStart);
+    } else if (primaryDriver || primaryTeam) {
+      // TYPOGRAPHY FALLBACK — title mentions a driver/team but no photo available
+      // (or no driver in title at all but a team is named)
+      const label = (primaryDriver ? primaryDriver.split(' ').pop() : primaryTeam || '').toUpperCase();
       ctx.save();
-      // Subtle dark plate
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      // Big driver name in team color, centered
-      let nameSize = 130;
+      let nameSize = 110;
       ctx.font = `900 ${nameSize}px sans-serif`;
-      while (ctx.measureText(lastName).width > W - 100 && nameSize > 60) {
+      while (ctx.measureText(label).width > W - 100 && nameSize > 50) {
         nameSize -= 6;
         ctx.font = `900 ${nameSize}px sans-serif`;
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // Outer stroke for contrast
       ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.lineWidth = 4;
-      ctx.strokeText(lastName, W / 2, 220);
+      ctx.strokeText(label, W / 2, 240);
       ctx.fillStyle = teamColor;
-      ctx.fillText(lastName, W / 2, 220);
-      // Team name underneath
-      ctx.font = '700 22px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText(primaryTeam || '', W / 2, 220 + nameSize / 2 + 24);
+      ctx.fillText(label, W / 2, 240);
+      // Team name underneath if we have a driver
+      if (primaryDriver && primaryTeam) {
+        ctx.font = '700 26px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText(primaryTeam.toUpperCase(), W / 2, 240 + nameSize / 2 + 32);
+      }
       ctx.restore();
     }
-
-    // Optional second driver — only if we have a real photo
-    if (drivers.length > 1) {
-      const second = await loadHeadshot(drivers[1]);
-      if (second && second.image && second.isReal) {
-        const h2 = second.image;
-        const sz = 140;
-        const x2 = W - sz - 50;
-        const y2 = 80;
-        const cx = x2 + sz / 2;
-        const cy = y2 + sz / 2;
-        const scale = Math.max(sz / h2.width, sz / h2.height);
-        const w = h2.width * scale;
-        const hh = h2.height * scale;
-        const yOff = -hh * 0.15;
-        ctx.save();
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.arc(cx, cy, sz / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(h2, cx - w / 2, cy - hh / 2 + yOff, w, hh);
-        ctx.restore();
-        ctx.globalAlpha = 1;
-      }
-    }
+    // Note: secondary driver logic removed — image stays focused on title subject only
 
     // Diagonal tag banner — moved up to ~42% so headline has more room
     const bannerY = H * 0.42;
