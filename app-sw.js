@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gridfeed-v49';
+const CACHE_NAME = 'gridfeed-v50';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,7 +13,12 @@ self.addEventListener('install', event => {
     caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
       .then(() => caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(() => {})))
   );
-  self.skipWaiting();
+  // Note: no auto-skipWaiting — the page shows an "Update available" banner
+  // and posts {type:'SKIP_WAITING'} when the user taps Refresh.
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {

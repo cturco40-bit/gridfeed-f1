@@ -228,6 +228,15 @@ body.mo{overflow:hidden}
 .notif-btn{display:flex;align-items:center;background:transparent;border:1px solid rgba(255,255,255,.2);border-radius:var(--radius);padding:5px 10px;color:rgba(255,255,255,.7);font-size:14px;cursor:pointer;min-height:32px}
 .notif-btn.subscribed{border-color:var(--accent);color:var(--accent)}
 
+/* ═══ UPDATE BANNER ═══ */
+.update-banner{display:none;position:fixed;bottom:calc(var(--bottom-nav) + 16px);left:12px;right:12px;max-width:480px;margin:0 auto;background:var(--header);border:1px solid var(--accent);border-left:4px solid var(--accent);border-radius:8px;padding:14px 16px;z-index:300;color:#fff;font-size:13px;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:slideUp .25s}
+.update-banner.vis{display:flex}
+.update-banner .ub-text{flex:1;min-width:0}
+.update-banner .ub-text strong{display:block;font-size:14px;font-weight:800}
+.update-banner .ub-text span{font-size:11px;color:rgba(255,255,255,0.6);display:block;margin-top:2px}
+.update-banner .ub-btn{background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:8px 14px;border-radius:var(--radius);text-transform:uppercase;letter-spacing:.5px;border:none;cursor:pointer;flex-shrink:0}
+.update-banner .ub-close{color:rgba(255,255,255,0.5);font-size:20px;padding:0 4px;background:none;border:none;cursor:pointer;flex-shrink:0}
+
 /* ═══ INSTALL BANNER ═══ */
 .install-banner{display:none;position:fixed;bottom:calc(var(--bottom-nav) + 8px);left:12px;right:12px;background:var(--header);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:14px 16px;z-index:150;color:#fff;font-size:13px}
 .install-banner.vis{display:flex;align-items:center;gap:12px}
@@ -668,6 +677,13 @@ body.mo{overflow:hidden}
   <div onclick="showHistory();closeMore()" style="padding:14px 20px;font-size:14px;font-weight:600;color:#fff;cursor:pointer">Archive 2020–2025</div>
 </div>
 
+<!-- UPDATE AVAILABLE BANNER -->
+<div id="updateBanner" class="update-banner">
+  <div class="ub-text"><strong>New version available</strong><span>Tap refresh to load the latest GridFeed</span></div>
+  <button class="ub-btn" onclick="applyUpdate()">Refresh</button>
+  <button class="ub-close" onclick="dismissUpdate()" aria-label="Dismiss">&times;</button>
+</div>
+
 <!-- INSTALL BANNER -->
 <div class="install-banner" id="installBanner">
   <div class="ib-text"><strong>📱 Add GridFeed</strong><span>Live timing + picks. Free.</span></div>
@@ -969,8 +985,34 @@ let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const v=parseInt(localStorage.getItem('gf_v')||'0')+1;localStorage.setItem('gf_v',v);if(v>=2&&!localStorage.getItem('gf_i')){document.getElementById('installBanner').classList.add('vis');const cta=document.getElementById('installCta');if(cta)cta.style.display='flex'}});
 document.getElementById('installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==='accepted')localStorage.setItem('gf_i','1');deferredPrompt=null}document.getElementById('installBanner').classList.remove('vis')};
 
-/* ═══ SERVICE WORKER ═══ */
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/app-sw.js').then(r=>{setInterval(()=>r.update(),36e5)}).catch(()=>{})}
+/* ═══ SERVICE WORKER + UPDATE PROMPT ═══ */
+let _waitingSW=null;
+function showUpdateBanner(sw){
+  _waitingSW=sw;
+  const b=document.getElementById('updateBanner');
+  if(b)b.classList.add('vis');
+}
+function applyUpdate(){
+  if(!_waitingSW){location.reload();return}
+  // Reload as soon as the new SW takes control
+  navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});
+  _waitingSW.postMessage({type:'SKIP_WAITING'});
+}
+function dismissUpdate(){const b=document.getElementById('updateBanner');if(b)b.classList.remove('vis')}
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/app-sw.js').then(reg=>{
+    // If a new worker is already waiting at registration time, prompt now
+    if(reg.waiting&&navigator.serviceWorker.controller)showUpdateBanner(reg.waiting);
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;if(!nw)return;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner(nw);
+      });
+    });
+    // Poll every 5 minutes so users on long sessions still see updates quickly
+    setInterval(()=>reg.update().catch(()=>{}),3e5);
+  }).catch(()=>{});
+}
 
 /* ═══ URL ROUTING ═══ */
 function initRoute(){if(location.hash&&checkHash())return;const path=location.pathname||'';if(path.startsWith('/article/')){showArtView(path.slice(9));return}const p=new URLSearchParams(location.search);const t=p.get('tab');if(t&&document.getElementById('p-'+t))go(t)}
