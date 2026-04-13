@@ -117,12 +117,12 @@
 
 [[redirects]]
   from = "/article/:slug"
-  to = "/.netlify/functions/article-page"
+  to = "/index.html"
   status = 200
 
-[functions.article-page]
-  timeout = 10
-  included_files = ["index.html"]
+[[edge_functions]]
+  path = "/article/*"
+  function = "article-meta"
 
 [[redirects]]
   from = "/gf-admin-drafts"
