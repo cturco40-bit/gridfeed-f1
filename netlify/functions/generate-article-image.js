@@ -296,50 +296,24 @@ export default async (req) => {
     let primaryHeadshot = null;
     if (primaryDriver) primaryHeadshot = await loadHeadshot(primaryDriver);
 
-    // Image area ends roughly at the tag banner (set further down)
-    const imageBottom = H * 0.5;
-
     if (primaryHeadshot && primaryHeadshot.image && primaryHeadshot.isReal) {
-      // REAL PHOTO LAYOUT — slice head + shoulders region from the source photo
-      // F1 photos are 720×2069 (tall full-body). The face is in the top ~25%.
-      // We use the 9-arg drawImage to slice that head region from the source
-      // and stretch it into the canvas image area.
+      // REAL PHOTO LAYOUT — fill the full 1080×1080 canvas with the photo,
+      // top-anchored cover-fit. F1 photos are 720×2069 (tall full-body) so we
+      // slice from the top of the source down to the height that matches the
+      // square aspect, keeping the head and shoulders centered.
       const img = primaryHeadshot.image;
-      const dstX = 0;
-      const dstY = 90;
-      const dstW = W;
-      const dstH = imageBottom - 90; // ~450px tall image area
-      // Source slice: 30% of the photo height from the top — head + shoulders
-      const sliceFraction = 0.30;
-      const srcY = img.height * 0.015; // skip 1.5% top padding
-      const srcH = img.height * sliceFraction;
-      // Crop source horizontally so it matches dst aspect ratio (no stretch)
-      const dstAspect = dstW / dstH;
-      const srcAspect = img.width / srcH;
-      let srcX = 0, srcW = img.width;
-      if (srcAspect < dstAspect) {
-        // Source slice is too tall — crop top/bottom of slice (use less height)
-        const newSrcH = img.width / dstAspect;
-        // Recenter vertically inside the slice
-        const cropY = (srcH - newSrcH) / 2;
-        ctx.drawImage(img, srcX, srcY + cropY, srcW, newSrcH, dstX, dstY, dstW, dstH);
-      } else {
-        // Source slice is wider — crop left/right
-        const newSrcW = srcH * dstAspect;
-        srcX = (img.width - newSrcW) / 2;
-        srcW = newSrcW;
-        ctx.drawImage(img, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-      }
-      // Bottom fade from transparent (top of fade) to solid bg (bottom of image area)
-      // and extend into the headline area for a smooth blend
-      const fadeStart = dstY + dstH * 0.55;
-      const fadeEnd = dstY + dstH + 40;
-      const fade = ctx.createLinearGradient(0, fadeStart, 0, fadeEnd);
-      fade.addColorStop(0, 'rgba(18,21,30,0)');
-      fade.addColorStop(0.55, 'rgba(18,21,30,0.85)');
-      fade.addColorStop(1, 'rgba(18,21,30,1)');
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, fadeStart, W, fadeEnd - fadeStart);
+      // Source slice: take a square region from the top of the photo so the
+      // head + chest fill the frame
+      const srcSize = img.width; // square region matching the photo width
+      const srcX = 0;
+      const srcY = 0; // anchor to the very top
+      ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, W, H);
+      // Subtle bottom vignette for visual depth (no banner / headline baked in)
+      const vg = ctx.createLinearGradient(0, H * 0.7, 0, H);
+      vg.addColorStop(0, 'rgba(10,13,20,0)');
+      vg.addColorStop(1, 'rgba(10,13,20,0.55)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, H * 0.7, W, H * 0.3);
     } else {
       // TEAM/GENERIC FALLBACK — no driver in title (or no real photo)
       // Show GridFeed car logo + team-themed background
@@ -406,32 +380,7 @@ export default async (req) => {
       ctx.fillText(subLabel, W / 2, 380);
       ctx.restore();
     }
-    // Note: secondary driver logic removed — image stays focused on title subject only
-
-    // Diagonal tag banner — moved up to ~42% so headline has more room
-    const bannerY = H * 0.42;
-    drawTagBanner(ctx, tag, tagColor, W, bannerY);
-
-    // Headline — large white uppercase, auto-fit
-    const headlineText = (article.title || 'GRIDFEED').toUpperCase();
-    const maxWidth = W - 80;
-    const startY = bannerY + 80;
-    let fontSize = 68;
-    let lines = [];
-    while (fontSize >= 32) {
-      ctx.font = `900 ${fontSize}px sans-serif`;
-      lines = wrapText(ctx, headlineText, maxWidth);
-      const totalH = lines.length * (fontSize * 1.08);
-      if (startY + totalH < H - 40) break;
-      fontSize -= 4;
-    }
-    ctx.font = `900 ${fontSize}px sans-serif`;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'left';
-    const lineH = fontSize * 1.08;
-    lines.forEach((line, i) => {
-      ctx.fillText(line, 40, startY + (i + 1) * lineH);
-    });
+    // Note: tag banner + headline are rendered as HTML around the card, not on the image
 
     // Bottom team-color accent
     const accent = ctx.createLinearGradient(0, 0, W * 0.6, 0);
@@ -452,8 +401,6 @@ export default async (req) => {
       image_url: imageUrl,
       primary_driver: primaryDriver,
       team: primaryTeam,
-      font_size: fontSize,
-      lines: lines.length,
     });
   } catch (err) {
     await logSync('generate-article-image', 'error', 0, err.message, Date.now() - start);
