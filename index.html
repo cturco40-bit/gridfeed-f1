@@ -364,7 +364,11 @@ body.mo{overflow:hidden}
 .tool-card{transition:transform .15s,box-shadow .15s,border-color .15s;cursor:pointer;padding:14px;text-align:center;font-family:var(--font);color:var(--text);width:100%;display:block}
 .tool-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.25);border-color:var(--accent)}
 .tool-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.art-card{border-left:3px solid var(--accent)}
+.art-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:12px}
+@media(max-width:480px){.art-grid{grid-template-columns:repeat(2,1fr);gap:8px}}
+.art-card{border-left:3px solid var(--accent);display:flex;flex-direction:column}
+.art-card .art-title{font-size:14px;line-height:1.25}
+@media(max-width:480px){.art-card{padding:12px}.art-card .art-title{font-size:13px}.art-card .art-by{font-size:10px}.art-card .art-tag{font-size:8px;padding:2px 6px}}
 .art-card[data-tag="tag-race"]{border-left-color:#991B1B}
 .art-card[data-tag="tag-qual"]{border-left-color:#6366F1}
 .art-card[data-tag="tag-betting"]{border-left-color:#22C55E}
@@ -740,10 +744,10 @@ async function loadArts(){
   S.arts=[...(data||[])];
   const el=document.getElementById('homeArts');
   if(!data?.length){el.innerHTML='<div class="empty">No articles yet.</div>';return}
-  el.innerHTML=data.map(a=>artCard(a)).join('');
+  el.innerHTML='<div class="art-grid">'+data.map(a=>artCard(a)).join('')+'</div>';
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="height:120px;border-radius:8px 8px 0 0;margin:-16px -16px 12px;background:url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:16/9;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
@@ -815,7 +819,7 @@ async function initNews(){
 function renderNews(){
   const arts=S.arts;
   document.getElementById('newsCt').textContent=arts.length+' articles';
-  document.getElementById('newsArts').innerHTML=arts.length?arts.map(a=>artCard(a)).join(''):'<div class="empty">No articles.</div>';
+  document.getElementById('newsArts').innerHTML=arts.length?'<div class="art-grid">'+arts.map(a=>artCard(a)).join('')+'</div>':'<div class="empty">No articles.</div>';
 }
 
 /* ═══ PICKS ═══ */
