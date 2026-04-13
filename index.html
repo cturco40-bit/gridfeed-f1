@@ -349,6 +349,14 @@ body.mo{overflow:hidden}
 .telem-sec-cell{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:8px;text-align:center}
 .telem-sec-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
 .telem-sec-val{font-weight:800}
+.speed-section{padding:12px 16px;border-bottom:1px solid var(--border)}
+.speed-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+.speed-row:last-child{border-bottom:none}
+.speed-pos{font-weight:800;width:20px;font-size:11px;color:var(--muted);font-family:var(--head)}
+.speed-name{font-size:12px;width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.speed-bar-wrap{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;min-width:40px}
+.speed-bar{height:100%;border-radius:4px;transition:width 0.3s ease}
+.speed-val{font-size:12px;font-weight:800;width:70px;text-align:right;font-variant-numeric:tabular-nums;color:var(--gold)}
 .hist-yr{display:inline-block;padding:8px 16px;margin:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--head);font-weight:900;font-size:16px;cursor:pointer;color:var(--text);text-decoration:none}
 .hist-yr:hover,.hist-yr.act{background:var(--accent);color:#fff;border-color:var(--accent)}
 .hist-race{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
@@ -457,6 +465,7 @@ body.mo{overflow:hidden}
         </div>
       </div>
     </div>
+    <div class="speed-section" id="speedSection" style="display:none"><div class="slabel" style="margin-bottom:8px">SPEED TRAP</div><div id="speedList"></div></div>
     <div class="rb-sec"><div class="rb-title">Race Blog</div><div id="rbEntries"><div class="empty" style="padding:14px;font-size:11px">No entries yet.</div></div></div>
     <div class="rc-sec"><div class="rc-title">Race Control</div><div id="rcFeed"></div></div>
     <div class="strat-sec"><div class="strat-title">Tyre Strategy</div><div id="stratTrack"></div></div>
@@ -1319,21 +1328,46 @@ async function checkLive(){
 
 async function fetchLive(){
   try{
-    const[lb,rc,st,wx,loc]=await Promise.allSettled([
+    const[lb,rc,st,wx,loc,sp]=await Promise.allSettled([
       sbq(s=>s.from('leaderboard').select('*').eq('session_type','race').order('position',{ascending:true}).limit(22)),
       sbq(s=>s.from('race_control').select('*').order('date',{ascending:false}).limit(12)),
       sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
       sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
       sbq(s=>s.from('car_locations').select('driver_number,x,y,date').order('date',{ascending:false}).limit(500)),
+      sbq(s=>s.from('lap_times').select('driver_number,st_speed,lap_number').not('st_speed','is',null).order('st_speed',{ascending:false}).limit(100)),
     ]);
     if(lb.status==='fulfilled'&&lb.value.data)procLB(lb.value.data);
     if(rc.status==='fulfilled'&&rc.value.data){S.liveRC=rc.value.data;checkBans()}
     if(st.status==='fulfilled'&&st.value.data)procStints(st.value.data);
     if(wx.status==='fulfilled'&&wx.value.data?.[0])procWx(wx.value.data[0]);
     if(loc.status==='fulfilled'&&loc.value.data)processLocs(loc.value.data);
+    if(sp.status==='fulfilled'&&sp.value.data)S.liveSpeeds=sp.value.data;
     S.lastPoll=performance.now();
-    if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap();loadRaceBlog()}
+    if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap();loadRaceBlog();renderSpeedTrap(S.liveSpeeds)}
   }catch(e){console.warn('[GF] Live fetch:',e.message)}
+}
+
+function renderSpeedTrap(speeds){
+  const section=document.getElementById('speedSection');if(!section)return;
+  if(!speeds||!speeds.length||!S.isLive){section.style.display='none';return}
+  // Collapse to max speed per driver
+  const maxSpeeds={};
+  speeds.forEach(s=>{
+    if(!maxSpeeds[s.driver_number]||s.st_speed>maxSpeeds[s.driver_number].speed){
+      maxSpeeds[s.driver_number]={speed:s.st_speed,lap:s.lap_number};
+    }
+  });
+  const sorted=Object.entries(maxSpeeds).map(([num,d])=>({num:parseInt(num),...d})).sort((a,b)=>b.speed-a.speed).slice(0,10);
+  if(!sorted.length){section.style.display='none';return}
+  section.style.display='';
+  const topSpeed=sorted[0].speed||1;
+  document.getElementById('speedList').innerHTML=sorted.map((s,i)=>{
+    const entry=Object.values(DSTATS).find(d=>d.num===s.num);
+    const name=entry?entry.abbr:('#'+s.num);
+    const color=entry?entry.tc:'#888';
+    const barWidth=Math.round((s.speed/topSpeed)*100);
+    return`<div class="speed-row"><span class="speed-pos">P${i+1}</span><span class="speed-name">${name}</span><div class="speed-bar-wrap"><div class="speed-bar" style="width:${barWidth}%;background:${color}"></div></div><span class="speed-val">${Math.round(s.speed)} km/h</span></div>`;
+  }).join('');
 }
 
 function procLB(data){
