@@ -361,12 +361,12 @@ export default async (req) => {
     const imageUrl = await uploadToSupabase(filename, buffer);
     await sb('articles?id=eq.' + articleId, 'PATCH', { image_url: imageUrl });
 
-    await logSync('generate-article-image', 'success', 1, `${filename} (${drivers.join('+') || 'no driver'})`, Date.now() - start);
+    await logSync('generate-article-image', 'success', 1, `${filename} (${primaryDriver || primaryTeam || 'generic'})`, Date.now() - start);
     return json({
       success: true,
       image_url: imageUrl,
-      drivers_detected: drivers,
-      team_detected: primaryTeam,
+      primary_driver: primaryDriver,
+      team: primaryTeam,
       font_size: fontSize,
       lines: lines.length,
     });
