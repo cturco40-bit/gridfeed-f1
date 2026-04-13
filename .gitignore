@@ -5,3 +5,6 @@ node_modules/
 .claude/
 *.txt
 !_redirects
+raw.png
+raw2.png
+raw*.png
