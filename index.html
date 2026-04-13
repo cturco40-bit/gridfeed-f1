@@ -118,7 +118,10 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
 .skel-row{display:flex;flex-direction:column;gap:12px;padding:16px}
 
 /* ═══ ARTICLES ═══ */
-.art-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:10px;cursor:pointer;min-height:44px;transition:transform .1s,box-shadow .1s;-webkit-tap-highlight-color:transparent}
+.art-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:10px;cursor:pointer;min-height:44px;transition:transform .1s,box-shadow .1s;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.art-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+body.dark .art-card{box-shadow:none}
+body.dark .art-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.4)}
 .art-card:active{transform:scale(.99)}
 .art-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 8px;border-radius:3px;margin-bottom:8px}
 .tag-race{background:#FEE2E2;color:#991B1B}.tag-qual{background:#DBEAFE;color:#1E40AF}.tag-betting{background:#FEF3C7;color:#92400E}.tag-preview{background:#F0FDF4;color:#166534}.tag-analysis{background:#F5F3FF;color:#5B21B6}.tag-breaking{background:var(--accent);color:#fff}.tag-rumour{background:#FFF7ED;color:#C2410C}
@@ -362,13 +365,13 @@ body.mo{overflow:hidden}
 .tool-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.25);border-color:var(--accent)}
 .tool-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .art-card{border-left:3px solid var(--accent)}
-.art-card.tag-race{border-left-color:#991B1B}
-.art-card.tag-qual{border-left-color:#6366F1}
-.art-card.tag-betting{border-left-color:#22C55E}
-.art-card.tag-preview{border-left-color:#F59E0B}
-.art-card.tag-analysis{border-left-color:#8B5CF6}
-.art-card.tag-breaking{border-left-color:#DC2626}
-.art-card.tag-rumour{border-left-color:#EC4899}
+.art-card[data-tag="tag-race"]{border-left-color:#991B1B}
+.art-card[data-tag="tag-qual"]{border-left-color:#6366F1}
+.art-card[data-tag="tag-betting"]{border-left-color:#22C55E}
+.art-card[data-tag="tag-preview"]{border-left-color:#F59E0B}
+.art-card[data-tag="tag-analysis"]{border-left-color:#8B5CF6}
+.art-card[data-tag="tag-breaking"]{border-left-color:#DC2626}
+.art-card[data-tag="tag-rumour"]{border-left-color:#EC4899}
 .hist-yr{display:inline-block;padding:8px 16px;margin:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--head);font-weight:900;font-size:16px;cursor:pointer;color:var(--text);text-decoration:none}
 .hist-yr:hover,.hist-yr.act{background:var(--accent);color:#fff;border-color:var(--accent)}
 .hist-race{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
@@ -434,7 +437,7 @@ body.mo{overflow:hidden}
     <button class="card tool-card" onclick="go('compare')" aria-label="Driver comparison tool"><div style="font-size:20px;margin-bottom:6px">VS</div><div style="font-size:11px;font-weight:700">Compare</div><div style="font-size:9px;color:var(--muted)">Driver vs driver</div></button>
     <button class="card tool-card" onclick="go('predict')" aria-label="Predict race podium"><div style="font-size:20px;margin-bottom:6px">?</div><div style="font-size:11px;font-weight:700">Predict</div><div style="font-size:9px;color:var(--muted)">Pick your podium</div></button>
     <button class="card tool-card" onclick="go('simulator')" aria-label="Championship simulator"><div style="font-size:20px;margin-bottom:6px">+/-</div><div style="font-size:11px;font-weight:700">Simulator</div><div style="font-size:9px;color:var(--muted)">What if?</div></button>
-    <button class="card tool-card" onclick="go('telemetry');initTelemetry()" aria-label="Telemetry comparison"><div style="font-size:20px;margin-bottom:6px">&#128200;</div><div style="font-size:11px;font-weight:700">Telemetry</div><div style="font-size:9px;color:var(--muted)">Lap-by-lap traces</div></button>
+    <button class="card tool-card" onclick="go('telemetry');initTelemetry()" aria-label="Telemetry comparison"><div style="font-size:20px;margin-bottom:6px">&#8767;</div><div style="font-size:11px;font-weight:700">Telemetry</div><div style="font-size:9px;color:var(--muted)">Lap-by-lap traces</div></button>
     <button class="card tool-card" onclick="showHistory()" aria-label="Historical results archive"><div style="font-size:20px;margin-bottom:6px">&boxbox;</div><div style="font-size:11px;font-weight:700">Archive</div><div style="font-size:9px;color:var(--muted)">2020\u20132025 results</div></button>
   </div>
   <div class="install-cta" id="installCta" style="display:none">
@@ -740,7 +743,7 @@ async function loadArts(){
   el.innerHTML=data.map(a=>artCard(a)).join('');
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);return`<div class="art-card ${tc}" onclick="openArt('${a.id}')"><div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')"><div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
