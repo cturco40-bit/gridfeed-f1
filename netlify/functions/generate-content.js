@@ -83,8 +83,9 @@ export default async (req, context) => {
       return false;
     }
 
-    const recentDrafts24h = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
-    const recentArticles24h = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+    // Subject-level dedup window tightened from 24h -> 6h
+    const recentDrafts24h = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
+    const recentArticles24h = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
     const allRecentTitles = [...recentDrafts24h, ...recentArticles24h].map(r => r.title || '');
 
     // Pick a topic that doesn't duplicate existing content
@@ -260,8 +261,8 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
 
       // Subject-level dedup on the GENERATED title — re-check against all recent content
       // (catches case where Claude wrote about same subject from a different topic)
-      const freshDrafts = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
-      const freshArticles = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 24 * 36e5).toISOString()}`);
+      const freshDrafts = await sb(`content_drafts?select=title&order=created_at.desc&limit=20&created_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
+      const freshArticles = await sb(`articles?select=title&order=published_at.desc&limit=20&published_at=gt.${new Date(Date.now() - 6 * 36e5).toISOString()}`);
       const freshTitles = [...freshDrafts, ...freshArticles].map(r => r.title || '');
       const overlapMatch = freshTitles.find(t => topicOverlaps(parsed.title, t));
       if (overlapMatch && !parsed.title.toLowerCase().startsWith('update')) {

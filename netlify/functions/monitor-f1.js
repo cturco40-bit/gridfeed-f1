@@ -131,7 +131,9 @@ export default async (req, context) => {
     }
 
     // Load existing topics from last 24h for title-level dedup (any status)
-    const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 24 * 36e5).toISOString());
+    // Subject-level dedup window tightened from 24h -> 6h so the pipeline can
+    // produce follow-ups on the same drivers/teams as new angles emerge
+    const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 6 * 36e5).toISOString());
     const recentTitleNorm = new Set(pendingTopics.map(t => normalizeTitle(t.topic)));
 
     for (const [sig, group] of Object.entries(sigGroups)) {
