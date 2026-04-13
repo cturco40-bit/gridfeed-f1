@@ -768,8 +768,17 @@ function initSched(){
   const el=document.getElementById('schedList');let nm=false;
   el.innerHTML=SCH.map(r=>{
     const isCan=r.st==='can',isDone=r.st==='done',isNext=!nm&&r.st==='up'?(nm=true):false;
-    return`<div class="sch-row" style="${isCan?'opacity:0.35':''}"><span class="sch-num">${r.r||'\u2014'}</span><span class="sch-flag">${r.fl}</span><div class="sch-info"><div class="sch-name" style="${isCan?'text-decoration:line-through':''}">${r.n}${r.nt?`<span class="sch-note">${r.nt}</span>`:''}</div><div class="sch-cir">${r.c}</div></div><div style="display:flex;align-items:center;gap:4px">${r.sp&&!isCan?'<span class="sch-badge sb-sprint">Sprint</span>':''}<span class="sch-date">${r.dl}</span>${isCan?'<span class="sch-badge sb-can">Cancelled</span>':isDone?`<span class="sch-badge sb-done">${r.w||'Done'}</span>`:isNext?'<span class="sch-badge sb-next">Next</span>':''}</div></div>`;
+    const histLink=!isCan?`<div style="font-size:10px;color:var(--accent);margin-top:4px;cursor:pointer" onclick="event.stopPropagation();findHistRace('${(r.n||'').replace(/'/g,'\\\'')}',2025)">View 2025 result \u2192</div>`:'';
+    return`<div class="sch-row" style="${isCan?'opacity:0.35':''}"><span class="sch-num">${r.r||'\u2014'}</span><span class="sch-flag">${r.fl}</span><div class="sch-info"><div class="sch-name" style="${isCan?'text-decoration:line-through':''}">${r.n}${r.nt?`<span class="sch-note">${r.nt}</span>`:''}</div><div class="sch-cir">${r.c}</div>${histLink}</div><div style="display:flex;align-items:center;gap:4px">${r.sp&&!isCan?'<span class="sch-badge sb-sprint">Sprint</span>':''}<span class="sch-date">${r.dl}</span>${isCan?'<span class="sch-badge sb-can">Cancelled</span>':isDone?`<span class="sch-badge sb-done">${r.w||'Done'}</span>`:isNext?'<span class="sch-badge sb-next">Next</span>':''}</div></div>`;
   }).join('');
+}
+async function findHistRace(raceName,year){
+  const{data}=await sbq(s=>s.from('historical_races').select('round').eq('season',year).eq('race_name',raceName).limit(1));
+  if(data&&data[0]){showHistory(year,data[0].round);return}
+  // Fallback: ilike search if exact match fails (e.g. "Australian Grand Prix" -> "Formula 1 Australian Grand Prix 2025")
+  const{data:fuzzy}=await sbq(s=>s.from('historical_races').select('round,race_name').eq('season',year).ilike('race_name','%'+raceName.replace(/Grand Prix/,'').trim()+'%').limit(1));
+  if(fuzzy&&fuzzy[0]){showHistory(year,fuzzy[0].round);return}
+  alert('No '+year+' result found for '+raceName);
 }
 
 /* ═══ PUSH NOTIFICATIONS ═══ */
