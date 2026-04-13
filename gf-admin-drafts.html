@@ -293,6 +293,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
       <button class="tab-btn active" data-tab="articles" onclick="switchAdminTab('articles',this)">&#128196; Articles <span class="tab-badge" id="badgeArticles"></span></button>
       <button class="tab-btn" data-tab="tweets" onclick="switchAdminTab('tweets',this)">&#128038; Tweets <span class="tab-badge" id="badgeTweets"></span></button>
       <button class="tab-btn" data-tab="raceblog" onclick="switchAdminTab('raceblog',this)">&#127937; Race Blog <span class="tab-badge" id="badgeRaceBlog"></span></button>
+      <button class="tab-btn" data-tab="published" onclick="switchAdminTab('published',this)">&#9999;&#65039; Published</button>
       <button class="tab-btn" data-tab="approved" onclick="switchAdminTab('approved',this)">&#9989; Approved</button>
       <button class="tab-btn" data-tab="rejected" onclick="switchAdminTab('rejected',this)">&#10060; Rejected</button>
       <button class="tab-btn" data-tab="queue" onclick="switchAdminTab('queue',this)">&#9881; Queue</button>
@@ -329,7 +330,7 @@ const ADMIN_PASS='f3rrar1!';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
 /* ═══ STATE ═══ */
-let drafts=[],tweets=[],syncLogs=[],topics=[],raceBlog=[];
+let drafts=[],tweets=[],syncLogs=[],topics=[],raceBlog=[],publishedArticles=[];
 let activeTab='articles',selectedId=null,isEditing=false;
 
 const CRONS=[
@@ -381,8 +382,11 @@ async function refreshAll(){
     twText: document.getElementById('twText')?.value,
     rbEdHead: document.getElementById('rbEdHead')?.value,
     rbEdBody: document.getElementById('rbEdBody')?.value,
+    pubEdTitle: document.getElementById('pubEdTitle')?.value,
+    pubEdBody: document.getElementById('pubEdBody')?.value,
+    pubEdExcerpt: document.getElementById('pubEdExcerpt')?.value,
   };
-  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries()]);
+  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries(),loadPublishedArticles()]);
   renderHeader();
   renderSidebar();
   if(selectedId){
@@ -409,6 +413,12 @@ async function loadRaceBlogEntries(){
     const{data}=await sb.from('race_blog_entries').select('*').order('created_at',{ascending:false}).limit(100);
     raceBlog=data||[];
   }catch(e){raceBlog=[]}
+}
+async function loadPublishedArticles(){
+  try{
+    const{data}=await sb.from('articles').select('id,title,slug,body,excerpt,tags,published_at').eq('status','published').order('published_at',{ascending:false}).limit(100);
+    publishedArticles=data||[];
+  }catch(e){publishedArticles=[]}
 }
 async function loadSyncLogs(){
   const{data}=await sb.from('sync_log').select('*').order('created_at',{ascending:false}).limit(50);
@@ -539,9 +549,64 @@ function renderSidebar(){
   if(activeTab==='articles')renderArticleSidebar(el);
   else if(activeTab==='tweets')renderTweetSidebar(el);
   else if(activeTab==='raceblog')renderRaceBlogSidebar(el);
+  else if(activeTab==='published')renderPublishedSidebar(el);
   else if(activeTab==='approved')renderApprovedSidebar(el);
   else if(activeTab==='rejected')renderRejectedSidebar(el);
   else if(activeTab==='queue'){el.innerHTML='<div style="padding:12px;font-size:11px;color:var(--muted)">See main panel</div>';renderQueuePanel();}
+}
+
+function renderPublishedSidebar(el){
+  if(!publishedArticles.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No published articles yet.</div>';return}
+  el.innerHTML=publishedArticles.map(a=>`
+    <div class="sidebar-item ${selectedId===a.id?'active':''}" onclick="selectPublished('${a.id}')">
+      <div class="si-top">
+        <span class="si-type">\u{1F4C4}</span>
+        <span class="si-time">${timeAgo(a.published_at)}</span>
+      </div>
+      <div class="si-title">${esc(a.title||'Untitled')}</div>
+      <div class="si-meta"><div class="si-dot dot-approved"></div>${esc((a.excerpt||'').slice(0,60))}</div>
+    </div>`).join('');
+}
+
+function selectPublished(id){
+  selectedId=id;renderSidebar();
+  const a=publishedArticles.find(x=>x.id===id);if(!a)return;
+  const tags=Array.isArray(a.tags)?a.tags:(a.tags?[a.tags]:['ANALYSIS']);
+  const main=document.getElementById('mainPanel');
+  main.innerHTML=`
+    <div style="padding:20px;max-width:900px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Published Article \u00b7 ${new Date(a.published_at).toLocaleString()}</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:16px">/#/article/${a.slug}</div>
+      <label class="editor-title-label" for="pubEdTitle">Title \u2014 click to edit</label>
+      <input class="editor-title" id="pubEdTitle" value="${esc(a.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
+      <div class="tag-row" id="pubEdTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="togglePubTag(this,'${t}')">${t}</span>`).join('')}</div>
+      <textarea class="editor-excerpt" id="pubEdExcerpt" placeholder="Excerpt..." onfocus="isEditing=true" onblur="isEditing=false">${esc(a.excerpt||'')}</textarea>
+      <textarea class="editor-body" id="pubEdBody" placeholder="Article body..." onfocus="isEditing=true" onblur="isEditing=false">${esc(a.body||'')}</textarea>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="act-btn act-approve" onclick="savePublished('${a.id}')">\u{1F4BE} Save Changes</button>
+        <a href="https://gridfeed.co/#/article/${a.slug}" target="_blank" class="act-btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);text-decoration:none;display:inline-flex;align-items:center;justify-content:center">\u{1F517} View Live</a>
+      </div>
+    </div>
+  `;
+}
+
+function togglePubTag(el,t){el.classList.toggle('active')}
+function getPubTags(){return Array.from(document.querySelectorAll('#pubEdTags .tag-pill.active')).map(el=>el.textContent.trim())}
+
+async function savePublished(id){
+  const title=document.getElementById('pubEdTitle')?.value?.trim();
+  const body=document.getElementById('pubEdBody')?.value?.trim();
+  const excerpt=document.getElementById('pubEdExcerpt')?.value?.trim();
+  const tags=getPubTags();
+  if(!title){toast('Title required','error');return}
+  if(!body){toast('Body required','error');return}
+  toast('Saving...','info');
+  try{
+    const{error}=await sb.from('articles').update({title,body,excerpt,tags}).eq('id',id);
+    if(error){toast('Save failed: '+error.message,'error');return}
+    toast('\u2713 Saved: '+title,'success');
+    await refreshAll();
+  }catch(e){toast('Save failed: '+e.message,'error')}
 }
 
 function renderRaceBlogSidebar(el){
