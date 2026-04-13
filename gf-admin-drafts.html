@@ -758,6 +758,13 @@ function renderArticleEditor(d){
     <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
     <div class="tag-row" id="edTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="toggleTag(this,'${t}')">${t}</span>`).join('')}</div>
     <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 GridFeed Pipeline \u00b7 ${d.content_type||'draft'}</div>
+    <div class="img-preview-wrap" id="edImgWrap" style="margin-bottom:14px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)">Image Preview</div>
+        <button type="button" class="act-btn act-regen" style="padding:4px 10px;font-size:11px" onclick="generateDraftPreview('${d.id}')">\u21ba Generate / Refresh</button>
+      </div>
+      <div id="edImgBody" style="font-size:12px;color:var(--muted);text-align:center;padding:24px 12px">Click <strong>Generate / Refresh</strong> to render a preview using the current title and tags.</div>
+    </div>
     <div class="editor-grid">
       <div>
         <textarea class="editor-excerpt" id="edExcerpt" placeholder="Excerpt / lead paragraph..." onfocus="isEditing=true" onblur="isEditing=false">${esc(d.excerpt||'')}</textarea>
@@ -908,6 +915,10 @@ function renderTweetEditor(t){
           <div class="tweet-preview-text" id="twPreview">${esc(t.tweet_text||'')}</div>
           <div class="tweet-preview-link">gridfeed.co</div>
         </div>
+        <div id="twImgWrap" style="margin-top:12px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:8px">Attached Image (Social Card)</div>
+          <div id="twImgBody" style="font-size:12px;color:var(--muted);text-align:center;padding:12px">Loading\u2026</div>
+        </div>
       </div>
       <div>
         <div class="source-box">
@@ -931,6 +942,61 @@ function renderTweetEditor(t){
         <div class="kb-hints">A=Approve  R=Reject  S=Save</div>
       </div>
     </div>`;
+  // Load the attached article's social image
+  loadTweetImage(t);
+}
+
+async function loadTweetImage(t){
+  const el=document.getElementById('twImgBody');
+  if(!el)return;
+  if(!t.article_id){
+    el.innerHTML='<span style="color:var(--muted)">No attached article.</span>';
+    return;
+  }
+  try{
+    const{data}=await sb.from('articles').select('image_url,title').eq('id',t.article_id).maybeSingle();
+    if(!data||!data.image_url){
+      el.innerHTML='<span style="color:var(--muted)">Article has no image yet.</span>';
+      return;
+    }
+    const socialUrl=data.image_url.replace(/\.png$/,'-social.png')+'?t='+Date.now();
+    el.innerHTML='<img src="'+socialUrl+'" alt="Social card" style="width:100%;max-width:560px;border-radius:6px;display:block;margin:0 auto" onerror="this.parentElement.innerHTML=\'<span style=&quot;color:var(--muted)&quot;>Social image not available yet.</span>\'"/>';
+  }catch(e){
+    el.innerHTML='<span style="color:var(--muted)">Failed to load image.</span>';
+  }
+}
+
+async function generateDraftPreview(draftId){
+  const el=document.getElementById('edImgBody');
+  if(!el)return;
+  // Save edits first so the preview uses the current title/tags
+  const title=document.getElementById('edTitle')?.value?.trim();
+  const tags=getSelectedTags();
+  if(title){
+    await sb.from('content_drafts').update({title,tags}).eq('id',draftId);
+  }
+  el.innerHTML='<span style="color:var(--muted)">Rendering\u2026 (10\u201315s)</span>';
+  try{
+    const res=await fetch('/.netlify/functions/generate-article-image',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({draft_id:draftId})
+    });
+    const data=await res.json();
+    if(!res.ok||!data.success){
+      el.innerHTML='<span style="color:var(--red)">Preview failed: '+(data.error||'unknown')+'</span>';
+      return;
+    }
+    const bust='?t='+Date.now();
+    el.innerHTML=
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+        '<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Site (1080\u00d71080)</div><img src="'+data.image_url+bust+'" style="width:100%;border-radius:6px;display:block"/></div>'+
+        '<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Social (1200\u00d7630)</div><img src="'+(data.social_image_url||'')+bust+'" style="width:100%;border-radius:6px;display:block"/></div>'+
+      '</div>'+
+      '<div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">'+(data.primary_driver||data.team||'Generic')+' layout</div>';
+  }catch(e){
+    el.innerHTML='<span style="color:var(--red)">Preview failed: '+e.message+'</span>';
+  }
 }
 
 function updateTweetCount(){

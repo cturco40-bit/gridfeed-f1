@@ -372,11 +372,23 @@ export default async (req) => {
   try {
     const body = await req.json();
     const articleId = body.article_id;
-    if (!articleId) return json({ error: 'Missing article_id' }, 400);
+    const draftId = body.draft_id;
+    if (!articleId && !draftId) return json({ error: 'Missing article_id or draft_id' }, 400);
 
-    const rows = await sb('articles?id=eq.' + articleId + '&select=id,title,tags,body,slug');
-    const article = rows[0];
-    if (!article) return json({ error: 'Article not found' }, 404);
+    let article;
+    const isDraft = !!draftId;
+    if (isDraft) {
+      const rows = await sb('content_drafts?id=eq.' + draftId + '&select=id,title,tags,body');
+      const d = rows[0];
+      if (!d) return json({ error: 'Draft not found' }, 404);
+      // Preview uses a synthetic slug so the file lives under draft-{id} and
+      // doesn't collide with the published article image after approval
+      article = { id: d.id, title: d.title, tags: d.tags, body: d.body, slug: 'draft-' + d.id };
+    } else {
+      const rows = await sb('articles?id=eq.' + articleId + '&select=id,title,tags,body,slug');
+      article = rows[0];
+      if (!article) return json({ error: 'Article not found' }, 404);
+    }
 
     const tag = (article.tags || ['ANALYSIS'])[0];
     const tagColor = TAG_COLORS[tag] || TAG_COLORS['ANALYSIS'];
@@ -549,7 +561,9 @@ export default async (req) => {
     const buffer = canvas.toBuffer('image/png');
     const filename = (article.slug || article.id) + '.png';
     const imageUrl = await uploadToSupabase(filename, buffer);
-    await sb('articles?id=eq.' + articleId, 'PATCH', { image_url: imageUrl });
+    if (!isDraft) {
+      await sb('articles?id=eq.' + articleId, 'PATCH', { image_url: imageUrl });
+    }
 
     // Also render a 1200x630 social card optimized for Twitter/OG aspect
     // ratio so the logo / driver face no longer get cropped off the top. The
@@ -568,13 +582,14 @@ export default async (req) => {
       console.warn('[generate-article-image] Social card failed:', socialErr.message);
     }
 
-    await logSync('generate-article-image', 'success', 1, `${filename} (${primaryDriver || primaryTeam || 'generic'})`, Date.now() - start);
+    await logSync('generate-article-image', 'success', 1, `${isDraft ? '[preview] ' : ''}${filename} (${primaryDriver || primaryTeam || 'generic'})`, Date.now() - start);
     return json({
       success: true,
       image_url: imageUrl,
       social_image_url: socialUrl,
       primary_driver: primaryDriver,
       team: primaryTeam,
+      preview: isDraft,
     });
   } catch (err) {
     await logSync('generate-article-image', 'error', 0, err.message, Date.now() - start);
