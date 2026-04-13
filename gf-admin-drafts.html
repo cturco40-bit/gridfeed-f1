@@ -373,10 +373,27 @@ if(sessionStorage.getItem('gf_admin')==='1'){
 
 /* ═══ DATA LOADING ═══ */
 async function refreshAll(){
+  // Preserve any unsaved edits across a refresh
+  const pending = {
+    edTitle: document.getElementById('edTitle')?.value,
+    edBody: document.getElementById('edBody')?.value,
+    edExcerpt: document.getElementById('edExcerpt')?.value,
+    twText: document.getElementById('twText')?.value,
+    rbEdHead: document.getElementById('rbEdHead')?.value,
+    rbEdBody: document.getElementById('rbEdBody')?.value,
+  };
   await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries()]);
   renderHeader();
   renderSidebar();
-  if(selectedId)renderMainForSelected();
+  if(selectedId){
+    renderMainForSelected();
+    // Restore unsaved edits (only if the field exists in the new DOM AND had a value)
+    Object.entries(pending).forEach(([id, val]) => {
+      if (val == null) return;
+      const el = document.getElementById(id);
+      if (el && el.value !== val) el.value = val;
+    });
+  }
 }
 
 async function loadDrafts(){
