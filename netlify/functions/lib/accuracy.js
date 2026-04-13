@@ -327,6 +327,23 @@ export function validateArticle(article) {
   }
   console.log('[validateArticle] PASSED championship claims');
 
+  // ── D2. LECLERC PODIUM COUNT FACT ──
+  // Leclerc has 2 podiums after R3 (P3 Australia, P4 China, P3 Japan).
+  // The "three consecutive podiums" error keeps slipping through.
+  const leclercPodiumErrors = [
+    /leclerc[^.]{0,50}three\s+(consecutive\s+)?podiums/i,
+    /three\s+(straight|consecutive)\s+podiums[^.]{0,50}leclerc/i,
+    /leclerc[^.]{0,30}\(P3,?\s*P3,?\s*P3\)/i,
+    /\bP3[,\s]+P3[,\s]+P3\b/,
+  ];
+  for (const pattern of leclercPodiumErrors) {
+    if (pattern.test(article.body || '')) {
+      console.log('[validateArticle] REJECTED — Wrong Leclerc podium count');
+      return { valid: false, reason: 'Wrong Leclerc podium count: he has 2 podiums (P3,P4,P3) not 3' };
+    }
+  }
+  console.log('[validateArticle] PASSED Leclerc podium count');
+
   // ── E. CIRCUIT TYPE FACTS ──
   for (const circuit of NOT_STREET_CIRCUITS) {
     if (combined.includes(circuit) && combined.includes('street circuit')) {
