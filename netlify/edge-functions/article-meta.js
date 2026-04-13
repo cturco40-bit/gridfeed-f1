@@ -35,7 +35,10 @@ export default async (request, context) => {
 
     const title = escape(article.title || 'GridFeed');
     const desc = escape((article.excerpt || article.title || '').slice(0, 200));
-    const image = article.image_url || 'https://gridfeed.co/og-image.png';
+    // Prefer the 1200x630 social card — Twitter's 1.91:1 crop otherwise chops
+    // off the top of the square canvas. The site UI still uses image_url.
+    const siteImage = article.image_url || 'https://gridfeed.co/og-image.png';
+    const image = siteImage.replace(/\.png$/, '-social.png');
     const canonical = `https://gridfeed.co/article/${slug}`;
 
     const modified = html
@@ -45,8 +48,8 @@ export default async (request, context) => {
       .replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${desc}"/>`)
       .replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${canonical}"/>`)
       .replace(/<meta property="og:image" content="[^"]*"\/>/, `<meta property="og:image" content="${image}"/>`)
-      .replace(/<meta property="og:image:width"[^>]*>/, `<meta property="og:image:width" content="1080"/>`)
-      .replace(/<meta property="og:image:height"[^>]*>/, `<meta property="og:image:height" content="1080"/>`)
+      .replace(/<meta property="og:image:width"[^>]*>/, `<meta property="og:image:width" content="1200"/>`)
+      .replace(/<meta property="og:image:height"[^>]*>/, `<meta property="og:image:height" content="630"/>`)
       .replace(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${title}"/>`)
       .replace(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${desc}"/>`)
       .replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${image}"/>`);

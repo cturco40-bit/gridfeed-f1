@@ -222,6 +222,128 @@ async function uploadToSupabase(filename, buffer) {
   return SB_URL + '/storage/v1/object/public/article-images/' + filename;
 }
 
+// Render a 1200x630 landscape card for Twitter/OG unfurls. Keeps the square
+// site canvas untouched and guarantees Twitter's 1.91:1 crop doesn't chop off
+// the GridFeed logo or the driver's face.
+async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor }) {
+  const SW = 1200, SH = 630;
+  const canvas = createCanvas(SW, SH);
+  const ctx = canvas.getContext('2d');
+
+  // Background gradient
+  const bg = ctx.createLinearGradient(0, 0, 0, SH);
+  bg.addColorStop(0, '#1A1E2E');
+  bg.addColorStop(0.5, '#12151E');
+  bg.addColorStop(1, '#0A0D14');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, SW, SH);
+
+  // Team color ambient glow (right side of card)
+  if (primaryTeam) {
+    const hex = teamColor.replace('#', '');
+    const tr = parseInt(hex.slice(0, 2), 16);
+    const tg = parseInt(hex.slice(2, 4), 16);
+    const tb = parseInt(hex.slice(4, 6), 16);
+    const glow = ctx.createRadialGradient(SW * 0.75, SH * 0.5, 0, SW * 0.75, SH * 0.5, SW * 0.5);
+    glow.addColorStop(0, `rgba(${tr},${tg},${tb},0.28)`);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, SW, SH);
+  }
+
+  const hasPhoto = primaryHeadshot && primaryHeadshot.image && primaryHeadshot.isReal;
+  if (hasPhoto) {
+    // LEFT: driver photo 630x630 square, blending into dark on the right
+    const img = primaryHeadshot.image;
+    const srcSize = Math.round(img.width * 0.88);
+    ctx.drawImage(img, 0, 0, srcSize, srcSize, 0, 0, 630, 630);
+    // Right-edge fade so the photo blends into the headline/logo area
+    const fade = ctx.createLinearGradient(380, 0, 680, 0);
+    fade.addColorStop(0, 'rgba(10,13,20,0)');
+    fade.addColorStop(1, 'rgba(18,21,30,1)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(380, 0, 320, SH);
+  }
+
+  // GridFeed logo — top-left when no photo, top-right of photo otherwise
+  const logoX = hasPhoto ? 680 : 60;
+  const logoY = 80;
+  const sq = 8;
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#FFFFFF' : 'rgba(255,255,255,0.2)';
+      ctx.fillRect(logoX + c * sq, logoY - 22 + r * sq, sq, sq);
+    }
+  }
+  ctx.font = '900 36px sans-serif';
+  ctx.textAlign = 'left';
+  const gridW = ctx.measureText('GRID').width;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText('GRID', logoX + 28, logoY);
+  ctx.fillStyle = '#E8002D';
+  ctx.fillText('FEED', logoX + 28 + gridW, logoY);
+  ctx.font = '700 12px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillText('YOUR DAILY F1 FIX', logoX + 28, logoY + 22);
+
+  // Headline text area — right half when photo, center when no photo
+  const textX = hasPhoto ? 680 : 60;
+  const textW = hasPhoto ? SW - 680 - 60 : SW - 120;
+  const textStartY = hasPhoto ? 180 : 260;
+  const headline = (title || 'GRIDFEED').toUpperCase();
+  let fontSize = hasPhoto ? 42 : 56;
+  let lines = [];
+  while (fontSize >= 24) {
+    ctx.font = `900 ${fontSize}px sans-serif`;
+    // Word wrap
+    const words = headline.split(' ');
+    lines = [];
+    let cur = '';
+    for (const w of words) {
+      const test = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(test).width > textW && cur) { lines.push(cur); cur = w; }
+      else cur = test;
+    }
+    if (cur) lines.push(cur);
+    const totalH = lines.length * (fontSize * 1.1);
+    if (textStartY + totalH < SH - 60) break;
+    fontSize -= 3;
+  }
+  ctx.font = `900 ${fontSize}px sans-serif`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textAlign = hasPhoto ? 'left' : 'center';
+  const lineH = fontSize * 1.1;
+  lines.forEach((line, i) => {
+    const px = hasPhoto ? textX : SW / 2;
+    ctx.fillText(line, px, textStartY + (i + 1) * lineH);
+  });
+
+  // Team name pill (small label under headline)
+  if (primaryTeam) {
+    ctx.font = '900 16px sans-serif';
+    const pillLabel = primaryTeam.toUpperCase();
+    const pillW = ctx.measureText(pillLabel).width + 28;
+    const pillY = textStartY + (lines.length + 1) * lineH + 12;
+    const pillX = hasPhoto ? textX : (SW - pillW) / 2;
+    if (pillY + 32 < SH - 20) {
+      ctx.fillStyle = teamColor;
+      ctx.fillRect(pillX, pillY, pillW, 28);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.fillText(pillLabel, pillX + 14, pillY + 20);
+    }
+  }
+
+  // Bottom accent bar
+  const accent = ctx.createLinearGradient(0, 0, SW * 0.6, 0);
+  accent.addColorStop(0, teamColor);
+  accent.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, SH - 6, SW, 6);
+
+  return canvas.toBuffer('image/png');
+}
+
 export default async (req) => {
   const start = Date.now();
   if (req.method !== 'POST') {
@@ -391,16 +513,34 @@ export default async (req) => {
     ctx.fillStyle = accent;
     ctx.fillRect(0, H - 5, W, 5);
 
-    // Export and upload
+    // Export and upload the square 1080x1080 (used by the site UI)
     const buffer = canvas.toBuffer('image/png');
     const filename = (article.slug || article.id) + '.png';
     const imageUrl = await uploadToSupabase(filename, buffer);
     await sb('articles?id=eq.' + articleId, 'PATCH', { image_url: imageUrl });
 
+    // Also render a 1200x630 social card optimized for Twitter/OG aspect
+    // ratio so the logo / driver face no longer get cropped off the top. The
+    // website still uses the square version; only og:image points here.
+    let socialUrl = null;
+    try {
+      const socialBuffer = await renderSocialCard({
+        title: article.title,
+        primaryHeadshot,
+        primaryTeam,
+        teamColor,
+      });
+      const socialName = (article.slug || article.id) + '-social.png';
+      socialUrl = await uploadToSupabase(socialName, socialBuffer);
+    } catch (socialErr) {
+      console.warn('[generate-article-image] Social card failed:', socialErr.message);
+    }
+
     await logSync('generate-article-image', 'success', 1, `${filename} (${primaryDriver || primaryTeam || 'generic'})`, Date.now() - start);
     return json({
       success: true,
       image_url: imageUrl,
+      social_image_url: socialUrl,
       primary_driver: primaryDriver,
       team: primaryTeam,
     });
