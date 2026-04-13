@@ -21,6 +21,10 @@
   schedule = "*/2 * * * *"
   timeout = 30
 
+[functions.live-race-tweets]
+  schedule = "* * * * *"
+  timeout = 30
+
 [functions.fetch-strategy]
   schedule = "*/5 * * * *"
   timeout = 30

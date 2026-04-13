@@ -1,27 +1,7 @@
 import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
 
-const LIVE_TWEET_EVENTS = {
-  SafetyCar: { emoji: '🟡', prefix: 'SAFETY CAR' },
-  Flag: { emoji: '🔴', prefix: 'RED FLAG' },
-  OvertakeMode: { emoji: '⚡', prefix: 'OVERTAKE MODE' },
-};
-
-function shouldLiveTweet(m) {
-  if (m.category === 'SafetyCar') return LIVE_TWEET_EVENTS.SafetyCar;
-  if (m.flag === 'RED') return LIVE_TWEET_EVENTS.Flag;
-  const msg = (m.message || '').toUpperCase();
-  if (msg.includes('PENALTY') || msg.includes('BLACK AND WHITE') || msg.includes('DISQUALIF')) return { emoji: '⚠️', prefix: 'PENALTY' };
-  if (msg.includes('RETIRE') || msg.includes('STOPPED ON TRACK')) return { emoji: '🏁', prefix: 'RETIREMENT' };
-  return null;
-}
-
-function buildLiveTweet(event, m, session) {
-  const meetingName = session.meeting_name || session.circuit_short_name || '';
-  const lap = m.lap_number ? `Lap ${m.lap_number}` : '';
-  const parts = [`${event.emoji} ${event.prefix}`, m.message || '', lap, meetingName, '', 'gridfeed.co'].filter(Boolean);
-  const tweet = parts.join('\n');
-  return tweet.length <= 280 ? tweet : tweet.slice(0, 276) + '...';
-}
+// Live tweet generation moved to live-race-tweets.js (approval flow).
+// This function now only mirrors race_control data into our DB.
 
 export default async (req, context) => {
   const start = Date.now();
@@ -55,19 +35,12 @@ export default async (req, context) => {
       });
       inserted++;
 
-      // Live tweet + push for big events (safety car, red flag, penalties, retirements)
-      const liveEvent = shouldLiveTweet(m);
-      if (liveEvent) {
-        const tweetText = buildLiveTweet(liveEvent, m, session);
-        // Live race events tweet immediately — no approval needed
-        await sb('tweets', 'POST', { tweet_text: tweetText, status: 'approved' });
-        const siteUrl = process.env.URL || 'https://gridfeed.co';
-        fetchWT(siteUrl + '/.netlify/functions/post-tweet', { method: 'POST' }, 15000).catch(() => {});
-        fetchWT(siteUrl + '/.netlify/functions/send-push', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: `${liveEvent.emoji} ${liveEvent.prefix}`, body: msg, url: '/?tab=live', tag: 'race-control-' + Date.now(), audience: 'public' }),
-        }, 5000).catch(() => {});
-      }
+    }
+
+    // After mirroring race_control rows, fire live-race-tweets to scan for new events
+    if (inserted > 0) {
+      const siteUrl = process.env.URL || 'https://gridfeed.co';
+      fetchWT(siteUrl + '/.netlify/functions/live-race-tweets', { method: 'POST' }, 15000).catch(() => {});
     }
 
     await logSync('fetch-race-control', 'success', inserted, `${inserted} new messages`, Date.now() - start);

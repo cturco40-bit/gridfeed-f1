@@ -56,6 +56,17 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .hdr-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;background:var(--card);border:1px solid var(--border);white-space:nowrap}
 .pill-gold{border-color:var(--gold);color:var(--gold)}
 .pill-green{border-color:var(--green);color:var(--green)}
+.live-banner{background:linear-gradient(90deg,#E8002D,#7a0017);color:#fff;padding:12px 20px;display:none;position:sticky;top:0;z-index:50;border-bottom:2px solid #E8002D;animation:livePulse 2s ease-in-out infinite}
+.live-banner.vis{display:block}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(232,0,45,0.4)}50%{box-shadow:0 0 0 8px rgba(232,0,45,0)}}
+.live-banner-hdr{display:flex;align-items:center;gap:10px;font-weight:900;font-size:14px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.live-banner-dot{width:10px;height:10px;border-radius:50%;background:#fff;animation:liveBlink 1s ease-in-out infinite}
+@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}
+.live-tweet-card{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.live-tweet-text{flex:1;font-size:13px;line-height:1.4;white-space:pre-wrap}
+.live-tweet-btn{padding:8px 14px;background:#fff;color:#E8002D;border:none;border-radius:4px;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0}
+.live-tweet-btn:hover{background:#fce0e5}
+.live-tweet-btn:disabled{opacity:0.5;cursor:wait}
 .pill-red{border-color:var(--red);color:var(--red)}
 .pill-blue{border-color:var(--blue);color:var(--blue)}
 .hdr-refresh{font-size:18px;color:var(--dim);padding:4px 8px;border-radius:4px}
@@ -266,6 +277,12 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <button class="hdr-refresh" onclick="refreshAll()" title="Refresh">&#8634;</button>
 </div>
 
+<!-- LIVE MODE banner: shown when pending live race tweets need approval -->
+<div class="live-banner" id="liveBanner">
+  <div class="live-banner-hdr"><span class="live-banner-dot"></span>LIVE RACE \u2014 <span id="liveBannerCount">0</span> tweets pending approval</div>
+  <div id="liveBannerList"></div>
+</div>
+
 <!-- LAYOUT -->
 <div class="admin-layout">
   <!-- SIDEBAR -->
@@ -400,6 +417,35 @@ function renderHeader(){
   // Mobile badges
   const ma=document.getElementById('mobBadgeArticles');if(ma)ma.textContent=pendingDrafts||'';
   const mt=document.getElementById('mobBadgeTweets');if(mt)mt.textContent=pendingTweets||'';
+  renderLiveBanner();
+}
+
+function renderLiveBanner(){
+  const banner=document.getElementById('liveBanner');if(!banner)return;
+  const liveTweets=tweets.filter(t=>t.status==='pending'&&t.tweet_type==='live_race');
+  if(!liveTweets.length){banner.classList.remove('vis');return}
+  banner.classList.add('vis');
+  document.getElementById('liveBannerCount').textContent=liveTweets.length;
+  document.getElementById('liveBannerList').innerHTML=liveTweets.map(t=>`
+    <div class="live-tweet-card">
+      <div class="live-tweet-text">${esc(t.tweet_text||'')}</div>
+      <button class="live-tweet-btn" onclick="approveLiveTweet('${t.id}',this)">\u2713 Post Now</button>
+    </div>
+  `).join('');
+}
+
+async function approveLiveTweet(id,btn){
+  btn.disabled=true;btn.textContent='Posting...';
+  try{
+    const res=await fetch('/.netlify/functions/approve-tweet',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id})
+    });
+    const data=await res.json();
+    if(data.error){toast('Failed: '+data.error,'error');btn.disabled=false;btn.textContent='\u2713 Post Now';return}
+    toast(data.posted?'\u2713 Live tweet posted':'\u2713 Approved (post pending)','success');
+    await refreshAll();
+  }catch(e){toast('Failed: '+e.message,'error');btn.disabled=false;btn.textContent='\u2713 Post Now'}
 }
 
 function getNextRaceInfo(){

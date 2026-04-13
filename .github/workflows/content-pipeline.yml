@@ -29,6 +29,10 @@ jobs:
         run: curl -sf https://gridfeed.co/.netlify/functions/fetch-race-control || echo "fetch-race-control failed"
         timeout-minutes: 1
 
+      - name: Live race tweets (scan + queue for approval)
+        run: curl -sf https://gridfeed.co/.netlify/functions/live-race-tweets || echo "live-race-tweets failed"
+        timeout-minutes: 1
+
       - name: Live timing
         run: curl -sf https://gridfeed.co/.netlify/functions/fetch-timing || echo "fetch-timing failed"
         timeout-minutes: 1
