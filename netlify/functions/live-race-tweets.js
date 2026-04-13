@@ -18,6 +18,16 @@ const TEMPLATES = {
   overtake_mode: '⚡ Overtake Mode {state} at {race}, lap {lap}\n\ngridfeed.co',
 };
 
+const BLOG_HEADLINES = {
+  safety_car: 'Safety Car Deployed',
+  vsc:        'Virtual Safety Car Deployed',
+  red_flag:   'Red Flag — Race Suspended',
+  yellow:     'Double Yellow Flag',
+  penalty:    'Penalty Issued',
+  retirement: 'Driver Retires',
+  overtake_mode: 'Overtake Mode {state}',
+};
+
 function classifyEvent(m) {
   const cat = (m.category || '').toLowerCase();
   const flag = (m.flag || '').toUpperCase();
@@ -90,7 +100,30 @@ export default async (req) => {
         });
         queued++;
       } catch (e) {
-        errors.push(e.message);
+        errors.push('tweet:' + e.message);
+      }
+
+      // Also insert race blog entry (separate dedup from tweets)
+      try {
+        const blogTag = 'blog-' + eventTag;
+        const existingBlog = await sb(`race_blog_entries?event_tag=eq.${encodeURIComponent(blogTag)}&limit=1`);
+        if (!existingBlog.length) {
+          const headline = (BLOG_HEADLINES[ev.kind] || ev.kind).replace('{state}', ev.state || '');
+          const reason = (m.message || '').replace(/\s+/g, ' ').trim();
+          const body = `Lap ${lap}: ${reason || headline} at ${raceName}.`;
+          await sb('race_blog_entries', 'POST', {
+            session_key: sessionKey,
+            lap_number: typeof lap === 'number' ? lap : null,
+            event_type: ev.kind,
+            headline,
+            body,
+            status: 'pending',
+            auto_generated: true,
+            event_tag: blogTag,
+          });
+        }
+      } catch (e) {
+        errors.push('blog:' + e.message);
       }
     }
 

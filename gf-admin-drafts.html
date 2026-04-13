@@ -290,6 +290,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
     <div class="sidebar-tabs">
       <button class="tab-btn active" data-tab="articles" onclick="switchAdminTab('articles',this)">&#128196; Articles <span class="tab-badge" id="badgeArticles"></span></button>
       <button class="tab-btn" data-tab="tweets" onclick="switchAdminTab('tweets',this)">&#128038; Tweets <span class="tab-badge" id="badgeTweets"></span></button>
+      <button class="tab-btn" data-tab="raceblog" onclick="switchAdminTab('raceblog',this)">&#127937; Race Blog <span class="tab-badge" id="badgeRaceBlog"></span></button>
       <button class="tab-btn" data-tab="approved" onclick="switchAdminTab('approved',this)">&#9989; Approved</button>
       <button class="tab-btn" data-tab="rejected" onclick="switchAdminTab('rejected',this)">&#10060; Rejected</button>
       <button class="tab-btn" data-tab="queue" onclick="switchAdminTab('queue',this)">&#9881; Queue</button>
@@ -326,7 +327,7 @@ const ADMIN_PASS='f3rrar1!';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
 /* ═══ STATE ═══ */
-let drafts=[],tweets=[],syncLogs=[],topics=[];
+let drafts=[],tweets=[],syncLogs=[],topics=[],raceBlog=[];
 let activeTab='articles',selectedId=null,isEditing=false;
 
 const CRONS=[
@@ -370,7 +371,7 @@ if(sessionStorage.getItem('gf_admin')==='1'){
 
 /* ═══ DATA LOADING ═══ */
 async function refreshAll(){
-  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics()]);
+  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries()]);
   renderHeader();
   renderSidebar();
   if(selectedId)renderMainForSelected();
@@ -383,6 +384,12 @@ async function loadDrafts(){
 async function loadTweets(){
   const{data}=await sb.from('tweets').select('*').order('created_at',{ascending:false});
   tweets=data||[];
+}
+async function loadRaceBlogEntries(){
+  try{
+    const{data}=await sb.from('race_blog_entries').select('*').order('created_at',{ascending:false}).limit(100);
+    raceBlog=data||[];
+  }catch(e){raceBlog=[]}
 }
 async function loadSyncLogs(){
   const{data}=await sb.from('sync_log').select('*').order('created_at',{ascending:false}).limit(50);
@@ -406,14 +413,17 @@ function renderHeader(){
   const rejectedToday=drafts.filter(d=>d.review_status==='rejected'&&new Date(d.reviewed_at)>=todayStart).length;
   const pendingTweets=tweets.filter(t=>t.status==='pending').length;
 
+  const pendingBlog=raceBlog.filter(b=>b.status==='pending').length;
   document.getElementById('hdrPills').innerHTML=`
     <span class="hdr-pill pill-gold">${pendingDrafts} Pending</span>
     <span class="hdr-pill pill-green">${approvedToday} Approved</span>
     <span class="hdr-pill pill-red">${rejectedToday} Rejected</span>
-    <span class="hdr-pill pill-blue">${pendingTweets} Tweets</span>`;
+    <span class="hdr-pill pill-blue">${pendingTweets} Tweets</span>
+    ${pendingBlog?`<span class="hdr-pill pill-red">${pendingBlog} Blog</span>`:''}`;
 
   document.getElementById('badgeArticles').textContent=pendingDrafts||'';
   document.getElementById('badgeTweets').textContent=pendingTweets||'';
+  const bb=document.getElementById('badgeRaceBlog');if(bb)bb.textContent=pendingBlog||'';
   // Mobile badges
   const ma=document.getElementById('mobBadgeArticles');if(ma)ma.textContent=pendingDrafts||'';
   const mt=document.getElementById('mobBadgeTweets');if(mt)mt.textContent=pendingTweets||'';
@@ -500,9 +510,63 @@ function renderSidebar(){
   const el=document.getElementById('sidebarList');
   if(activeTab==='articles')renderArticleSidebar(el);
   else if(activeTab==='tweets')renderTweetSidebar(el);
+  else if(activeTab==='raceblog')renderRaceBlogSidebar(el);
   else if(activeTab==='approved')renderApprovedSidebar(el);
   else if(activeTab==='rejected')renderRejectedSidebar(el);
   else if(activeTab==='queue'){el.innerHTML='<div style="padding:12px;font-size:11px;color:var(--muted)">See main panel</div>';renderQueuePanel();}
+}
+
+function renderRaceBlogSidebar(el){
+  const pending=raceBlog.filter(b=>b.status==='pending').sort((a,b)=>(b.lap_number||0)-(a.lap_number||0));
+  if(!pending.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No pending race blog entries.</div>';return}
+  el.innerHTML=pending.map(b=>`
+    <div class="sidebar-item ${selectedId===b.id?'active':''}" onclick="selectRaceBlog('${b.id}')">
+      <div class="si-top">
+        <span class="si-type">L${b.lap_number||'\u2014'}</span>
+        <span class="si-type">${b.event_type||''}</span>
+        <span class="si-time">${timeAgo(b.created_at)}</span>
+      </div>
+      <div class="si-title">${esc(b.headline||'')}</div>
+      <div class="si-meta"><div class="si-dot dot-pending"></div>${esc((b.body||'').slice(0,60))}</div>
+    </div>`).join('');
+}
+
+function selectRaceBlog(id){
+  selectedId=id;renderSidebar();
+  const b=raceBlog.find(x=>x.id===id);if(!b)return;
+  const main=document.getElementById('mainPanel');
+  main.innerHTML=`
+    <div style="padding:20px;max-width:700px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Race Blog Entry \u00b7 Lap ${b.lap_number||'\u2014'} \u00b7 ${b.event_type||''}</div>
+      <input id="rbEdHead" value="${esc(b.headline||'')}" style="width:100%;padding:10px;font-size:18px;font-weight:700;background:var(--card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--head);margin-bottom:10px">
+      <textarea id="rbEdBody" rows="3" style="width:100%;padding:10px;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font);resize:vertical">${esc(b.body||'')}</textarea>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="act-btn act-approve" onclick="approveRaceBlog('${b.id}')">\u2713 Approve & Publish</button>
+        <button class="act-btn" style="background:var(--card);color:var(--text);border:1px solid var(--border)" onclick="rejectRaceBlog('${b.id}')">Reject</button>
+      </div>
+    </div>
+  `;
+}
+
+async function approveRaceBlog(id){
+  const headline=document.getElementById('rbEdHead')?.value?.trim();
+  const body=document.getElementById('rbEdBody')?.value?.trim();
+  if(!headline){toast('Headline required','error');return}
+  toast('Publishing...','info');
+  try{
+    const{error}=await sb.from('race_blog_entries').update({headline,body,status:'approved',reviewed_at:new Date().toISOString(),reviewed_by:'admin'}).eq('id',id);
+    if(error){toast('Failed: '+error.message,'error');return}
+    toast('\u2713 Published','success');
+    await refreshAll();
+  }catch(e){toast('Failed: '+e.message,'error')}
+}
+
+async function rejectRaceBlog(id){
+  try{
+    await sb.from('race_blog_entries').update({status:'rejected',reviewed_at:new Date().toISOString(),reviewed_by:'admin'}).eq('id',id);
+    toast('Rejected','error');
+    await refreshAll();
+  }catch(e){toast('Failed: '+e.message,'error')}
 }
 
 function renderArticleSidebar(el){

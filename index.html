@@ -253,7 +253,14 @@ body.mo{overflow:hidden}
 .tr-lt{font-size:9px;text-align:right;font-variant-numeric:tabular-nums}
 .tr-ar{font-size:9px}.tr-up{color:#22C55E}.tr-dn{color:var(--accent)}
 .rc-sec{padding:12px 16px;border-bottom:1px solid var(--border)}
-.rc-title,.strat-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.rc-title,.strat-title,.rb-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.rb-sec{padding:12px 16px;border-bottom:1px solid var(--border)}
+.rb-entry{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.rb-entry:last-child{border-bottom:none}
+.rb-lap{min-width:32px;font-family:var(--head);font-size:13px;font-weight:900;color:var(--gold);padding-top:2px}
+.rb-content{flex:1}
+.rb-headline{font-size:13px;font-weight:700;color:#fff;margin-bottom:2px}
+.rb-body{font-size:11px;color:var(--dim);line-height:1.4}
 .rc-msg{padding:6px 10px;border-radius:4px;margin-bottom:5px;border-left:3px solid var(--border);font-size:11px;background:rgba(255,255,255,.02)}
 .rc-msg .rc-meta{font-size:9px;color:var(--muted);margin-bottom:2px}
 .rc-sc{border-color:#F5A623;background:rgba(245,166,35,.06)}.rc-rf{border-color:var(--accent);background:rgba(232,0,45,.06)}.rc-ot{border-color:#22C55E;background:rgba(34,197,94,.05)}.rc-pen{border-color:#F97316;background:rgba(249,115,22,.05)}.rc-fl{border-color:#B47FFF;background:rgba(180,127,255,.05)}
@@ -436,6 +443,7 @@ body.mo{overflow:hidden}
         </div>
       </div>
     </div>
+    <div class="rb-sec"><div class="rb-title">Race Blog</div><div id="rbEntries"><div class="empty" style="padding:14px;font-size:11px">No entries yet.</div></div></div>
     <div class="rc-sec"><div class="rc-title">Race Control</div><div id="rcFeed"></div></div>
     <div class="strat-sec"><div class="strat-title">Tyre Strategy</div><div id="stratTrack"></div></div>
   </div>
@@ -1288,7 +1296,7 @@ async function fetchLive(){
     if(wx.status==='fulfilled'&&wx.value.data?.[0])procWx(wx.value.data[0]);
     if(loc.status==='fulfilled'&&loc.value.data)processLocs(loc.value.data);
     S.lastPoll=performance.now();
-    if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap()}
+    if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap();loadRaceBlog()}
   }catch(e){console.warn('[GF] Live fetch:',e.message)}
 }
 
@@ -1338,6 +1346,13 @@ function renderRC(){
     Object.entries(CLS).forEach(([k,v])=>{if(mu.includes(k)){cls=v;ico=ICO[k]}});
     return`<div class="rc-msg ${cls}"><div class="rc-meta">Lap ${m.lap_number||'\u2014'}</div>${ico} ${m.message||'\u2014'}</div>`;
   }).join('');
+}
+
+async function loadRaceBlog(){
+  const el=document.getElementById('rbEntries');if(!el)return;
+  const{data}=await sbq(s=>s.from('race_blog_entries').select('lap_number,headline,body,event_type,created_at').eq('status','approved').order('lap_number',{ascending:false}).order('created_at',{ascending:false}).limit(20));
+  if(!data||!data.length){el.innerHTML='<div class="empty" style="padding:14px;font-size:11px">No entries yet.</div>';return}
+  el.innerHTML=data.map(e=>`<div class="rb-entry"><div class="rb-lap">L${e.lap_number||'\u2014'}</div><div class="rb-content"><div class="rb-headline">${e.headline||''}</div><div class="rb-body">${e.body||''}</div></div></div>`).join('');
 }
 
 function renderStrat(){
