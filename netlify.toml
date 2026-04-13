@@ -60,6 +60,9 @@
   timeout = 30
   external_node_modules = ["@napi-rs/canvas"]
 
+[functions.backfill-images]
+  timeout = 300
+
 [functions.fetch-telemetry]
   timeout = 30
 
