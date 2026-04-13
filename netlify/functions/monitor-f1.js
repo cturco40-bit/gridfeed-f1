@@ -21,7 +21,9 @@ const F1_KEYWORDS = [
 ];
 
 const RSS_FEEDS = [
-  { url: 'https://www.formula1.com/content/fom-website/en/latest.xml', source: 'Formula1.com', region: 'INT' },
+  // Formula1.com removed their RSS feed (old URL 301s to a 404). Google News
+  // aggregates F1.com + everything else, so we use it as the F1-wide net.
+  { url: 'https://news.google.com/rss/search?q=Formula+1&hl=en-US&gl=US&ceid=US:en', source: 'Google News F1', region: 'INT' },
   { url: 'https://www.autosport.com/rss/f1/news/', source: 'Autosport', region: 'GB' },
   { url: 'https://www.motorsport.com/rss/f1/news/', source: 'Motorsport.com', region: 'GB' },
   { url: 'https://the-race.com/feed/', source: 'The Race', region: 'GB' },
