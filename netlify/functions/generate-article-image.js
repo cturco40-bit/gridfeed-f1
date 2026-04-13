@@ -87,27 +87,38 @@ function extractDrivers(title, body) {
   return found;
 }
 
+// Returns { image, isReal } — isReal = false when we only have a small
+// placeholder PNG (team-colored square with initials), so we know to use a
+// typography-forward layout instead of drawing it as a fake portrait
+const REAL_PHOTO_MIN_BYTES = 6000; // OpenF1 photos are 11-13KB, placeholders are 2-5KB
 async function loadHeadshot(name) {
   const file = DRIVER_FILE[name];
-  if (!file) return null;
-  // Try multiple candidate paths — bundling can place files in different spots
+  if (!file) return { image: null, isReal: false };
+  const fs = await import('fs/promises');
   const candidates = [
     path.join(HERE, '..', '..', 'drivers', file + '.png'),
     path.join(process.cwd(), 'drivers', file + '.png'),
     path.join(HERE, 'drivers', file + '.png'),
   ];
   for (const p of candidates) {
-    try { return await loadImage(p); } catch {}
+    try {
+      const buf = await fs.readFile(p);
+      const isReal = buf.length >= REAL_PHOTO_MIN_BYTES;
+      const image = await loadImage(buf);
+      return { image, isReal };
+    } catch {}
   }
-  // Fall back to fetching from the live site
+  // Fallback to network fetch
   try {
     const res = await fetchWT('https://gridfeed.co/drivers/' + file + '.png', {}, 8000);
     if (res.ok) {
       const buf = Buffer.from(await res.arrayBuffer());
-      return await loadImage(buf);
+      const isReal = buf.length >= REAL_PHOTO_MIN_BYTES;
+      const image = await loadImage(buf);
+      return { image, isReal };
     }
   } catch {}
-  return null;
+  return { image: null, isReal: false };
 }
 
 function wrapText(ctx, text, maxWidth) {
@@ -251,41 +262,70 @@ export default async (req) => {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText('YOUR DAILY F1 FIX', logoX + 22, logoY + 18);
 
-    // Primary driver headshot — face in upper portion of source image,
-    // so we offset the draw upward inside the circular clip
+    // Primary driver — real photo or typography fallback
+    let primaryHeadshot = null;
     if (primaryDriver) {
-      const headshot = await loadHeadshot(primaryDriver);
-      if (headshot) {
-        const imgSize = 300;
-        const imgX = (W - imgSize) / 2 + 40;
-        const imgY = 50;
-        const cx = imgX + imgSize / 2;
-        const cy = imgY + imgSize / 2;
-        // Cover-fit + face offset
-        const scale = Math.max(imgSize / headshot.width, imgSize / headshot.height);
-        const w = headshot.width * scale;
-        const h = headshot.height * scale;
-        const yOffset = -h * 0.15; // shift up 15% so face is visible
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, imgSize / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(headshot, cx - w / 2, cy - h / 2 + yOffset, w, h);
-        ctx.restore();
-        // Fade bottom of headshot into background
-        const fade = ctx.createLinearGradient(0, imgY + imgSize * 0.65, 0, imgY + imgSize);
-        fade.addColorStop(0, 'rgba(18,21,30,0)');
-        fade.addColorStop(1, 'rgba(18,21,30,1)');
-        ctx.fillStyle = fade;
-        ctx.fillRect(0, imgY + imgSize * 0.65, W, imgSize * 0.35 + 20);
-      }
+      primaryHeadshot = await loadHeadshot(primaryDriver);
     }
 
-    // Optional second driver — same face offset trick, smaller + offset right
+    if (primaryHeadshot && primaryHeadshot.image && primaryHeadshot.isReal) {
+      // REAL PHOTO: draw rectangular with soft fade, no hard circle
+      const headshot = primaryHeadshot.image;
+      const imgSize = 320;
+      const imgX = (W - imgSize) / 2 + 30;
+      const imgY = 60;
+      const cx = imgX + imgSize / 2;
+      const cy = imgY + imgSize / 2;
+      const scale = Math.max(imgSize / headshot.width, imgSize / headshot.height);
+      const w = headshot.width * scale;
+      const h = headshot.height * scale;
+      const yOff = -h * 0.12;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, imgSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(headshot, cx - w / 2, cy - h / 2 + yOff, w, h);
+      ctx.restore();
+      // Soft bottom fade into bg
+      const fade = ctx.createLinearGradient(0, imgY + imgSize * 0.6, 0, imgY + imgSize + 20);
+      fade.addColorStop(0, 'rgba(18,21,30,0)');
+      fade.addColorStop(1, 'rgba(18,21,30,1)');
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, imgY + imgSize * 0.6, W, imgSize * 0.4 + 30);
+    } else if (primaryDriver) {
+      // TYPOGRAPHY FALLBACK: big team-colored last name centered upper area
+      const lastName = primaryDriver.split(' ').pop().toUpperCase();
+      ctx.save();
+      // Subtle dark plate
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      // Big driver name in team color, centered
+      let nameSize = 130;
+      ctx.font = `900 ${nameSize}px sans-serif`;
+      while (ctx.measureText(lastName).width > W - 100 && nameSize > 60) {
+        nameSize -= 6;
+        ctx.font = `900 ${nameSize}px sans-serif`;
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Outer stroke for contrast
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 4;
+      ctx.strokeText(lastName, W / 2, 220);
+      ctx.fillStyle = teamColor;
+      ctx.fillText(lastName, W / 2, 220);
+      // Team name underneath
+      ctx.font = '700 22px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText(primaryTeam || '', W / 2, 220 + nameSize / 2 + 24);
+      ctx.restore();
+    }
+
+    // Optional second driver — only if we have a real photo
     if (drivers.length > 1) {
-      const h2 = await loadHeadshot(drivers[1]);
-      if (h2) {
+      const second = await loadHeadshot(drivers[1]);
+      if (second && second.image && second.isReal) {
+        const h2 = second.image;
         const sz = 140;
         const x2 = W - sz - 50;
         const y2 = 80;
