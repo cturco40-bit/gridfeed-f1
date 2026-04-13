@@ -41,7 +41,7 @@ export default async (request, context) => {
     // Bumping this number forces every platform (Twitter, Slack, Discord, etc)
     // to re-fetch the image the next time they see any article URL. Increment
     // whenever the canvas layout, fonts, or watermark change.
-    const IMAGE_VERSION = '3';
+    const IMAGE_VERSION = '4';
     const siteImage = article.image_url || 'https://gridfeed.co/og-image.png';
     const image = siteImage.replace(/\.png$/, '-social.png') + '?v=' + IMAGE_VERSION;
     const canonical = `https://gridfeed.co/article/${slug}`;

@@ -285,26 +285,25 @@ async function renderSocialCard({ title, primaryHeadshot, primaryTeam, teamColor
     ctx.fillRect(380, 0, 320, SH);
   }
 
-  // GridFeed logo — top-left when no photo, top-right of photo otherwise
-  const logoX = hasPhoto ? 680 : 60;
-  const logoY = 80;
-  const sq = 8;
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 2; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? '#FFFFFF' : 'rgba(255,255,255,0.2)';
-      ctx.fillRect(logoX + c * sq, logoY - 22 + r * sq, sq, sq);
-    }
+  // GridFeed logo — real logo.png bitmap (car silhouette + GRID FEED wordmark)
+  // placed top-left when no photo, top-right of photo area otherwise
+  const socialLogo = await loadLogo();
+  let logoBottomY = 60;
+  if (socialLogo) {
+    const targetLogoW = 280;
+    const scale = targetLogoW / socialLogo.width;
+    const drawW = socialLogo.width * scale;
+    const drawH = socialLogo.height * scale;
+    const logoX = hasPhoto ? 680 : (SW - drawW) / 2;
+    const logoY = 50;
+    ctx.drawImage(socialLogo, logoX, logoY, drawW, drawH);
+    logoBottomY = logoY + drawH;
+    ctx.font = '700 13px DMSans';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textAlign = hasPhoto ? 'left' : 'center';
+    ctx.fillText('YOUR DAILY F1 FIX', hasPhoto ? logoX : SW / 2, logoBottomY + 18);
+    logoBottomY += 24;
   }
-  ctx.font = '900 36px DMSans';
-  ctx.textAlign = 'left';
-  const gridW = ctx.measureText('GRID').width;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText('GRID', logoX + 28, logoY);
-  ctx.fillStyle = '#E8002D';
-  ctx.fillText('FEED', logoX + 28 + gridW, logoY);
-  ctx.font = '700 12px DMSans';
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillText('YOUR DAILY F1 FIX', logoX + 28, logoY + 22);
 
   // Headline text area — right half when photo, center when no photo
   const textX = hasPhoto ? 680 : 60;
@@ -440,40 +439,37 @@ export default async (req) => {
       ctx.fillStyle = vg;
       ctx.fillRect(0, H * 0.7, W, H * 0.3);
 
-      // Top-right GridFeed watermark with semi-transparent backdrop so it
-      // stays readable against any photo color
-      ctx.save();
-      ctx.font = '900 28px DMSans';
-      const wGrid = ctx.measureText('GRID').width;
-      const wFeed = ctx.measureText('FEED').width;
-      const padX = 16, padY = 12;
-      const boxW = wGrid + wFeed + padX * 2;
-      const boxH = 42;
-      const boxX = W - boxW - 30;
-      const boxY = 30;
-      // Rounded backdrop
-      ctx.fillStyle = 'rgba(10,13,20,0.7)';
-      const r = 8;
-      ctx.beginPath();
-      ctx.moveTo(boxX + r, boxY);
-      ctx.lineTo(boxX + boxW - r, boxY);
-      ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
-      ctx.lineTo(boxX + boxW, boxY + boxH - r);
-      ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - r, boxY + boxH);
-      ctx.lineTo(boxX + r, boxY + boxH);
-      ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - r);
-      ctx.lineTo(boxX, boxY + r);
-      ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
-      ctx.closePath();
-      ctx.fill();
-      // GRID (white) + FEED (accent red)
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText('GRID', boxX + padX, boxY + boxH / 2 + 1);
-      ctx.fillStyle = '#E8002D';
-      ctx.fillText('FEED', boxX + padX + wGrid, boxY + boxH / 2 + 1);
-      ctx.restore();
+      // Top-right GridFeed watermark using the actual logo.png bitmap
+      // (car silhouette + GRID FEED wordmark) on a semi-transparent backdrop
+      const wmLogo = await loadLogo();
+      if (wmLogo) {
+        const targetW = 240;
+        const scale = targetW / wmLogo.width;
+        const drawW = wmLogo.width * scale;
+        const drawH = wmLogo.height * scale;
+        const padX = 16, padY = 12;
+        const boxW = drawW + padX * 2;
+        const boxH = drawH + padY * 2;
+        const boxX = W - boxW - 30;
+        const boxY = 30;
+        ctx.save();
+        ctx.fillStyle = 'rgba(10,13,20,0.72)';
+        const r = 10;
+        ctx.beginPath();
+        ctx.moveTo(boxX + r, boxY);
+        ctx.lineTo(boxX + boxW - r, boxY);
+        ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
+        ctx.lineTo(boxX + boxW, boxY + boxH - r);
+        ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - r, boxY + boxH);
+        ctx.lineTo(boxX + r, boxY + boxH);
+        ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - r);
+        ctx.lineTo(boxX, boxY + r);
+        ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.drawImage(wmLogo, boxX + padX, boxY + padY, drawW, drawH);
+        ctx.restore();
+      }
     } else {
       // TEAM/GENERIC FALLBACK — no driver in title (or no real photo)
       // Show GridFeed car logo + team-themed background
