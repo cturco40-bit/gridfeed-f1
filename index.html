@@ -743,7 +743,7 @@ async function loadArts(){
   el.innerHTML=data.map(a=>artCard(a)).join('');
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="height:180px;border-radius:8px 8px 0 0;margin:-16px -16px 12px;background:url('${a.image_url}') center/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="height:120px;border-radius:8px 8px 0 0;margin:-16px -16px 12px;background:url('${a.image_url}') center/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
@@ -785,7 +785,7 @@ async function openArt(id){
   document.getElementById('mBy').textContent=a?`By ${a.author||'GridFeed Staff'} \u00b7 ${new Date(a.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:'';
   // Strip any prior injected image header
   const oldHdr=document.getElementById('mImgHdr');if(oldHdr)oldHdr.remove();
-  if(a?.image_url){const mb=document.getElementById('mBody');mb.insertAdjacentHTML('beforebegin',`<div id="mImgHdr" style="height:200px;margin:-16px -16px 16px;background:url('${a.image_url}') center/cover no-repeat;background-color:#12151E;border-radius:4px 4px 0 0"></div>`)}
+  if(a?.image_url){const mb=document.getElementById('mBody');mb.insertAdjacentHTML('beforebegin',`<div id="mImgHdr" style="height:160px;margin:-16px -16px 16px;background:url('${a.image_url}') center/cover no-repeat;background-color:#12151E;border-radius:4px 4px 0 0"></div>`)}
   document.getElementById('mBody').innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
   document.getElementById('mSrc').style.display='none';
   if('share' in navigator)document.getElementById('shareBtn').style.display='flex';

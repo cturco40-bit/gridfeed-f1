@@ -11,7 +11,11 @@ import { sb, fetchWT, logSync, json } from './lib/shared.js';
 export default async (req) => {
   const start = Date.now();
   try {
-    const articles = await sb('articles?status=eq.published&image_url=is.null&select=id,title&order=published_at.desc');
+    // ?force=1 regenerates EVERY published article (even if image_url already set)
+    const url = new URL(req.url);
+    const force = url.searchParams.get('force') === '1';
+    const filter = force ? '' : '&image_url=is.null';
+    const articles = await sb('articles?status=eq.published' + filter + '&select=id,title&order=published_at.desc');
 
     if (!articles?.length) {
       await logSync('backfill-images', 'success', 0, 'No articles need images', Date.now() - start);

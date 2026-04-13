@@ -49,15 +49,39 @@ const TAG_COLORS = {
   'RUMOUR': '#EA580C', 'CHAMPIONSHIP': '#E8002D'
 };
 
-function extractDrivers(text) {
+// Look at title first (most relevant subject), then body. Title hits get priority.
+function extractDrivers(title, body) {
   const found = [];
   const seen = new Set();
+  const inTitle = (name, last) => (title || '').includes(name) || (title || '').includes(last);
+  const inBody = (name, last) => (body || '').includes(name) || (body || '').includes(last);
+
+  // Pass 1: drivers in the title (ordered by first occurrence position in title)
+  const titleHits = [];
   for (const name of Object.keys(DRIVER_FILE)) {
-    const lastName = name.split(' ').pop();
-    if ((text.includes(name) || text.includes(lastName)) && !seen.has(name)) {
-      found.push(name);
-      seen.add(name);
-      if (found.length >= 2) break;
+    const last = name.split(' ').pop();
+    const idx = (title || '').indexOf(last);
+    if (idx >= 0 || (title || '').includes(name)) {
+      titleHits.push({ name, idx: idx >= 0 ? idx : (title || '').indexOf(name) });
+    }
+  }
+  titleHits.sort((a, b) => a.idx - b.idx);
+  for (const t of titleHits) {
+    if (found.length >= 2) break;
+    found.push(t.name);
+    seen.add(t.name);
+  }
+
+  // Pass 2: fill remaining slots from body
+  if (found.length < 2) {
+    for (const name of Object.keys(DRIVER_FILE)) {
+      if (seen.has(name)) continue;
+      const last = name.split(' ').pop();
+      if (inBody(name, last)) {
+        found.push(name);
+        seen.add(name);
+        if (found.length >= 2) break;
+      }
     }
   }
   return found;
@@ -177,8 +201,7 @@ export default async (req) => {
 
     const tag = (article.tags || ['ANALYSIS'])[0];
     const tagColor = TAG_COLORS[tag] || TAG_COLORS['ANALYSIS'];
-    const fullText = (article.title || '') + ' ' + (article.body || '');
-    const drivers = extractDrivers(fullText);
+    const drivers = extractDrivers(article.title, article.body);
     const primaryDriver = drivers[0] || null;
     const primaryTeam = primaryDriver ? DRIVER_TEAMS[primaryDriver] : null;
     const teamColor = primaryTeam ? TEAM_COLORS[primaryTeam] : '#E8002D';
@@ -228,50 +251,64 @@ export default async (req) => {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText('YOUR DAILY F1 FIX', logoX + 22, logoY + 18);
 
-    // Primary driver headshot
+    // Primary driver headshot — face in upper portion of source image,
+    // so we offset the draw upward inside the circular clip
     if (primaryDriver) {
       const headshot = await loadHeadshot(primaryDriver);
       if (headshot) {
-        const imgSize = 420;
+        const imgSize = 300;
         const imgX = (W - imgSize) / 2 + 40;
-        const imgY = 100;
+        const imgY = 50;
+        const cx = imgX + imgSize / 2;
+        const cy = imgY + imgSize / 2;
+        // Cover-fit + face offset
+        const scale = Math.max(imgSize / headshot.width, imgSize / headshot.height);
+        const w = headshot.width * scale;
+        const h = headshot.height * scale;
+        const yOffset = -h * 0.15; // shift up 15% so face is visible
         ctx.save();
         ctx.beginPath();
-        ctx.arc(imgX + imgSize / 2, imgY + imgSize / 2, imgSize / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, imgSize / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(headshot, imgX, imgY, imgSize, imgSize);
+        ctx.drawImage(headshot, cx - w / 2, cy - h / 2 + yOffset, w, h);
         ctx.restore();
         // Fade bottom of headshot into background
-        const fade = ctx.createLinearGradient(0, imgY + imgSize * 0.6, 0, imgY + imgSize);
+        const fade = ctx.createLinearGradient(0, imgY + imgSize * 0.65, 0, imgY + imgSize);
         fade.addColorStop(0, 'rgba(18,21,30,0)');
         fade.addColorStop(1, 'rgba(18,21,30,1)');
         ctx.fillStyle = fade;
-        ctx.fillRect(0, imgY + imgSize * 0.6, W, imgSize * 0.4 + 20);
+        ctx.fillRect(0, imgY + imgSize * 0.65, W, imgSize * 0.35 + 20);
       }
     }
 
-    // Optional second driver
+    // Optional second driver — same face offset trick, smaller + offset right
     if (drivers.length > 1) {
       const h2 = await loadHeadshot(drivers[1]);
       if (h2) {
-        const sz = 220;
+        const sz = 140;
         const x2 = W - sz - 50;
-        const y2 = 130;
+        const y2 = 80;
+        const cx = x2 + sz / 2;
+        const cy = y2 + sz / 2;
+        const scale = Math.max(sz / h2.width, sz / h2.height);
+        const w = h2.width * scale;
+        const hh = h2.height * scale;
+        const yOff = -hh * 0.15;
         ctx.save();
         ctx.globalAlpha = 0.5;
         ctx.beginPath();
-        ctx.arc(x2 + sz / 2, y2 + sz / 2, sz / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, sz / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(h2, x2, y2, sz, sz);
+        ctx.drawImage(h2, cx - w / 2, cy - hh / 2 + yOff, w, hh);
         ctx.restore();
         ctx.globalAlpha = 1;
       }
     }
 
-    // Diagonal tag banner
-    const bannerY = H * 0.5;
+    // Diagonal tag banner — moved up to ~42% so headline has more room
+    const bannerY = H * 0.42;
     drawTagBanner(ctx, tag, tagColor, W, bannerY);
 
     // Headline — large white uppercase, auto-fit
