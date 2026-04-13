@@ -86,6 +86,33 @@ function findFocusTeam(title) {
   return best;
 }
 
+// Cache logo across invocations within the same warm container
+let _logoCache = null;
+async function loadLogo() {
+  if (_logoCache) return _logoCache;
+  const fs = await import('fs/promises');
+  const candidates = [
+    path.join(HERE, '..', '..', 'logo.png'),
+    path.join(process.cwd(), 'logo.png'),
+    path.join(HERE, 'logo.png'),
+  ];
+  for (const p of candidates) {
+    try {
+      const buf = await fs.readFile(p);
+      _logoCache = await loadImage(buf);
+      return _logoCache;
+    } catch {}
+  }
+  try {
+    const res = await fetchWT('https://gridfeed.co/logo.png', {}, 8000);
+    if (res.ok) {
+      _logoCache = await loadImage(Buffer.from(await res.arrayBuffer()));
+      return _logoCache;
+    }
+  } catch {}
+  return null;
+}
+
 // Returns { image, isReal } — isReal = false when we only have a small
 // placeholder PNG (team-colored square with initials), so we know to use a
 // typography-forward layout instead of drawing it as a fake portrait
@@ -295,30 +322,70 @@ export default async (req) => {
       fade.addColorStop(1, 'rgba(18,21,30,1)');
       ctx.fillStyle = fade;
       ctx.fillRect(0, fadeStart, W, fadeEnd - fadeStart);
-    } else if (primaryDriver || primaryTeam) {
-      // TYPOGRAPHY FALLBACK — title mentions a driver/team but no photo available
-      // (or no driver in title at all but a team is named)
-      const label = (primaryDriver ? primaryDriver.split(' ').pop() : primaryTeam || '').toUpperCase();
+    } else {
+      // TEAM/GENERIC FALLBACK — no driver in title (or no real photo)
+      // Show GridFeed car logo + team-themed background
+      const logo = await loadLogo();
+      // Stronger team-color radial glow as backdrop
+      if (primaryTeam) {
+        const hex = teamColor.replace('#', '');
+        const tr2 = parseInt(hex.slice(0, 2), 16);
+        const tg2 = parseInt(hex.slice(2, 4), 16);
+        const tb2 = parseInt(hex.slice(4, 6), 16);
+        const bigGlow = ctx.createRadialGradient(W / 2, 280, 0, W / 2, 280, W * 0.65);
+        bigGlow.addColorStop(0, `rgba(${tr2},${tg2},${tb2},0.32)`);
+        bigGlow.addColorStop(0.5, `rgba(${tr2},${tg2},${tb2},0.12)`);
+        bigGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = bigGlow;
+        ctx.fillRect(0, 0, W, H);
+      }
+      // Draw the logo big and centered in the upper area
+      if (logo) {
+        const targetW = W * 0.7;
+        const scale = targetW / logo.width;
+        const drawW = logo.width * scale;
+        const drawH = logo.height * scale;
+        const drawX = (W - drawW) / 2;
+        const drawY = 140;
+        // Apply a slight team-color tint via globalCompositeOperation
+        if (primaryTeam) {
+          // Draw logo in team color: first solid team-color rect clipped to logo alpha
+          const off = createCanvas(drawW, drawH);
+          const offCtx = off.getContext('2d');
+          offCtx.drawImage(logo, 0, 0, drawW, drawH);
+          offCtx.globalCompositeOperation = 'source-in';
+          offCtx.fillStyle = teamColor;
+          offCtx.fillRect(0, 0, drawW, drawH);
+          // Layer 1: full team-color version at 60% opacity
+          ctx.save();
+          ctx.globalAlpha = 0.6;
+          ctx.drawImage(off, drawX, drawY);
+          ctx.restore();
+          // Layer 2: original logo at 80% opacity for white text legibility
+          ctx.save();
+          ctx.globalAlpha = 0.85;
+          ctx.drawImage(logo, drawX, drawY, drawW, drawH);
+          ctx.restore();
+        } else {
+          ctx.drawImage(logo, drawX, drawY, drawW, drawH);
+        }
+      }
+      // Team name (or "FORMULA 1" if no team) in big letters under the logo
+      const subLabel = (primaryTeam || 'FORMULA 1').toUpperCase();
       ctx.save();
-      let nameSize = 110;
-      ctx.font = `900 ${nameSize}px sans-serif`;
-      while (ctx.measureText(label).width > W - 100 && nameSize > 50) {
-        nameSize -= 6;
-        ctx.font = `900 ${nameSize}px sans-serif`;
+      let subSize = 64;
+      ctx.font = `900 ${subSize}px sans-serif`;
+      while (ctx.measureText(subLabel).width > W - 100 && subSize > 32) {
+        subSize -= 4;
+        ctx.font = `900 ${subSize}px sans-serif`;
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-      ctx.lineWidth = 4;
-      ctx.strokeText(label, W / 2, 240);
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(subLabel, W / 2, 380);
       ctx.fillStyle = teamColor;
-      ctx.fillText(label, W / 2, 240);
-      // Team name underneath if we have a driver
-      if (primaryDriver && primaryTeam) {
-        ctx.font = '700 26px sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText(primaryTeam.toUpperCase(), W / 2, 240 + nameSize / 2 + 32);
-      }
+      ctx.fillText(subLabel, W / 2, 380);
       ctx.restore();
     }
     // Note: secondary driver logic removed — image stays focused on title subject only
