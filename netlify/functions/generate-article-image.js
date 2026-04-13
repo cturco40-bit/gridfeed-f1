@@ -414,26 +414,6 @@ export default async (req) => {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // GridFeed logo (top-left)
-    const logoX = 40, logoY = 60;
-    const sq = 6;
-    for (let r = 0; r < 2; r++) {
-      for (let c = 0; c < 2; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? '#FFFFFF' : 'rgba(255,255,255,0.2)';
-        ctx.fillRect(logoX + c * sq, logoY - 16 + r * sq, sq, sq);
-      }
-    }
-    ctx.font = '900 26px DMSans';
-    ctx.textAlign = 'left';
-    const gridW = ctx.measureText('GRID').width;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText('GRID', logoX + 22, logoY);
-    ctx.fillStyle = '#E8002D';
-    ctx.fillText('FEED', logoX + 22 + gridW, logoY);
-    ctx.font = '700 10px DMSans';
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('YOUR DAILY F1 FIX', logoX + 22, logoY + 18);
-
     // Primary driver photo OR typography fallback when title has no driver
     // STRICT RULE: image only shows the driver named in the title, never anyone else
     let primaryHeadshot = null;
@@ -459,6 +439,41 @@ export default async (req) => {
       vg.addColorStop(1, 'rgba(10,13,20,0.55)');
       ctx.fillStyle = vg;
       ctx.fillRect(0, H * 0.7, W, H * 0.3);
+
+      // Top-right GridFeed watermark with semi-transparent backdrop so it
+      // stays readable against any photo color
+      ctx.save();
+      ctx.font = '900 28px DMSans';
+      const wGrid = ctx.measureText('GRID').width;
+      const wFeed = ctx.measureText('FEED').width;
+      const padX = 16, padY = 12;
+      const boxW = wGrid + wFeed + padX * 2;
+      const boxH = 42;
+      const boxX = W - boxW - 30;
+      const boxY = 30;
+      // Rounded backdrop
+      ctx.fillStyle = 'rgba(10,13,20,0.7)';
+      const r = 8;
+      ctx.beginPath();
+      ctx.moveTo(boxX + r, boxY);
+      ctx.lineTo(boxX + boxW - r, boxY);
+      ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
+      ctx.lineTo(boxX + boxW, boxY + boxH - r);
+      ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - r, boxY + boxH);
+      ctx.lineTo(boxX + r, boxY + boxH);
+      ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - r);
+      ctx.lineTo(boxX, boxY + r);
+      ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
+      ctx.closePath();
+      ctx.fill();
+      // GRID (white) + FEED (accent red)
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText('GRID', boxX + padX, boxY + boxH / 2 + 1);
+      ctx.fillStyle = '#E8002D';
+      ctx.fillText('FEED', boxX + padX + wGrid, boxY + boxH / 2 + 1);
+      ctx.restore();
     } else {
       // TEAM/GENERIC FALLBACK — no driver in title (or no real photo)
       // Show GridFeed car logo + team-themed background
