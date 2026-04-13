@@ -30,9 +30,6 @@
   schedule = "0 */4 * * *"
   timeout = 15
 
-[functions.subscribe-newsletter]
-  timeout = 10
-
 [functions.fetch-timing]
   schedule = "*/2 * * * *"
   timeout = 30
