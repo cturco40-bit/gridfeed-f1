@@ -1,6 +1,7 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+  command = "npm install"
 
 [functions]
   node_bundler = "esbuild"
@@ -59,6 +60,7 @@
 [functions.generate-article-image]
   timeout = 30
   external_node_modules = ["@napi-rs/canvas"]
+  included_files = ["node_modules/@napi-rs/canvas-linux-x64-gnu/**", "drivers/**"]
 
 [functions.backfill-images]
   timeout = 300
