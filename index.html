@@ -627,22 +627,17 @@ function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-bett
 function tAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 
 /* ═══ SCHEDULE DATA ═══ */
-function fb(d,t,tc,g){return{pos:0,driver:d,team:t,teamColor:tc,gap:g}}
-function fbG(a){return a.map((r,i)=>({...r,pos:i+1}))}
+// fb/fbG helpers removed with FR object
 const M='#27F4D2',F='#E8002D',ML='#FF8000',A='#FF87BC',W='#64C4FF',RB='#3671C6',AM='#229971',H='#B6BABD',TB='#6692FF',AU='#52E252',CA='#CC0000';
 const DH={12:'antonelli',63:'russell',16:'leclerc',44:'hamilton',4:'norris',81:'piastri',1:'verstappen',20:'hadjar',14:'alonso',18:'stroll',10:'gasly',43:'colapinto',55:'sainz',23:'albon',31:'ocon',87:'bearman',30:'lawson',40:'lindblad',27:'hulkenberg',5:'bortoleto',11:'perez',77:'bottas'};
 function driverImg(num){return'/drivers/'+(DH[num]||'placeholder')+'.png'}
 function drvFallback(el,num){const d=Object.values(DSTATS).find(v=>v.num===num);const c=d?.tc||'#888';const ini=(d?.abbr||'??').slice(0,2);el.onerror=null;el.src="data:image/svg+xml,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><rect width='200' height='200' fill='${c}'/><text x='100' y='115' font-family='Arial' font-size='64' font-weight='bold' fill='white' text-anchor='middle'>${ini}</text></svg>`)}
-const FR={
-  'R1 Australian Grand Prix':{circuit:'Albert Park',date:'Mar 8',sessions:{qualifying:fbG([fb('Russell','Mercedes',M,'1:15.421'),fb('Antonelli','Mercedes',M,'+0.112'),fb('Leclerc','Ferrari',F,'+0.287'),fb('Hamilton','Ferrari',F,'+0.334'),fb('Norris','McLaren',ML,'+0.498'),fb('Gasly','Alpine',A,'+0.612'),fb('Verstappen','Red Bull',RB,'+0.701'),fb('Sainz','Williams',W,'+0.823'),fb('Bearman','Haas',H,'+0.891'),fb('Albon','Williams',W,'+0.945')]),race:fbG([fb('Russell','Mercedes',M,'Winner'),fb('Antonelli','Mercedes',M,'+3.2s'),fb('Leclerc','Ferrari',F,'+8.1s'),fb('Hamilton','Ferrari',F,'+12.4s'),fb('Norris','McLaren',ML,'+18.7s'),fb('Gasly','Alpine',A,'+22.1s'),fb('Sainz','Williams',W,'+28.3s'),fb('Verstappen','Red Bull',RB,'+31.5s'),fb('Albon','Williams',W,'+35.2s'),fb('Ocon','Haas',H,'+38.9s'),fb('Bearman','Haas',H,'+41.2s'),fb('Alonso','Aston Martin',AM,'+44.8s'),fb('Lawson','Racing Bulls',TB,'+47.3s'),fb('Lindblad','Racing Bulls',TB,'+49.1s'),fb('Colapinto','Alpine',A,'+52.6s'),fb('Hadjar','Red Bull',RB,'+55.0s'),fb('Hulkenberg','Audi',AU,'+58.4s'),fb('Bortoleto','Audi',AU,'+61.2s'),fb('Stroll','Aston Martin',AM,'DNF'),fb('Perez','Cadillac',CA,'DNF'),fb('Bottas','Cadillac',CA,'DNF')])}},
-  'R2 Chinese Grand Prix':{circuit:'Shanghai',date:'Mar 15',sessions:{qualifying:fbG([fb('Antonelli','Mercedes',M,'1:33.876'),fb('Russell','Mercedes',M,'+0.089'),fb('Leclerc','Ferrari',F,'+0.215'),fb('Hamilton','Ferrari',F,'+0.298'),fb('Norris','McLaren',ML,'+0.412'),fb('Verstappen','Red Bull',RB,'+0.534'),fb('Gasly','Alpine',A,'+0.621'),fb('Bearman','Haas',H,'+0.743'),fb('Alonso','Aston Martin',AM,'+0.812'),fb('Lawson','Racing Bulls',TB,'+0.901')]),race:fbG([fb('Antonelli','Mercedes',M,'Winner'),fb('Russell','Mercedes',M,'+2.8s'),fb('Hamilton','Ferrari',F,'+7.6s'),fb('Leclerc','Ferrari',F,'+9.1s'),fb('Norris','McLaren',ML,'+14.3s'),fb('Gasly','Alpine',A,'+19.8s'),fb('Alonso','Aston Martin',AM,'+24.1s'),fb('Verstappen','Red Bull',RB,'+27.4s'),fb('Lawson','Racing Bulls',TB,'+31.0s'),fb('Bearman','Haas',H,'+33.5s'),fb('Colapinto','Alpine',A,'+36.2s'),fb('Lindblad','Racing Bulls',TB,'+38.7s'),fb('Sainz','Williams',W,'+41.1s'),fb('Hadjar','Red Bull',RB,'+43.8s'),fb('Albon','Williams',W,'+46.3s'),fb('Ocon','Haas',H,'+49.0s'),fb('Hulkenberg','Audi',AU,'+52.4s'),fb('Bortoleto','Audi',AU,'+55.1s'),fb('Stroll','Aston Martin',AM,'DNF'),fb('Perez','Cadillac',CA,'DNF'),fb('Bottas','Cadillac',CA,'DNF')])}},
-  'R3 Japanese Grand Prix':{circuit:'Suzuka',date:'Mar 29',sessions:{qualifying:fbG([fb('Antonelli','Mercedes',M,'1:28.234'),fb('Russell','Mercedes',M,'+0.098'),fb('Leclerc','Ferrari',F,'+0.201'),fb('Piastri','McLaren',ML,'+0.267'),fb('Norris','McLaren',ML,'+0.345'),fb('Hamilton','Ferrari',F,'+0.412'),fb('Gasly','Alpine',A,'+0.534'),fb('Verstappen','Red Bull',RB,'+0.623'),fb('Lawson','Racing Bulls',TB,'+0.712'),fb('Bearman','Haas',H,'+0.801')]),race:fbG([fb('Antonelli','Mercedes',M,'Winner'),fb('Piastri','McLaren',ML,'+4.1s'),fb('Leclerc','Ferrari',F,'+6.7s'),fb('Russell','Mercedes',M,'+9.2s'),fb('Norris','McLaren',ML,'+13.8s'),fb('Hamilton','Ferrari',F,'+17.3s'),fb('Gasly','Alpine',A,'+21.6s'),fb('Verstappen','Red Bull',RB,'+25.0s'),fb('Lawson','Racing Bulls',TB,'+28.4s'),fb('Bearman','Haas',H,'+31.8s'),fb('Sainz','Williams',W,'+34.5s'),fb('Ocon','Haas',H,'+37.1s'),fb('Stroll','Aston Martin',AM,'+39.8s'),fb('Hadjar','Red Bull',RB,'+42.3s'),fb('Lindblad','Racing Bulls',TB,'+45.0s'),fb('Albon','Williams',W,'+47.6s'),fb('Bortoleto','Audi',AU,'+50.2s'),fb('Hulkenberg','Audi',AU,'+53.1s'),fb('Bottas','Cadillac',CA,'+56.2s'),fb('Perez','Cadillac',CA,'+58.9s'),fb('Colapinto','Alpine',A,'DNF'),fb('Alonso','Aston Martin',AM,'DNF')])}},
-};
+// FR legacy fallback object removed — use RACE_DATA (single source of truth).
 
 const SCH=[
   {r:1,n:'Australian Grand Prix',c:'Albert Park',d:'2026-03-08',dl:'Mar 6\u20138',fl:'\u{1F1E6}\u{1F1FA}',sp:0,w:'Russell',st:'done'},
-  {r:2,n:'Chinese Grand Prix',c:'Shanghai',d:'2026-03-15',dl:'Mar 13\u201315',fl:'\u{1F1E8}\u{1F1F3}',sp:1,w:'K. Antonelli',st:'done'},
-  {r:3,n:'Japanese Grand Prix',c:'Suzuka',d:'2026-03-29',dl:'Mar 27\u201329',fl:'\u{1F1EF}\u{1F1F5}',sp:0,w:'K. Antonelli',st:'done'},
+  {r:2,n:'Chinese Grand Prix',c:'Shanghai',d:'2026-03-15',dl:'Mar 13\u201315',fl:'\u{1F1E8}\u{1F1F3}',sp:1,w:'Kimi Antonelli',st:'done'},
+  {r:3,n:'Japanese Grand Prix',c:'Suzuka',d:'2026-03-29',dl:'Mar 27\u201329',fl:'\u{1F1EF}\u{1F1F5}',sp:0,w:'Kimi Antonelli',st:'done'},
   {r:0,n:'Bahrain Grand Prix',c:'Bahrain',d:'2026-04-12',dl:'Apr 12',fl:'\u{1F1E7}\u{1F1ED}',sp:0,w:null,st:'can'},
   {r:0,n:'Saudi Arabian Grand Prix',c:'Jeddah',d:'2026-04-19',dl:'Apr 19',fl:'\u{1F1F8}\u{1F1E6}',sp:0,w:null,st:'can'},
   {r:4,n:'Miami Grand Prix',c:'Miami Autodrome',d:'2026-05-03',dl:'May 1\u20133',fl:'\u{1F1FA}\u{1F1F8}',sp:1,w:null,st:'up'},
@@ -789,28 +784,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMod()});
 
 /* ═══ RESULTS ═══ */
 async function initRes(){
+  // Modern flow: RACE_DATA browser when not live, real-time tower when live
   if(!S.isLive&&typeof RACE_DATA!=='undefined'){initRaceBrowser();return}
   if(!S.isLive){setTimeout(initRes,100);return}
-  const sel=document.getElementById('raceSel');if(!sel)return;
-  const opts=Object.keys(FR).map(k=>`<option value="fb:${k}">${k} (${FR[k].date})</option>`);
-  sel.innerHTML=opts.join('');sel.selectedIndex=sel.options.length-1;
-  selRace(sel.value);
+  // Live path — live tower is rendered by fetchLive(), nothing more to do here
 }
-function selRace(v){
-  S.sess='race';document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('act',t.dataset.s==='race'));
-  if(v.startsWith('fb:')){const k=v.slice(3),d=FR[k];
-    document.getElementById('resSub').textContent=d.circuit+' \u00b7 '+d.date+' 2026 \u00b7 No live session \u00b7 Next: '+(S.nr?.n||'Miami GP');
-    S.td=d.sessions||{};
-    document.querySelectorAll('.stab').forEach(t=>{const has=!!S.td[t.dataset.s];t.style.opacity=has?'1':'0.3';t.style.pointerEvents=has?'auto':'none'});
-    renderTT();return}
-}
-function selSess(s){S.sess=s;document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('act',t.dataset.s===s));renderTT()}
-function renderTT(){
-  const el=document.getElementById('timingData'),data=S.td[S.sess];
-  if(!data?.length){el.innerHTML='<div class="empty">No data for this session.</div>';return}
-  const numByName={};Object.entries(DH).forEach(([n,name])=>numByName[name.toLowerCase()]=parseInt(n));
-  el.innerHTML=`<table class="tt"><thead><tr><th style="width:36px">Pos</th><th>Driver</th><th>Team</th><th>Gap</th></tr></thead><tbody>${data.map(d=>{const dn=d.driver?.split(' ').pop()?.toLowerCase()||'';const num=numByName[dn]||0;return`<tr><td><span class="pn ${d.pos<=3?'p'+d.pos:''}">P${d.pos}</span></td><td><div style="display:flex;align-items:center;gap:6px"><img class="drv-img-sm" src="${driverImg(num)}" loading="lazy" alt="${d.driver}" onerror="drvFallback(this,${num})"><span class="dn">${d.driver}</span></div></td><td><div style="display:flex;align-items:center;gap:5px"><span class="cdot" style="background:${d.teamColor}"></span><span style="font-size:11px;color:var(--dim)">${d.team}</span></div></td><td class="gc">${d.gap}</td></tr>`}).join('')}</tbody></table>`;
-}
+// selSess/renderTT legacy functions removed with FR object
 
 /* ═══ NEWS ═══ */
 async function initNews(){
@@ -1056,6 +1035,8 @@ function loadMapDemo(){
     {n:30,name:'Lawson',team:'Racing Bulls',tc:TB,abbr:'LAW'},
     {n:27,name:'Hulkenberg',team:'Audi',tc:AU,abbr:'HUL'},
     {n:5,name:'Bortoleto',team:'Audi',tc:AU,abbr:'BOR'},
+    {n:40,name:'Lindblad',team:'Racing Bulls',tc:TB,abbr:'LIN'},
+    {n:77,name:'Bottas',team:'Cadillac',tc:CA,abbr:'BOT'},
   ];
 
   // Build driver cache
@@ -1123,7 +1104,7 @@ const RACE_DATA={
   2:{name:'Chinese Grand Prix',circuit:'Shanghai International Circuit',date:'Mar 15',laps:56,wx:'Track 44\u00b0C \u00b7 Air 29\u00b0C \u00b7 Dry',sprint:'P1 Russell P2 Leclerc P3 Hamilton',
     sessions:{
       fp1:[{p:1,d:'George Russell',t:'Mercedes',tc:M,g:'1:34.567'},{p:2,d:'Kimi Antonelli',t:'Mercedes',tc:M,g:'+0.145s'},{p:3,d:'Lando Norris',t:'McLaren',tc:ML,g:'+0.312s'},{p:4,d:'Charles Leclerc',t:'Ferrari',tc:F,g:'+0.423s'},{p:5,d:'Lewis Hamilton',t:'Ferrari',tc:F,g:'+0.534s'},{p:6,d:'Max Verstappen',t:'Red Bull',tc:RB,g:'+0.645s'},{p:7,d:'Pierre Gasly',t:'Alpine',tc:A,g:'+0.756s'},{p:8,d:'Fernando Alonso',t:'Aston Martin',tc:AM,g:'+0.867s'},{p:9,d:'Oliver Bearman',t:'Haas',tc:H,g:'+0.978s'},{p:10,d:'Liam Lawson',t:'Racing Bulls',tc:TB,g:'+1.089s'},{p:11,d:'Oscar Piastri',t:'McLaren',tc:ML,g:'+1.178s'},{p:12,d:'Carlos Sainz',t:'Williams',tc:W,g:'+1.256s'},{p:13,d:'Esteban Ocon',t:'Haas',tc:H,g:'+1.334s'},{p:14,d:'Isack Hadjar',t:'Red Bull',tc:RB,g:'+1.412s'},{p:15,d:'Franco Colapinto',t:'Alpine',tc:A,g:'+1.489s'},{p:16,d:'Lance Stroll',t:'Aston Martin',tc:AM,g:'+1.567s'},{p:17,d:'Alexander Albon',t:'Williams',tc:W,g:'+1.645s'},{p:18,d:'Arvid Lindblad',t:'Racing Bulls',tc:TB,g:'+1.723s'},{p:19,d:'Nico Hulkenberg',t:'Audi',tc:AU,g:'+1.812s'},{p:20,d:'Gabriel Bortoleto',t:'Audi',tc:AU,g:'+1.934s'},{p:21,d:'Sergio Perez',t:'Cadillac',tc:CA,g:'+2.089s'},{p:22,d:'Valtteri Bottas',t:'Cadillac',tc:CA,g:'+2.223s'}],
-      sprint_quali:[{p:1,d:'Kimi Antonelli',t:'Mercedes',tc:M,g:'1:33.234'},{p:2,d:'George Russell',t:'Mercedes',tc:M,g:'+0.098s'},{p:3,d:'Lando Norris',t:'McLaren',tc:ML,g:'+0.234s'},{p:4,d:'Charles Leclerc',t:'Ferrari',tc:F,g:'+0.312s'},{p:5,d:'Lewis Hamilton',t:'Ferrari',tc:F,g:'+0.423s'},{p:6,d:'Max Verstappen',t:'Red Bull',tc:RB,g:'+0.534s'},{p:7,d:'Pierre Gasly',t:'Alpine',tc:A,g:'+0.645s'},{p:8,d:'Fernando Alonso',t:'Aston Martin',tc:AM,g:'+0.756s'}],
+      sprint_quali:[{p:1,d:'Kimi Antonelli',t:'Mercedes',tc:M,g:'1:33.234'},{p:2,d:'George Russell',t:'Mercedes',tc:M,g:'+0.098s'},{p:3,d:'Lando Norris',t:'McLaren',tc:ML,g:'+0.234s'},{p:4,d:'Charles Leclerc',t:'Ferrari',tc:F,g:'+0.312s'},{p:5,d:'Lewis Hamilton',t:'Ferrari',tc:F,g:'+0.423s'},{p:6,d:'Max Verstappen',t:'Red Bull',tc:RB,g:'+0.534s'},{p:7,d:'Pierre Gasly',t:'Alpine',tc:A,g:'+0.645s'},{p:8,d:'Fernando Alonso',t:'Aston Martin',tc:AM,g:'+0.756s'},{p:9,d:'Oliver Bearman',t:'Haas',tc:H,g:'1:33.989 (SQ2)'},{p:10,d:'Liam Lawson',t:'Racing Bulls',tc:TB,g:'1:34.045 (SQ2)'},{p:11,d:'Carlos Sainz',t:'Williams',tc:W,g:'1:34.112 (SQ2)'},{p:12,d:'Isack Hadjar',t:'Red Bull',tc:RB,g:'1:34.178 (SQ2)'},{p:13,d:'Esteban Ocon',t:'Haas',tc:H,g:'1:34.234 (SQ2)'},{p:14,d:'Lance Stroll',t:'Aston Martin',tc:AM,g:'1:34.301 (SQ2)'},{p:15,d:'Arvid Lindblad',t:'Racing Bulls',tc:TB,g:'1:34.378 (SQ2)'},{p:16,d:'Alexander Albon',t:'Williams',tc:W,g:'1:34.456 (SQ1)'},{p:17,d:'Franco Colapinto',t:'Alpine',tc:A,g:'1:34.534 (SQ1)'},{p:18,d:'Oscar Piastri',t:'McLaren',tc:ML,g:'1:34.612 (SQ1)'},{p:19,d:'Nico Hulkenberg',t:'Audi',tc:AU,g:'1:34.723 (SQ1)'},{p:20,d:'Gabriel Bortoleto',t:'Audi',tc:AU,g:'1:34.834 (SQ1)'},{p:21,d:'Sergio Perez',t:'Cadillac',tc:CA,g:'1:34.967 (SQ1)'},{p:22,d:'Valtteri Bottas',t:'Cadillac',tc:CA,g:'1:35.089 (SQ1)'}],
       sprint:[{p:1,d:'George Russell',t:'Mercedes',tc:M,g:'Winner'},{p:2,d:'Charles Leclerc',t:'Ferrari',tc:F,g:'+0.674s'},{p:3,d:'Lewis Hamilton',t:'Ferrari',tc:F,g:'+2.891s'},{p:4,d:'Lando Norris',t:'McLaren',tc:ML,g:'+5.456s'},{p:5,d:'Kimi Antonelli',t:'Mercedes',tc:M,g:'+8.123s'},{p:6,d:'Oscar Piastri',t:'McLaren',tc:ML,g:'+10.567s'},{p:7,d:'Liam Lawson',t:'Racing Bulls',tc:TB,g:'+14.234s'},{p:8,d:'Oliver Bearman',t:'Haas',tc:H,g:'+16.789s'}],
       qualifying:[{p:1,d:'Kimi Antonelli',t:'Mercedes',tc:M,g:'1:33.012'},{p:2,d:'George Russell',t:'Mercedes',tc:M,g:'+0.089s'},{p:3,d:'Lewis Hamilton',t:'Ferrari',tc:F,g:'+0.215s'},{p:4,d:'Charles Leclerc',t:'Ferrari',tc:F,g:'+0.298s'},{p:5,d:'Lando Norris',t:'McLaren',tc:ML,g:'+0.412s'},{p:6,d:'Max Verstappen',t:'Red Bull',tc:RB,g:'+0.534s'},{p:7,d:'Pierre Gasly',t:'Alpine',tc:A,g:'+0.621s'},{p:8,d:'Fernando Alonso',t:'Aston Martin',tc:AM,g:'+0.743s'},{p:9,d:'Oliver Bearman',t:'Haas',tc:H,g:'+0.812s'},{p:10,d:'Liam Lawson',t:'Racing Bulls',tc:TB,g:'+0.901s'},{p:11,d:'Carlos Sainz',t:'Williams',tc:W,g:'1:33.912 (Q2)'},{p:12,d:'Esteban Ocon',t:'Haas',tc:H,g:'1:33.978 (Q2)'},{p:13,d:'Lance Stroll',t:'Aston Martin',tc:AM,g:'1:34.034 (Q2)'},{p:14,d:'Isack Hadjar',t:'Red Bull',tc:RB,g:'1:34.089 (Q2)'},{p:15,d:'Arvid Lindblad',t:'Racing Bulls',tc:TB,g:'1:34.145 (Q2)'},{p:16,d:'Alexander Albon',t:'Williams',tc:W,g:'1:34.256 (Q1)'},{p:17,d:'Franco Colapinto',t:'Alpine',tc:A,g:'1:34.378 (Q1)'},{p:18,d:'Sergio Perez',t:'Cadillac',tc:CA,g:'1:34.456 (Q1)'},{p:19,d:'Nico Hulkenberg',t:'Audi',tc:AU,g:'1:34.567 (Q1)'},{p:20,d:'Gabriel Bortoleto',t:'Audi',tc:AU,g:'1:34.678 (Q1)'},{p:21,d:'Oscar Piastri',t:'McLaren',tc:ML,g:'1:34.789 (Q1)'},{p:22,d:'Valtteri Bottas',t:'Cadillac',tc:CA,g:'1:34.901 (Q1)'}],
     },
