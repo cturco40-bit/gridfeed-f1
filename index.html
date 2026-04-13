@@ -429,8 +429,10 @@ body.mo{overflow:hidden}
 .map-dot{cursor:pointer}
 .map-dot:hover circle{opacity:0.8}
 .map-dot-sel circle{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
-.map-zoom-ctl{position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
-.map-zoom-ctl button{width:30px;height:30px;border-radius:6px;background:rgba(20,25,38,0.85);border:1px solid var(--border);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:0;line-height:1}
+.map-zoom-ctl{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.map-zoom-ctl button{width:34px;height:34px;border-radius:6px;background:rgba(20,25,38,0.85);border:1px solid var(--border);color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:0;line-height:1}
+.map-zoom-ctl button.reset-btn{font-size:9px;letter-spacing:0.5px}
+.map-zoom-ctl button:disabled{opacity:0.35;cursor:default}
 .map-zoom-ctl button:hover{background:rgba(232,0,45,0.7);border-color:var(--accent)}
 .map-zoom-ctl button:active{transform:scale(0.95)}
 </style>
@@ -1319,6 +1321,38 @@ function zoomMap(delta){
   renderRaceContent();
 }
 
+// Re-position driver dots along the actual track path instead of a circle.
+// Runs after the SVG is mounted so we can call getTotalLength / getPointAtLength
+// on the real <path> element. This gives a realistic "drivers on track" look
+// for completed races (where we have no GPS) AND serves as the fallback layout
+// during live sessions if car_locations hasn't populated yet.
+function positionDotsOnPath(){
+  const svg=document.getElementById('circuitMap');if(!svg)return;
+  const pathEl=svg.querySelector('path');if(!pathEl)return;
+  let total;
+  try{total=pathEl.getTotalLength()}catch{return}
+  if(!total||!isFinite(total))return;
+  const dots=svg.querySelectorAll('g.map-dot');
+  if(!dots.length)return;
+  const n=dots.length;
+  dots.forEach((g,i)=>{
+    // Evenly spaced fractions, offset so leader is near the start/finish line
+    const frac=(i/n);
+    const pt=pathEl.getPointAtLength(frac*total);
+    // Update every child that uses cx/cy/x/y for the old synthetic coords
+    g.querySelectorAll('circle').forEach(c=>{
+      c.setAttribute('cx',pt.x.toFixed(1));
+      c.setAttribute('cy',pt.y.toFixed(1));
+    });
+    g.querySelectorAll('text').forEach((t,ti)=>{
+      t.setAttribute('x',pt.x.toFixed(1));
+      // First text is the P# inside the dot (baseline offset +3), second is abbr below
+      const yOff=ti===0?3:(g.classList.contains('map-dot-sel')?26:20);
+      t.setAttribute('y',(pt.y+yOff).toFixed(1));
+    });
+  });
+}
+
 // Drag-to-pan the circuit map (only when zoomed in)
 function bindCircuitPan(){
   const svg=document.getElementById('circuitMap');if(!svg)return;
@@ -1491,9 +1525,9 @@ function renderRaceContent(){
           driverDots+
           '</svg>'+
           '<div class="map-zoom-ctl">'+
-            '<button onclick="zoomMap(0.5)" aria-label="Zoom in">+</button>'+
-            '<button onclick="zoomMap(-0.5)" aria-label="Zoom out">\u2212</button>'+
-            (z>1?'<button onclick="S._mapZoom=1;S._mapVx=null;S._mapVy=null;renderRaceContent()" aria-label="Reset zoom" style="font-size:9px">RESET</button>':'')+
+            '<button onclick="zoomMap(0.5)" aria-label="Zoom in"'+(z>=4?' disabled':'')+'>+</button>'+
+            '<button onclick="zoomMap(-0.5)" aria-label="Zoom out"'+(z<=1?' disabled':'')+'>\u2212</button>'+
+            '<button class="reset-btn" onclick="S._mapZoom=1;S._mapVx=null;S._mapVy=null;renderRaceContent()" aria-label="Reset zoom"'+(z<=1?' disabled':'')+'>RESET</button>'+
           '</div>'+
           '</div>';
       }
@@ -1517,7 +1551,7 @@ function renderRaceContent(){
       (rd.sprint&&S._raceSess==='race'?'<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> '+rd.sprint+'</div>':'')+
       subTabHtml+
       subContent;
-    if(S._raceSubTab==='circuit')setTimeout(bindCircuitPan,0);
+    if(S._raceSubTab==='circuit')setTimeout(()=>{positionDotsOnPath();bindCircuitPan()},0);
     return;
   }
 
