@@ -2,7 +2,12 @@ import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
 
 function generateTweet(title, articleBody, slug) {
-  const url = 'https://gridfeed.co/article/' + slug;
+  // Cache-buster: Twitter caches per-URL permanently, so even after we fix
+  // og:image on the server, a previously-scraped URL will keep serving the
+  // stale preview. A unique v=N param guarantees Twitter treats every new
+  // tweet as a fresh URL and re-scrapes OG meta (server ignores the param).
+  const cacheBust = Date.now().toString(36).slice(-6);
+  const url = `https://gridfeed.co/article/${slug}?v=${cacheBust}`;
   const firstSentence = (articleBody || '').split(/[.!?]/)[0]?.trim() || '';
 
   // Only use first sentence if it's meaningfully different from the title
