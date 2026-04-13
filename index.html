@@ -429,6 +429,8 @@ body.mo{overflow:hidden}
 .map-dot{cursor:pointer}
 .map-dot:hover circle{opacity:0.8}
 .map-dot-sel circle{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
+#circuitMap g.map-dot{opacity:0;transition:opacity .12s}
+#circuitMap.dots-ready g.map-dot{opacity:1}
 .map-zoom-ctl{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
 .map-zoom-ctl button{width:34px;height:34px;border-radius:6px;background:rgba(20,25,38,0.85);border:1px solid var(--border);color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:0;line-height:1}
 .map-zoom-ctl button.reset-btn{font-size:9px;letter-spacing:0.5px}
@@ -1335,10 +1337,13 @@ function positionDotsOnPath(){
   const dots=svg.querySelectorAll('g.map-dot');
   if(!dots.length)return;
   const n=dots.length;
+  const positions={};
   dots.forEach((g,i)=>{
-    // Evenly spaced fractions, offset so leader is near the start/finish line
+    // Evenly spaced fractions along the actual track curve
     const frac=(i/n);
     const pt=pathEl.getPointAtLength(frac*total);
+    const driver=g.getAttribute('data-driver');
+    if(driver)positions[driver]={x:pt.x,y:pt.y};
     // Update every child that uses cx/cy/x/y for the old synthetic coords
     g.querySelectorAll('circle').forEach(c=>{
       c.setAttribute('cx',pt.x.toFixed(1));
@@ -1351,6 +1356,22 @@ function positionDotsOnPath(){
       t.setAttribute('y',(pt.y+yOff).toFixed(1));
     });
   });
+  // If a driver is selected and we're zoomed in without a manual pan, recenter
+  // the viewBox on the driver's REAL track position instead of the stale
+  // synthetic circle coord that the initial render used
+  const z=Math.max(1,Math.min(4,S._mapZoom||1));
+  if(z>1&&S._selectedDriver&&S._mapVx==null){
+    const sel=positions[S._selectedDriver];
+    if(sel){
+      const vw=600/z,vh=400/z;
+      let vx=sel.x-vw/2,vy=sel.y-vh/2;
+      vx=Math.max(0,Math.min(600-vw,vx));
+      vy=Math.max(0,Math.min(400-vh,vy));
+      svg.setAttribute('viewBox',vx+' '+vy+' '+vw+' '+vh);
+    }
+  }
+  // Reveal dots now that they're placed on the track
+  svg.classList.add('dots-ready');
 }
 
 // Drag-to-pan the circuit map (only when zoomed in)
