@@ -1,5 +1,5 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
-import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
+import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY, checkPlagiarism } from './lib/accuracy.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const WORD_TARGETS = {
@@ -208,7 +208,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       // Build user prompt — source-grounded when available, conservative fallback otherwise
       let userPrompt;
       if (sourceContent) {
-        userPrompt = `Source article from ${sourcePublication}:\n"""\n${sourceContent}\n"""\n\nRewrite this story in GridFeed voice for our readers.\n\nCRITICAL RULES:\n- Only use facts that appear in the source above\n- Only quote text that appears verbatim in the source above\n- Every direct quote MUST be attributed: "Speaking to ${sourcePublication}, [driver] said..."\n- Do not invent quotes, briefings, or statements\n- Do not add analysis that is not grounded in the source facts\n- If the source mentions specific numbers, use those exact numbers\n- Lead sentence must contain a specific driver name AND a specific number\n- Match the GridFeed voice (sharp, authoritative, data-backed)\n- Word count: ${wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
+        userPrompt = `Source article from ${sourcePublication}:\n"""\n${sourceContent}\n"""\n\nRewrite this story completely in GridFeed voice for our readers.\n\nPLAGIARISM RULES (ENFORCED BY AUTOMATED CHECK — VIOLATION = AUTO-REJECT):\n- NEVER copy any 6+ consecutive words from the source verbatim\n- Rewrite every sentence from scratch in your own words\n- Change sentence structure, word order, and vocabulary\n- Do not paraphrase one-to-one; restructure the narrative\n- Use the source ONLY as a fact reference, never as a text template\n\nCRITICAL RULES:\n- Only use facts that appear in the source above\n- Every direct quote MUST be attributed: "Speaking to ${sourcePublication}, [driver] said..."\n- Do not invent quotes, briefings, or statements\n- Do not add analysis that is not grounded in the source facts\n- If the source mentions specific numbers, use those exact numbers\n- Lead sentence must contain a specific driver name AND a specific number\n- Match the GridFeed voice (sharp, authoritative, data-backed)\n- Word count: ${wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
       } else {
         userPrompt = `Topic: ${topicText}\n\nWrite an F1 ${noSource ? 'hot take' : 'news update'} on this topic in GridFeed voice.\n\nCRITICAL RULES:\n- Do NOT include any direct quotes — no source available\n- Do NOT invent statements or briefings\n- Stick to verifiable facts about the 2026 season from the context below\n- You CAN speculate and give opinions — frame as analysis ("This suggests...", "The numbers point to...")\n- Lead sentence must contain a specific driver name AND a specific number\n- ${noSource ? 'Maximum 200 words' : 'Word count: ' + wordTarget}\n\n${fullContext}\n\nReturn ONLY valid JSON:\n{"title":"...","excerpt":"...","body":"...","tags":["ANALYSIS"],"content_type":"${contentType}"}`;
       }
@@ -246,6 +246,38 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
           }
         }
         return json({ ok: true, generated: 0, reason: validation.reason, retry: newRetryCount });
+      }
+
+      // ── Plagiarism check vs source content ──
+      if (sourceContent && sourceContent.length > 200) {
+        const plag = checkPlagiarism(parsed.body, sourceContent);
+        // Reject if more than 15% of 6-grams overlap OR any 10+ word contiguous phrase is copied
+        if (plag.overlapRatio > 0.15 || plag.longestMatch >= 10) {
+          const newRetryCount = (topic.retry_count || 0) + 1;
+          const reason = `Plagiarism: ${(plag.overlapRatio * 100).toFixed(0)}% overlap, longest ${plag.longestMatch}-word match`;
+          if (topic.id) {
+            if (newRetryCount >= 3) {
+              await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', retry_count: newRetryCount, last_error: reason });
+            } else {
+              await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'pending', retry_count: newRetryCount, last_error: reason + '. Sample: "' + (plag.samples[0] || '') + '"' });
+            }
+          }
+          await logSync('generate-content', 'plagiarism_blocked', 0, `${reason} — "${parsed.title.slice(0, 40)}"`, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'plagiarism', overlap: plag.overlapRatio, longest: plag.longestMatch });
+        }
+      }
+
+      // ── Plagiarism check vs our own published articles (self-plagiarism) ──
+      const ourRecent = await sb(`articles?select=body&order=published_at.desc&limit=5&published_at=gt.${new Date(Date.now() - 7 * 24 * 36e5).toISOString()}`);
+      for (const prior of ourRecent) {
+        if (!prior.body || prior.body.length < 200) continue;
+        const selfPlag = checkPlagiarism(parsed.body, prior.body);
+        if (selfPlag.overlapRatio > 0.25 || selfPlag.longestMatch >= 12) {
+          const reason = `Self-plagiarism: ${(selfPlag.overlapRatio * 100).toFixed(0)}% overlap with recent article`;
+          if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped', last_error: reason });
+          await logSync('generate-content', 'plagiarism_blocked', 0, reason, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'self_plagiarism' });
+        }
       }
 
       // Title dedup (exact match)

@@ -132,6 +132,75 @@ export function buildSystemPrompt(extra, outputFormat) {
   return parts.join('\n\n');
 }
 
+/* ═══ PLAGIARISM DETECTION ═══ */
+
+// Tokenize text into lowercase alphanumeric words, filtering very short ones.
+// Short words (the, a, of, etc.) are meaningless for phrase matching.
+function tokenize(text) {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 3);
+}
+
+// Build a set of N-grams from tokens.
+function ngrams(tokens, n) {
+  const set = new Set();
+  for (let i = 0; i <= tokens.length - n; i++) {
+    set.add(tokens.slice(i, i + n).join(' '));
+  }
+  return set;
+}
+
+/**
+ * Check how much of `article` appears verbatim in `source`.
+ * Returns an object: { overlapRatio (0-1), longestMatch (words), samples[] }
+ *
+ * Uses 6-word n-grams. Any 6-word phrase that appears in both is suspicious.
+ * Legitimate rewrites share single words and occasional 2-3 word phrases but
+ * almost never share 6+ consecutive content words.
+ */
+export function checkPlagiarism(article, source) {
+  const aTokens = tokenize(article);
+  const sTokens = tokenize(source);
+  if (aTokens.length < 20 || sTokens.length < 20) {
+    return { overlapRatio: 0, longestMatch: 0, samples: [] };
+  }
+
+  const N = 6;
+  const sGrams = ngrams(sTokens, N);
+  const aGrams = ngrams(aTokens, N);
+
+  let matches = 0;
+  const samples = [];
+  for (const g of aGrams) {
+    if (sGrams.has(g)) {
+      matches++;
+      if (samples.length < 3) samples.push(g);
+    }
+  }
+
+  // Longest contiguous match (greedy walk)
+  let longest = 0;
+  let cur = 0;
+  for (let i = 0; i <= aTokens.length - N; i++) {
+    const g = aTokens.slice(i, i + N).join(' ');
+    if (sGrams.has(g)) {
+      cur = cur === 0 ? N : cur + 1;
+      if (cur > longest) longest = cur;
+    } else {
+      cur = 0;
+    }
+  }
+
+  return {
+    overlapRatio: aGrams.size > 0 ? matches / aGrams.size : 0,
+    longestMatch: longest,
+    samples,
+  };
+}
+
 /* ═══ VALIDATION CONSTANTS ═══ */
 
 const BANNED_WORDS = [
