@@ -704,7 +704,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1};
+const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour'}[t]||'tag-analysis'}
 function tAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 
@@ -1292,6 +1292,71 @@ function pickRace(round){
   renderRaceContent();
 }
 
+// Zoom map while keeping the current view center
+function zoomMap(delta){
+  const oldZ=Math.max(1,Math.min(4,S._mapZoom||1));
+  const newZ=Math.max(1,Math.min(4,oldZ+delta));
+  if(newZ===oldZ)return;
+  const oldVw=600/oldZ,oldVh=400/oldZ;
+  const oldVx=(S._mapVx!=null?S._mapVx:(600-oldVw)/2);
+  const oldVy=(S._mapVy!=null?S._mapVy:(400-oldVh)/2);
+  const cx=oldVx+oldVw/2,cy=oldVy+oldVh/2;
+  const newVw=600/newZ,newVh=400/newZ;
+  S._mapZoom=newZ;
+  if(newZ===1){S._mapVx=null;S._mapVy=null}
+  else{
+    let nx=cx-newVw/2,ny=cy-newVh/2;
+    nx=Math.max(0,Math.min(600-newVw,nx));
+    ny=Math.max(0,Math.min(400-newVh,ny));
+    S._mapVx=nx;S._mapVy=ny;
+  }
+  renderRaceContent();
+}
+
+// Drag-to-pan the circuit map (only when zoomed in)
+function bindCircuitPan(){
+  const svg=document.getElementById('circuitMap');if(!svg)return;
+  const z=Math.max(1,Math.min(4,S._mapZoom||1));
+  if(z<=1)return;
+  let dragging=false,startX=0,startY=0,startVx=0,startVy=0;
+  const getPt=(e)=>e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY};
+  const onDown=(e)=>{
+    dragging=true;
+    const p=getPt(e);startX=p.x;startY=p.y;
+    const vb=svg.getAttribute('viewBox').split(' ').map(parseFloat);
+    startVx=vb[0];startVy=vb[1];
+    svg.style.cursor='grabbing';
+    e.preventDefault();
+  };
+  const onMove=(e)=>{
+    if(!dragging)return;
+    const p=getPt(e);
+    const rect=svg.getBoundingClientRect();
+    const vw=600/z,vh=400/z;
+    const dx=(p.x-startX)*(vw/rect.width);
+    const dy=(p.y-startY)*(vh/rect.height);
+    let nx=startVx-dx,ny=startVy-dy;
+    nx=Math.max(0,Math.min(600-vw,nx));
+    ny=Math.max(0,Math.min(400-vh,ny));
+    svg.setAttribute('viewBox',nx+' '+ny+' '+vw+' '+vh);
+    e.preventDefault();
+  };
+  const onUp=()=>{
+    if(!dragging)return;
+    dragging=false;
+    svg.style.cursor='grab';
+    const vb=svg.getAttribute('viewBox').split(' ').map(parseFloat);
+    S._mapVx=vb[0];S._mapVy=vb[1];
+  };
+  svg.addEventListener('mousedown',onDown);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onUp);
+  svg.addEventListener('touchstart',onDown,{passive:false});
+  svg.addEventListener('touchmove',onMove,{passive:false});
+  svg.addEventListener('touchend',onUp);
+  svg.addEventListener('touchcancel',onUp);
+}
+
 function renderRaceContent(){
   const el=document.getElementById('raceContent');if(!el)return;
   const rd=RACE_DATA[S.selRound];
@@ -1356,14 +1421,24 @@ function renderRaceContent(){
     }else if(S._raceSubTab==='circuit'){
       // Mini timing tower from race results
       const raceResults=rd.results||[];
+      const finishers=raceResults.filter(r=>r.p!=='DNF'&&r.p!=='DNS');
+      const totalF=finishers.length||1;
+      // Helper: 3-letter abbreviation for a driver
+      const getAbbr=(name)=>{
+        const last=name.split(' ').pop().toLowerCase();
+        const entry=Object.entries(DH).find(([n,nm])=>nm===last);
+        if(entry){const ab=Object.values(DSTATS).find(d=>d.num===parseInt(entry[0]))?.abbr;if(ab)return ab}
+        return name.split(' ').pop().slice(0,3).toUpperCase();
+      };
+      // Helper: dot position on the imaginary track loop for finisher index
+      const dotPos=(idx)=>{const a=(idx/totalF)*Math.PI*2-Math.PI/2;return{cx:300+Math.cos(a)*140,cy:200+Math.sin(a)*120}};
+
       const towerRows=raceResults.map((r,i)=>{
         const isDnf=r.p==='DNF'||r.p==='DNS';
-        const lastName=r.d.split(' ').pop().toLowerCase();
-        const abbrEntry=Object.entries(DH).find(([num,name])=>name===lastName);
-        const drvAbbr=abbrEntry?(Object.values(DSTATS).find(d=>d.num===parseInt(abbrEntry[0]))?.abbr||r.d.slice(0,3).toUpperCase()):r.d.split(' ').pop().slice(0,3).toUpperCase();
+        const drvAbbr=getAbbr(r.d);
         const selected=S._selectedDriver===r.d;
         return '<div class="mt-row'+(selected?' mt-sel':'')+(isDnf?' mt-dnf':'')+'" '+
-          'onclick="S._selectedDriver=\''+r.d.replace(/'/g,"\\'")+'\';renderRaceContent()" '+
+          'onclick="S._selectedDriver=\''+r.d.replace(/'/g,"\\'")+'\';S._mapVx=null;S._mapVy=null;renderRaceContent()" '+
           'style="cursor:pointer">'+
           '<span class="mt-pos">'+(isDnf?r.p:'P'+r.p)+'</span>'+
           '<span class="mt-bar" style="background:'+r.tc+'"></span>'+
@@ -1377,34 +1452,42 @@ function renderRaceContent(){
       const circPath=CS[circKey];
       let mapContent='<div class="empty">No circuit data</div>';
       if(circPath){
-        const finishers=raceResults.filter(r=>r.p!=='DNF'&&r.p!=='DNS');
-        const total=finishers.length||1;
         const driverDots=finishers.map((r,i)=>{
-          const lastName2=r.d.split(' ').pop().toLowerCase();
-          const abbrEntry2=Object.entries(DH).find(([num,name])=>name===lastName2);
-          const drvAbbr2=abbrEntry2?(Object.values(DSTATS).find(d=>d.num===parseInt(abbrEntry2[0]))?.abbr||'???'):'???';
+          const drvAbbr2=getAbbr(r.d);
           const selected=S._selectedDriver===r.d;
-          const angle=(i/total)*Math.PI*2-Math.PI/2;
-          const cx=300+Math.cos(angle)*140;
-          const cy=200+Math.sin(angle)*120;
+          const{cx,cy}=dotPos(i);
+          // Always label every dot with P# + ABBR so users can spot lapped cars
           return '<g class="map-dot'+(selected?' map-dot-sel':'')+'" data-driver="'+r.d+'">'+
-            (selected?'<circle cx="'+cx+'" cy="'+cy+'" r="18" fill="'+r.tc+'" opacity="0.25"/>':'')+
-            '<circle cx="'+cx+'" cy="'+cy+'" r="'+(selected?'10':'7')+'" fill="'+r.tc+'" stroke="'+(selected?'#fff':'rgba(255,255,255,0.3)')+'" stroke-width="'+(selected?'2':'1')+'"/>'+
-            (selected||i<3?'<text x="'+cx+'" y="'+(cy+(selected?24:18))+'" text-anchor="middle" fill="'+(selected?'#fff':'rgba(255,255,255,0.5)')+'" font-size="'+(selected?'10':'7')+'" font-weight="'+(selected?'800':'600')+'" font-family="DM Sans,sans-serif">'+drvAbbr2+'</text>':'')+
+            (selected?'<circle cx="'+cx+'" cy="'+cy+'" r="20" fill="'+r.tc+'" opacity="0.25"/>':'')+
+            '<circle cx="'+cx+'" cy="'+cy+'" r="'+(selected?'11':'8')+'" fill="'+r.tc+'" stroke="'+(selected?'#fff':'rgba(255,255,255,0.4)')+'" stroke-width="'+(selected?'2':'1.2')+'"/>'+
+            '<text x="'+cx+'" y="'+(cy+3)+'" text-anchor="middle" fill="#fff" font-size="'+(selected?'9':'8')+'" font-weight="900" font-family="DM Sans,sans-serif" pointer-events="none">'+(r.p)+'</text>'+
+            '<text x="'+cx+'" y="'+(cy+(selected?26:20))+'" text-anchor="middle" fill="'+(selected?'#fff':'rgba(255,255,255,0.75)')+'" font-size="'+(selected?'10':'8')+'" font-weight="800" font-family="DM Sans,sans-serif" pointer-events="none">'+drvAbbr2+'</text>'+
             '</g>';
         }).join('');
+        // Compute viewBox: zoom + center on selected driver + user pan override
         const z=Math.max(1,Math.min(4,S._mapZoom||1));
-        const vw=600/z,vh=400/z,vx=(600-vw)/2,vy=(400-vh)/2;
+        const vw=600/z,vh=400/z;
+        let vx,vy;
+        if(z===1){vx=0;vy=0}
+        else if(S._mapVx!=null&&S._mapVy!=null){vx=S._mapVx;vy=S._mapVy}
+        else if(S._selectedDriver){
+          const idx=finishers.findIndex(r=>r.d===S._selectedDriver);
+          if(idx>=0){const{cx,cy}=dotPos(idx);vx=cx-vw/2;vy=cy-vh/2}
+          else{vx=(600-vw)/2;vy=(400-vh)/2}
+        }else{vx=(600-vw)/2;vy=(400-vh)/2}
+        // Clamp inside original 600x400
+        vx=Math.max(0,Math.min(600-vw,vx));
+        vy=Math.max(0,Math.min(400-vh,vy));
         mapContent='<div style="position:relative">'+
-          '<svg viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0A0D12">'+
+          '<svg id="circuitMap" viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0A0D12;touch-action:none;cursor:'+(z>1?'grab':'default')+'">'+
           '<path d="'+circPath+'" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'+
           '<path d="'+circPath+'" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>'+
           driverDots+
           '</svg>'+
           '<div class="map-zoom-ctl">'+
-            '<button onclick="S._mapZoom=Math.min(4,(S._mapZoom||1)+0.5);renderRaceContent()" aria-label="Zoom in">+</button>'+
-            '<button onclick="S._mapZoom=Math.max(1,(S._mapZoom||1)-0.5);renderRaceContent()" aria-label="Zoom out">\u2212</button>'+
-            (z>1?'<button onclick="S._mapZoom=1;renderRaceContent()" aria-label="Reset zoom" style="font-size:9px">RESET</button>':'')+
+            '<button onclick="zoomMap(0.5)" aria-label="Zoom in">+</button>'+
+            '<button onclick="zoomMap(-0.5)" aria-label="Zoom out">\u2212</button>'+
+            (z>1?'<button onclick="S._mapZoom=1;S._mapVx=null;S._mapVy=null;renderRaceContent()" aria-label="Reset zoom" style="font-size:9px">RESET</button>':'')+
           '</div>'+
           '</div>';
       }
@@ -1428,6 +1511,7 @@ function renderRaceContent(){
       (rd.sprint&&S._raceSess==='race'?'<div style="padding:8px 16px;font-size:11px;background:#161B27;border-bottom:1px solid var(--border);color:var(--muted)"><strong style="color:var(--gold)">Sprint:</strong> '+rd.sprint+'</div>':'')+
       subTabHtml+
       subContent;
+    if(S._raceSubTab==='circuit')setTimeout(bindCircuitPan,0);
     return;
   }
 
