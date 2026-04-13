@@ -18,6 +18,21 @@
   schedule = "@hourly"
   timeout = 60
 
+[functions.generate-recap]
+  schedule = "*/5 * * * *"
+  timeout = 60
+
+[functions.push-session-reminder]
+  schedule = "*/5 * * * *"
+  timeout = 15
+
+[functions.generate-social]
+  schedule = "0 */4 * * *"
+  timeout = 15
+
+[functions.subscribe-newsletter]
+  timeout = 10
+
 [functions.fetch-timing]
   schedule = "*/2 * * * *"
   timeout = 30

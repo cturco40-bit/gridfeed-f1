@@ -94,6 +94,15 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px}
 @media(max-width:768px){.two-col{grid-template-columns:1fr}}
+.nl-bar{background:linear-gradient(135deg,#1B1F2A,#2A1520);border:1px solid rgba(232,0,45,0.2);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px}
+.nl-inner{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.nl-text{flex:1;min-width:200px}
+.nl-form{display:flex;gap:8px}
+.nl-input{padding:10px 14px;border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius);background:rgba(255,255,255,0.06);color:#fff;font-size:13px;font-family:var(--font);width:200px;outline:none}
+.nl-input:focus{border-color:var(--accent)}
+.nl-btn{padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;white-space:nowrap}
+.nl-btn:hover{opacity:0.9}
+@media(max-width:480px){.nl-form{width:100%}.nl-input{flex:1;width:auto}}
 .home-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
 .home-main{order:1}
 .home-sidebar{order:2}
@@ -471,6 +480,18 @@ body.mo{overflow:hidden}
 <!-- HOME -->
 <div class="panel act" id="p-home">
   <div id="homeHero"></div>
+  <div id="nlBar" class="nl-bar">
+    <div class="nl-inner">
+      <div class="nl-text">
+        <div style="font-family:var(--head);font-size:14px;font-weight:800;text-transform:uppercase;color:#fff">Free F1 Newsletter</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Race recaps, picks, and analysis. Every weekend.</div>
+      </div>
+      <div class="nl-form">
+        <input type="email" id="nlEmail" class="nl-input" placeholder="your@email.com" autocomplete="email"/>
+        <button type="button" onclick="subscribeNL()" class="nl-btn">Subscribe</button>
+      </div>
+    </div>
+  </div>
   <div class="home-grid">
     <div class="home-sidebar">
       <div class="slabel">Race Weekend</div>
@@ -994,6 +1015,32 @@ function triggerInstall(){if(deferredPrompt){deferredPrompt.prompt();deferredPro
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const v=parseInt(localStorage.getItem('gf_v')||'0')+1;localStorage.setItem('gf_v',v);if(v>=2&&!localStorage.getItem('gf_i')){document.getElementById('installBanner').classList.add('vis');const cta=document.getElementById('installCta');if(cta)cta.style.display='flex'}});
 document.getElementById('installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==='accepted')localStorage.setItem('gf_i','1');deferredPrompt=null}document.getElementById('installBanner').classList.remove('vis')};
+
+/* ═══ NEWSLETTER ═══ */
+async function subscribeNL(){
+  const input=document.getElementById('nlEmail');
+  const email=(input?.value||'').trim();
+  if(!email||!email.includes('@')){input?.focus();return}
+  const bar=document.getElementById('nlBar');
+  try{
+    const res=await fetch('/.netlify/functions/subscribe-newsletter',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email})
+    });
+    if(res.ok){
+      if(bar)bar.innerHTML='<div style="text-align:center;padding:12px;color:var(--gold);font-weight:700;font-size:13px">\u2713 Subscribed. See you race weekend.</div>';
+      window.gtag&&gtag('event','newsletter_subscribe');
+      localStorage.setItem('gf_nl','1');
+    }else{
+      if(input)input.placeholder='Subscription failed, try again';
+      if(input)input.value='';
+    }
+  }catch{
+    if(input)input.placeholder='Subscription failed, try again';
+    if(input)input.value='';
+  }
+}
+if(localStorage.getItem('gf_nl')==='1'){const _nl=document.getElementById('nlBar');if(_nl)_nl.style.display='none'}
 
 /* ═══ SERVICE WORKER + UPDATE PROMPT ═══ */
 let _waitingSW=null;
