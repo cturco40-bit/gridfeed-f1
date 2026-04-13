@@ -302,9 +302,11 @@ export default async (req) => {
       // slice from the top of the source down to the height that matches the
       // square aspect, keeping the head and shoulders centered.
       const img = primaryHeadshot.image;
-      // Source slice: take a square region from the top of the photo so the
-      // head + chest fill the frame
-      const srcSize = img.width; // square region matching the photo width
+      // Source slice: take a square region from the top-left of the photo.
+      // The official F1 portraits put the driver slightly left of center
+      // (head around x=0.45*width), so we crop ~12% off the right side to
+      // recenter the driver in the output frame.
+      const srcSize = Math.round(img.width * 0.88);
       const srcX = 0;
       const srcY = 0; // anchor to the very top
       ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, W, H);
