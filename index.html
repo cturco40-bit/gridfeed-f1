@@ -225,10 +225,12 @@ body.mo{overflow:hidden}
 .install-cta h3{font-family:var(--head);font-size:20px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.5px}
 .install-cta p{font-size:13px;color:rgba(255,255,255,.5);margin-top:4px}
 .install-cta-btn{background:var(--accent);color:#fff;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:12px 20px;border-radius:var(--radius);white-space:nowrap}
-.notif-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:14px;font-family:var(--font);font-size:11px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;cursor:pointer;min-height:32px;transition:all .15s;border:1px solid rgba(232,0,45,0.55);background:rgba(232,0,45,0.16);color:#FF6B8A}
-.notif-btn::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.notif-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:14px;font-family:var(--font);font-size:10px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;min-height:32px;transition:all .15s;border:1px solid rgba(232,0,45,0.55);background:rgba(232,0,45,0.16);color:#FF6B8A}
+.notif-btn svg{width:14px;height:14px;flex-shrink:0}
+.notif-btn .notif-state{font-weight:900}
 .notif-btn.on{border-color:rgba(34,197,94,0.6);background:rgba(34,197,94,0.18);color:#4ADE80}
 .notif-btn:hover{filter:brightness(1.15)}
+@media(max-width:480px){.notif-btn{font-size:9px;padding:5px 9px;gap:5px}.notif-btn svg{width:12px;height:12px}}
 
 /* ═══ UPDATE BANNER ═══ */
 .update-banner{display:none;position:fixed;bottom:calc(var(--bottom-nav) + 16px);left:12px;right:12px;max-width:480px;margin:0 auto;background:var(--header);border:1px solid var(--accent);border-left:4px solid var(--accent);border-radius:8px;padding:14px 16px;z-index:300;color:#fff;font-size:13px;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:slideUp .25s}
@@ -453,7 +455,7 @@ body.mo{overflow:hidden}
     </div>
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
     <button class="notif-btn" id="darkBtn" onclick="toggleDark()" style="font-size:16px" aria-label="Toggle dark mode">&#127769;</button>
-    <button class="notif-btn" id="notifBtn" onclick="regPush()" aria-label="Toggle notifications">OFF</button>
+    <button class="notif-btn" id="notifBtn" onclick="regPush()" aria-label="Toggle notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>NOTIFS</span><span class="notif-state">OFF</span></button>
   </div>
 </div></header>
 
@@ -959,7 +961,8 @@ const VAPID_PK='BGiNH3DDw7QMuFmiB_Qxgn4aEPLl4k5MW9T27MzcUCjv5jxi5wy7Bb74Fdn8J2PX
 function b64toUint8(b){const p='='.repeat((4-b.length%4)%4);const r=atob((b+p).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a}
 function updateNotifBtn(on){
   const btn=document.getElementById('notifBtn');if(!btn)return;
-  btn.textContent=on?'ON':'OFF';
+  const state=btn.querySelector('.notif-state');
+  if(state)state.textContent=on?'ON':'OFF';
   btn.classList.toggle('on',!!on);
   btn.setAttribute('aria-label',on?'Notifications on — tap to turn off':'Notifications off — tap to turn on');
 }
