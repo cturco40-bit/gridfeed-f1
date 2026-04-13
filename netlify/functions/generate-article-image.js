@@ -300,25 +300,43 @@ export default async (req) => {
     const imageBottom = H * 0.5;
 
     if (primaryHeadshot && primaryHeadshot.image && primaryHeadshot.isReal) {
-      // REAL PHOTO LAYOUT — rectangular, top-anchored, no circle clip
-      // F1 hero shots are tall portraits with the face in the upper third
+      // REAL PHOTO LAYOUT — slice head + shoulders region from the source photo
+      // F1 photos are 720×2069 (tall full-body). The face is in the top ~25%.
+      // We use the 9-arg drawImage to slice that head region from the source
+      // and stretch it into the canvas image area.
       const img = primaryHeadshot.image;
-      // Scale so image fills the canvas width OR fills the image area height
-      // We anchor to the TOP so the face is always visible
-      const targetH = imageBottom - 90; // image area from y=90 to ~y=540
-      const scale = Math.max(W / img.width, targetH / img.height);
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
-      const drawX = (W - drawW) / 2;
-      const drawY = 90; // top-anchored — face at the top of the canvas image area
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-      // Strong gradient fade from transparent at ~60% of image area to solid bg
-      // This hides the chest/body and blends the photo into the background
-      const fadeStart = imageBottom - 220;
-      const fadeEnd = imageBottom + 40;
+      const dstX = 0;
+      const dstY = 90;
+      const dstW = W;
+      const dstH = imageBottom - 90; // ~450px tall image area
+      // Source slice: 30% of the photo height from the top — head + shoulders
+      const sliceFraction = 0.30;
+      const srcY = img.height * 0.015; // skip 1.5% top padding
+      const srcH = img.height * sliceFraction;
+      // Crop source horizontally so it matches dst aspect ratio (no stretch)
+      const dstAspect = dstW / dstH;
+      const srcAspect = img.width / srcH;
+      let srcX = 0, srcW = img.width;
+      if (srcAspect < dstAspect) {
+        // Source slice is too tall — crop top/bottom of slice (use less height)
+        const newSrcH = img.width / dstAspect;
+        // Recenter vertically inside the slice
+        const cropY = (srcH - newSrcH) / 2;
+        ctx.drawImage(img, srcX, srcY + cropY, srcW, newSrcH, dstX, dstY, dstW, dstH);
+      } else {
+        // Source slice is wider — crop left/right
+        const newSrcW = srcH * dstAspect;
+        srcX = (img.width - newSrcW) / 2;
+        srcW = newSrcW;
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+      }
+      // Bottom fade from transparent (top of fade) to solid bg (bottom of image area)
+      // and extend into the headline area for a smooth blend
+      const fadeStart = dstY + dstH * 0.55;
+      const fadeEnd = dstY + dstH + 40;
       const fade = ctx.createLinearGradient(0, fadeStart, 0, fadeEnd);
       fade.addColorStop(0, 'rgba(18,21,30,0)');
-      fade.addColorStop(0.6, 'rgba(18,21,30,0.7)');
+      fade.addColorStop(0.55, 'rgba(18,21,30,0.85)');
       fade.addColorStop(1, 'rgba(18,21,30,1)');
       ctx.fillStyle = fade;
       ctx.fillRect(0, fadeStart, W, fadeEnd - fadeStart);

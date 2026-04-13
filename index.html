@@ -747,7 +747,7 @@ async function loadArts(){
   el.innerHTML='<div class="art-grid">'+data.map(a=>artCard(a)).join('')+'</div>';
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:16/9;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:1/1;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="openArt('${a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
@@ -789,7 +789,7 @@ async function openArt(id){
   document.getElementById('mBy').textContent=a?`By ${a.author||'GridFeed Staff'} \u00b7 ${new Date(a.published_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:'';
   // Strip any prior injected image header
   const oldHdr=document.getElementById('mImgHdr');if(oldHdr)oldHdr.remove();
-  if(a?.image_url){const mb=document.getElementById('mBody');mb.insertAdjacentHTML('beforebegin',`<div id="mImgHdr" style="height:160px;margin:-16px -16px 16px;background:url('${a.image_url}') top/cover no-repeat;background-color:#12151E;border-radius:4px 4px 0 0"></div>`)}
+  if(a?.image_url){const mb=document.getElementById('mBody');mb.insertAdjacentHTML('beforebegin',`<div id="mImgHdr" style="aspect-ratio:1/1;max-height:420px;margin:-16px -16px 16px;background:linear-gradient(180deg,rgba(0,0,0,0) 55%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E;border-radius:4px 4px 0 0"></div>`)}
   document.getElementById('mBody').innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
   document.getElementById('mSrc').style.display='none';
   if('share' in navigator)document.getElementById('shareBtn').style.display='flex';
