@@ -344,6 +344,20 @@ export function validateArticle(article) {
   }
   console.log('[validateArticle] PASSED Leclerc podium count');
 
+  // ── D3. POINTS LEAD PHRASING ──
+  // Antonelli has 72 TOTAL points and a 9-point LEAD. Don't confuse the two.
+  // Block "72-point lead" (and 70/71-point variants) which is a common AI mistake.
+  const pointLeadErrors = [
+    /\b7[0-2][\s-]*point\s+(lead|advantage|gap|margin|cushion|buffer|clear)/i,
+  ];
+  for (const pattern of pointLeadErrors) {
+    if (pattern.test(article.body || '')) {
+      console.log('[validateArticle] REJECTED — Wrong points lead phrasing');
+      return { valid: false, reason: 'Wrong points phrasing: 72 is total points, lead is 9 points' };
+    }
+  }
+  console.log('[validateArticle] PASSED points lead phrasing');
+
   // ── E. CIRCUIT TYPE FACTS ──
   for (const circuit of NOT_STREET_CIRCUITS) {
     if (combined.includes(circuit) && combined.includes('street circuit')) {
