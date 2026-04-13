@@ -277,9 +277,9 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <button class="hdr-refresh" onclick="refreshAll()" title="Refresh">&#8634;</button>
 </div>
 
-<!-- LIVE MODE banner: shown when pending live race tweets need approval -->
+<!-- LIVE MODE banner: shows recently auto-posted live race tweets -->
 <div class="live-banner" id="liveBanner">
-  <div class="live-banner-hdr"><span class="live-banner-dot"></span>LIVE RACE \u2014 <span id="liveBannerCount">0</span> tweets pending approval</div>
+  <div class="live-banner-hdr"><span class="live-banner-dot"></span>LIVE RACE \u2014 <span id="liveBannerCount">0</span> auto-posted in last 30 min</div>
   <div id="liveBannerList"></div>
 </div>
 
@@ -432,16 +432,25 @@ function renderHeader(){
 
 function renderLiveBanner(){
   const banner=document.getElementById('liveBanner');if(!banner)return;
-  const liveTweets=tweets.filter(t=>t.status==='pending'&&t.tweet_type==='live_race');
+  // Show live tweets posted in the last 30 minutes (informational — they auto-post)
+  const cutoff=Date.now()-30*60*1000;
+  const liveTweets=tweets.filter(t=>{
+    if(t.tweet_type!=='live_race')return false;
+    const ts=new Date(t.posted_at||t.created_at).getTime();
+    return ts>=cutoff;
+  }).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(!liveTweets.length){banner.classList.remove('vis');return}
   banner.classList.add('vis');
   document.getElementById('liveBannerCount').textContent=liveTweets.length;
-  document.getElementById('liveBannerList').innerHTML=liveTweets.map(t=>`
-    <div class="live-tweet-card">
+  document.getElementById('liveBannerList').innerHTML=liveTweets.map(t=>{
+    const isPosted=t.status==='posted';
+    const isFailed=t.status==='failed';
+    const statusBadge=isPosted?'\u2713 POSTED':isFailed?'\u26a0 FAILED':'\u23f3 QUEUED';
+    return`<div class="live-tweet-card">
       <div class="live-tweet-text">${esc(t.tweet_text||'')}</div>
-      <button class="live-tweet-btn" onclick="approveLiveTweet('${t.id}',this)">\u2713 Post Now</button>
-    </div>
-  `).join('');
+      <div style="font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${statusBadge}</div>
+    </div>`;
+  }).join('');
 }
 
 async function approveLiveTweet(id,btn){

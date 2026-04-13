@@ -5,8 +5,8 @@ import { postTweetNow } from './lib/twitter.js';
 const TWENTY_FOUR_HOURS = 864e5;
 const DAILY_CAP = 40;            // Free tier is ~50/day; stay safely under
 const HOURLY_CAP = 10;           // Avoid bursty behavior that triggers anti-spam
-const MIN_SPACING_MS = 30 * 1000; // Min 30s between any two tweets
-const LIVE_BURST_SPACING_MS = 60 * 1000; // Min 60s between live race tweets
+const MIN_SPACING_MS = 30 * 1000;      // Min 30s between any two tweets (article default)
+const LIVE_MIN_SPACING_MS = 20 * 1000; // Min 20s between live race tweets (faster for breaking events)
 
 function tooSimilar(a, b) {
   // Compare normalized text — Twitter rejects near-duplicates
@@ -40,24 +40,12 @@ export default async (req, context) => {
       return json({ ok: true, posted: 0, reason: 'hourly_cap', count: hourPosted.length });
     }
 
-    // ── 3. Min spacing between posts ──
-    const lastPosted = dayPosted.sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))[0];
-    if (lastPosted) {
-      const sinceLast = Date.now() - new Date(lastPosted.posted_at).getTime();
-      if (sinceLast < MIN_SPACING_MS) {
-        await logSync('post-tweet', 'success', 0, `Spacing throttle: ${Math.round(sinceLast/1000)}s since last`, Date.now() - start);
-        return json({ ok: true, posted: 0, reason: 'spacing', wait_ms: MIN_SPACING_MS - sinceLast });
-      }
-    }
-
-    // ── 4. Pick next approved tweet ──
+    // ── 3. Pick next approved tweet (with live race priority) ──
     const queue = await sb(`tweets?status=eq.approved&or=(scheduled_post_at.is.null,scheduled_post_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=5`);
     if (!queue.length) {
       await logSync('post-tweet', 'success', 0, 'No approved tweets ready', Date.now() - start);
       return json({ ok: true, posted: 0 });
     }
-
-    // Live tweets get priority over article tweets
     queue.sort((a, b) => {
       const aLive = a.tweet_type === 'live_race' ? 0 : 1;
       const bLive = b.tweet_type === 'live_race' ? 0 : 1;
@@ -65,13 +53,16 @@ export default async (req, context) => {
     });
 
     let tweet = queue[0];
+    const isLive = tweet.tweet_type === 'live_race';
 
-    // Live race burst protection: if last posted tweet was live AND too recent, hold off
-    if (tweet.tweet_type === 'live_race' && lastPosted) {
+    // ── 4. Min spacing (live tweets get faster spacing) ──
+    const lastPosted = dayPosted.sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))[0];
+    if (lastPosted) {
       const sinceLast = Date.now() - new Date(lastPosted.posted_at).getTime();
-      if (sinceLast < LIVE_BURST_SPACING_MS) {
-        await logSync('post-tweet', 'success', 0, `Live burst hold: ${Math.round(sinceLast/1000)}s since last live`, Date.now() - start);
-        return json({ ok: true, posted: 0, reason: 'live_spacing' });
+      const minGap = isLive ? LIVE_MIN_SPACING_MS : MIN_SPACING_MS;
+      if (sinceLast < minGap) {
+        await logSync('post-tweet', 'success', 0, `Spacing: ${Math.round(sinceLast/1000)}s since last (need ${minGap/1000}s)`, Date.now() - start);
+        return json({ ok: true, posted: 0, reason: 'spacing', wait_ms: minGap - sinceLast });
       }
     }
 
