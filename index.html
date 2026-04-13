@@ -947,7 +947,7 @@ document.getElementById('installBtn').onclick=async()=>{if(deferredPrompt){defer
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/app-sw.js').then(r=>{setInterval(()=>r.update(),36e5)}).catch(()=>{})}
 
 /* ═══ URL ROUTING ═══ */
-function initRoute(){if(location.hash&&checkHash())return;const p=new URLSearchParams(location.search);const t=p.get('tab');if(t&&document.getElementById('p-'+t))go(t)}
+function initRoute(){if(location.hash&&checkHash())return;const path=location.pathname||'';if(path.startsWith('/article/')){showArtView(path.slice(9));return}const p=new URLSearchParams(location.search);const t=p.get('tab');if(t&&document.getElementById('p-'+t))go(t)}
 
 /* ═══ CIRCUIT MAP ═══ */
 S.carLocs={};S.prevLocs={};S.circBounds=null;S.locHistory=[];S.activeMap=false;S.animFrame=null;S.lastPoll=0;S.p1Num=null;S.tooltipTimer=null;S.liveView='tower';S.isLive=false;S.drvCache={};
@@ -1549,7 +1549,7 @@ function showDrv(abbr){const entry=Object.entries(DSTATS).find(([_,d])=>d.abbr==
 
 /* ═══ ARTICLE VIEW (Phase 4) ═══ */
 async function showArtView(slugOrId){
-  go('article');history.replaceState({},'','/#/article/'+slugOrId);
+  go('article');history.replaceState({},'','/article/'+slugOrId);
   const el=document.getElementById('articleView');if(!el)return;
   el.innerHTML='<div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
   // Try slug first, fall back to id (artCard passes a.slug||a.id)
@@ -1561,7 +1561,7 @@ async function showArtView(slugOrId){
   const tag=(data.tags||['ANALYSIS'])[0];
   document.title='GridFeed | '+data.title;
   el.innerHTML=`<button onclick="history.back();go('news')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">\u2190 Back</button>
-${data.image_url?`<div style="height:180px;border-radius:8px;margin-bottom:16px;background:url('${data.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:''}
+${data.image_url?`<div style="aspect-ratio:1/1;width:100%;max-width:520px;border-radius:8px;margin:0 auto 16px;background:url('${data.image_url}') center/cover no-repeat;background-color:#12151E"></div>`:''}
 <span class="art-tag ${tagCl(tag)}" style="margin-bottom:12px;display:inline-block">${tag}</span>
 <h1 style="font-family:var(--head);font-size:28px;font-weight:900;line-height:1.15;text-transform:uppercase;margin-bottom:8px">${data.title}</h1>
 <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${data.author||'GridFeed Staff'} | ${new Date(data.published_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>

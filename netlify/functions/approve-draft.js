@@ -2,7 +2,7 @@ import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
 
 function generateTweet(title, articleBody, slug) {
-  const url = 'gridfeed.co/#/article/' + slug;
+  const url = 'https://gridfeed.co/article/' + slug;
   const firstSentence = (articleBody || '').split(/[.!?]/)[0]?.trim() || '';
 
   // Only use first sentence if it's meaningfully different from the title
@@ -84,12 +84,18 @@ export default async (req) => {
       }),
     }, 8000).catch(() => {});
 
-    // 5. Generate broadcast-style article image (fire-and-forget)
-    fetchWT(siteUrl + '/.netlify/functions/generate-article-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article_id: articleId }),
-    }, 30000).catch(() => {});
+    // 5. Generate broadcast-style article image. Awaited (not fire-and-forget)
+    // because Netlify will kill in-flight outbound requests once the parent
+    // function returns, which sometimes left new articles without images.
+    try {
+      await fetchWT(siteUrl + '/.netlify/functions/generate-article-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article_id: articleId }),
+      }, 25000);
+    } catch (imgErr) {
+      console.warn('[approve-draft] Image generation failed:', imgErr.message);
+    }
 
     return json({ ok: true, articleId, slug });
   } catch (err) {

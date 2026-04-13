@@ -117,8 +117,12 @@
 
 [[redirects]]
   from = "/article/:slug"
-  to = "/index.html"
+  to = "/.netlify/functions/article-page"
   status = 200
+
+[functions.article-page]
+  timeout = 10
+  included_files = ["index.html"]
 
 [[redirects]]
   from = "/gf-admin-drafts"
