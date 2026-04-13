@@ -10,7 +10,7 @@
 </script>
 <!-- Chart.js lazy-loaded in initTelemetry() to save ~250KB on initial page load -->
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
 <title>GridFeed — Your Daily F1 Fix</title>
 <meta name="description" content="Live F1 timing, betting picks, race results and original analysis. Every race weekend. Free."/>
 <meta name="theme-color" content="#1B1F2A" id="themeColor"/>
@@ -395,7 +395,7 @@ body.mo{overflow:hidden}
 
 /* ═══ BROADCAST LAYOUT (Circuit sub-tab) ═══ */
 .broadcast-layout{display:grid;grid-template-columns:180px 1fr;gap:0;background:#0A0D12;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
-@media(max-width:768px){.broadcast-layout{grid-template-columns:1fr}.mini-tower{max-height:200px;overflow-y:auto}}
+@media(max-width:768px){.broadcast-layout{grid-template-columns:108px 1fr}.mini-tower{max-height:none}.mt-row{grid-template-columns:20px 3px 32px 1fr;padding:4px 6px;font-size:10px}.mt-pos{font-size:9px}.mt-name{font-size:10px}.mt-gap{font-size:8px}.mt-header{font-size:8px;padding:6px 6px}.mini-map{padding:8px}}
 .mini-tower{background:#0E1117;border-right:1px solid #1C2333;overflow-y:auto;max-height:400px;scrollbar-width:none}
 .mini-tower::-webkit-scrollbar{display:none}
 .mt-header{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--muted);padding:8px 10px;border-bottom:1px solid #1C2333;text-transform:uppercase;position:sticky;top:0;background:#0E1117;z-index:1}
@@ -414,6 +414,10 @@ body.mo{overflow:hidden}
 .map-dot{cursor:pointer}
 .map-dot:hover circle{opacity:0.8}
 .map-dot-sel circle{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
+.map-zoom-ctl{position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.map-zoom-ctl button{width:30px;height:30px;border-radius:6px;background:rgba(20,25,38,0.85);border:1px solid var(--border);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:0;line-height:1}
+.map-zoom-ctl button:hover{background:rgba(232,0,45,0.7);border-color:var(--accent)}
+.map-zoom-ctl button:active{transform:scale(0.95)}
 </style>
 </head>
 <body>
@@ -684,7 +688,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null};
+const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour'}[t]||'tag-analysis'}
 function tAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 
@@ -1347,12 +1351,20 @@ function renderRaceContent(){
             (selected||i<3?'<text x="'+cx+'" y="'+(cy+(selected?24:18))+'" text-anchor="middle" fill="'+(selected?'#fff':'rgba(255,255,255,0.5)')+'" font-size="'+(selected?'10':'7')+'" font-weight="'+(selected?'800':'600')+'" font-family="DM Sans,sans-serif">'+drvAbbr2+'</text>':'')+
             '</g>';
         }).join('');
-        mapContent='<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">'+
-          '<rect width="600" height="400" fill="#0A0D12"/>'+
+        const z=Math.max(1,Math.min(4,S._mapZoom||1));
+        const vw=600/z,vh=400/z,vx=(600-vw)/2,vy=(400-vh)/2;
+        mapContent='<div style="position:relative">'+
+          '<svg viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0A0D12">'+
           '<path d="'+circPath+'" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'+
           '<path d="'+circPath+'" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>'+
           driverDots+
-          '</svg>';
+          '</svg>'+
+          '<div class="map-zoom-ctl">'+
+            '<button onclick="S._mapZoom=Math.min(4,(S._mapZoom||1)+0.5);renderRaceContent()" aria-label="Zoom in">+</button>'+
+            '<button onclick="S._mapZoom=Math.max(1,(S._mapZoom||1)-0.5);renderRaceContent()" aria-label="Zoom out">\u2212</button>'+
+            (z>1?'<button onclick="S._mapZoom=1;renderRaceContent()" aria-label="Reset zoom" style="font-size:9px">RESET</button>':'')+
+          '</div>'+
+          '</div>';
       }
 
       subContent='<div class="broadcast-layout">'+
