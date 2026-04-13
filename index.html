@@ -1302,19 +1302,27 @@ function pickRace(round){
   renderRaceContent();
 }
 
-// Zoom map while keeping the current view center
+// Zoom map. When a driver is selected, always re-center on them (the
+// positionDotsOnPath pass handles the actual track coord after render).
+// Otherwise keep the current view center.
 function zoomMap(delta){
   const oldZ=Math.max(1,Math.min(4,S._mapZoom||1));
   const newZ=Math.max(1,Math.min(4,oldZ+delta));
   if(newZ===oldZ)return;
-  const oldVw=600/oldZ,oldVh=400/oldZ;
-  const oldVx=(S._mapVx!=null?S._mapVx:(600-oldVw)/2);
-  const oldVy=(S._mapVy!=null?S._mapVy:(400-oldVh)/2);
-  const cx=oldVx+oldVw/2,cy=oldVy+oldVh/2;
-  const newVw=600/newZ,newVh=400/newZ;
   S._mapZoom=newZ;
-  if(newZ===1){S._mapVx=null;S._mapVy=null}
-  else{
+  if(newZ===1){
+    S._mapVx=null;S._mapVy=null;
+  }else if(S._selectedDriver){
+    // Clear pan so positionDotsOnPath centers on the selected driver's
+    // real track position during the next render
+    S._mapVx=null;S._mapVy=null;
+  }else{
+    // No selection — preserve whatever view center was showing
+    const oldVw=600/oldZ,oldVh=400/oldZ;
+    const oldVx=(S._mapVx!=null?S._mapVx:(600-oldVw)/2);
+    const oldVy=(S._mapVy!=null?S._mapVy:(400-oldVh)/2);
+    const cx=oldVx+oldVw/2,cy=oldVy+oldVh/2;
+    const newVw=600/newZ,newVh=400/newZ;
     let nx=cx-newVw/2,ny=cy-newVh/2;
     nx=Math.max(0,Math.min(600-newVw,nx));
     ny=Math.max(0,Math.min(400-newVh,ny));
