@@ -56,6 +56,12 @@
 [functions.fetch-historical]
   timeout = 60
 
+[functions.fetch-telemetry]
+  timeout = 30
+
+[functions.list-sessions]
+  timeout = 15
+
 [functions.generate-picks]
   schedule = "0 5 * * *"
   timeout = 60

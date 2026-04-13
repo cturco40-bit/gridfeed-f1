@@ -8,6 +8,7 @@
   gtag('js', new Date());
   gtag('config', 'G-LDKXVGY3Y1');
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
 <title>GridFeed — Your Daily F1 Fix</title>
@@ -336,6 +337,18 @@ body.mo{overflow:hidden}
 .reaction:hover{border-color:var(--accent)}
 .reaction.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .reaction-count{font-size:12px;font-weight:700;min-width:14px}
+.telem-selectors{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.telem-selectors select{flex:1}
+.telem-session{margin-bottom:10px}
+.telem-legend{display:flex;gap:20px;justify-content:center;margin-bottom:8px;font-size:12px;color:var(--dim)}
+.telem-leg-item{display:flex;align-items:center;gap:6px}
+.telem-leg-dot{width:14px;height:3px;border-radius:2px}
+#telemCharts{background:#0E1117;border-radius:var(--radius);padding:12px;border:1px solid var(--border)}
+#telemCharts canvas{margin-bottom:10px;max-width:100%}
+.telem-sectors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;font-size:11px}
+.telem-sec-cell{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:8px;text-align:center}
+.telem-sec-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.telem-sec-val{font-weight:800}
 .hist-yr{display:inline-block;padding:8px 16px;margin:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--head);font-weight:900;font-size:16px;cursor:pointer;color:var(--text);text-decoration:none}
 .hist-yr:hover,.hist-yr.act{background:var(--accent);color:#fff;border-color:var(--accent)}
 .hist-race{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
@@ -397,10 +410,11 @@ body.mo{overflow:hidden}
     </div>
   </div>
   <div class="slabel" style="margin-top:20px">Tools</div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('compare')"><div style="font-size:20px;margin-bottom:6px">VS</div><div style="font-size:11px;font-weight:700">Compare</div><div style="font-size:9px;color:var(--muted)">Driver vs driver</div></div>
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('predict')"><div style="font-size:20px;margin-bottom:6px">?</div><div style="font-size:11px;font-weight:700">Predict</div><div style="font-size:9px;color:var(--muted)">Pick your podium</div></div>
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('simulator')"><div style="font-size:20px;margin-bottom:6px">+/-</div><div style="font-size:11px;font-weight:700">Simulator</div><div style="font-size:9px;color:var(--muted)">What if?</div></div>
+    <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="go('telemetry');initTelemetry()"><div style="font-size:20px;margin-bottom:6px">\u{1F4CA}</div><div style="font-size:11px;font-weight:700">Telemetry</div><div style="font-size:9px;color:var(--muted)">Lap-by-lap traces</div></div>
     <div class="card" style="padding:14px;cursor:pointer;text-align:center" onclick="showHistory()"><div style="font-size:20px;margin-bottom:6px">&boxbox;</div><div style="font-size:11px;font-weight:700">Archive</div><div style="font-size:9px;color:var(--muted)">2020\u20132025 results</div></div>
   </div>
   <div class="install-cta" id="installCta" style="display:none">
@@ -525,6 +539,28 @@ body.mo{overflow:hidden}
   <div id="circuitProfile"></div>
 </div>
 
+<div class="panel" id="p-telemetry">
+  <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">Telemetry Comparison</h2></div>
+  <div class="card"><div class="card-body">
+    <div class="telem-session">
+      <select id="telemSession" class="race-sel" style="width:100%" onchange="loadTelemetry()">
+        <option value="">Select a session...</option>
+      </select>
+    </div>
+    <div class="telem-selectors">
+      <select id="telemD1" class="race-sel" onchange="loadTelemetry()"><option value="">Driver 1</option></select>
+      <span style="color:var(--muted);font-size:12px;font-weight:800">VS</span>
+      <select id="telemD2" class="race-sel" onchange="loadTelemetry()"><option value="">Driver 2</option></select>
+    </div>
+    <div class="telem-legend" id="telemLegend" style="display:none">
+      <span class="telem-leg-item"><span class="telem-leg-dot" id="telemDot1"></span><span id="telemName1">Driver 1</span></span>
+      <span class="telem-leg-item"><span class="telem-leg-dot" id="telemDot2"></span><span id="telemName2">Driver 2</span></span>
+    </div>
+    <div id="telemCharts"><div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Select a session and two drivers to compare their fastest lap</div></div>
+    <div id="telemLapInfo" style="margin-top:10px"></div>
+  </div></div>
+</div>
+
 <!-- ARTICLE VIEW -->
 <div class="panel" id="p-article">
   <div id="articleView"></div>
@@ -628,7 +664,7 @@ function go(t){
   history.replaceState({tab:t},'','?tab='+t);
   if(t==='results')initRes();if(t==='news')initNews();if(t==='picks')initPicks();
   if(t==='standings')initSt();if(t==='schedule')initSched();
-  if(t==='compare')initCompare();if(t==='predict')initPredict();if(t==='simulator')initSim();
+  if(t==='compare')initCompare();if(t==='predict')initPredict();if(t==='simulator')initSim();if(t==='telemetry')initTelemetry();
   if(S._tapped)try{navigator.vibrate(10)}catch(e){}
 }
 document.querySelectorAll('.tn,.bn').forEach(b=>b.addEventListener('click',()=>go(b.dataset.t)));
@@ -1591,6 +1627,116 @@ async function showCircuit(slug){
   const mapSvg=path?`<div style="background:#0A0D12;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${path}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c.country==='Monaco'||c.type==='Street'?'#E8002D':'#2A3145'}" stroke-width="2" stroke-dasharray="5,4"/></svg></div>`:'';
   const histRows=(history||[]).map(h=>`<div class="hist-race" onclick="showHistory(${h.season},${h.round})"><div class="hist-rnd">${h.season}</div><div class="hist-info"><div class="hist-name">${h.winner_driver||'\u2014'}</div><div class="hist-cir">${h.winner_team||''}</div></div><div class="hist-win">\u2192</div></div>`).join('');
   el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div style="font-size:48px">${c.flag}</div><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${c.shortName}</div><div style="font-size:13px;color:var(--muted)">${c.name} \u00b7 ${c.country}</div></div></div>${mapSvg}<div class="stats-grid">${[[c.laps,'LAPS'],[c.length+' km','LENGTH'],[c.distance+' km','DISTANCE'],['R'+c.round,'2026 ROUND']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Lap Record</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Time</span><span style="font-weight:700;color:var(--gold);font-size:16px">${c.lapRecord.time}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Driver</span><span style="font-weight:600">${c.lapRecord.driver}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Year</span><span style="font-weight:600">${c.lapRecord.year}</span></div></div></div><div class="slabel">Circuit Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Type</span><span style="font-weight:600">${c.type}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">First GP</span><span style="font-weight:600">${c.firstGP}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">2026 Regulations</span><span style="font-weight:600">No DRS \u00b7 Overtake Mode</span></div></div></div>${histRows?`<div class="slabel">Recent Winners</div><div class="card" style="overflow:hidden;margin-bottom:20px">${histRows}</div>`:''}`;
+}
+
+/* ═══ TELEMETRY COMPARISON ═══ */
+S.telemChart=S.telemChart||{speed:null,throttle:null,brake:null,gear:null};
+S.telemSessionsLoaded=false;
+
+async function initTelemetry(){
+  // Populate driver dropdowns from DSTATS
+  const drvOpts=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).map(([name,d])=>`<option value="${d.num}">${name.split(' ').pop()} (${d.team})</option>`).join('');
+  const d1=document.getElementById('telemD1'),d2=document.getElementById('telemD2');
+  if(d1&&!d1.dataset.ready){d1.innerHTML='<option value="">Driver 1</option>'+drvOpts;d1.dataset.ready='1'}
+  if(d2&&!d2.dataset.ready){d2.innerHTML='<option value="">Driver 2</option>'+drvOpts;d2.dataset.ready='1'}
+  // Load sessions once
+  if(!S.telemSessionsLoaded){
+    const sel=document.getElementById('telemSession');if(!sel)return;
+    sel.innerHTML='<option value="">Loading sessions...</option>';
+    try{
+      const r=await fetch('/.netlify/functions/list-sessions');
+      const j=await r.json();
+      const sessions=j.sessions||[];
+      if(!sessions.length){sel.innerHTML='<option value="">No sessions available</option>';return}
+      sel.innerHTML='<option value="">Select a session...</option>'+sessions.map(s=>`<option value="${s.session_key}">${s.meeting_name||s.circuit_short_name} \u00b7 ${s.session_name}</option>`).join('');
+      S.telemSessionsLoaded=true;
+    }catch(e){sel.innerHTML='<option value="">Failed to load sessions</option>'}
+  }
+}
+
+function telemDrvByNum(num){return Object.entries(DSTATS).find(([_,d])=>d.num===parseInt(num))}
+
+async function loadTelemetry(){
+  const d1=document.getElementById('telemD1')?.value;
+  const d2=document.getElementById('telemD2')?.value;
+  const sess=document.getElementById('telemSession')?.value;
+  if(!d1||!d2||!sess||d1===d2){
+    document.getElementById('telemCharts').innerHTML='<div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Select a session and two different drivers</div>';
+    document.getElementById('telemLegend').style.display='none';
+    document.getElementById('telemLapInfo').innerHTML='';
+    return;
+  }
+  if(typeof Chart==='undefined'){
+    document.getElementById('telemCharts').innerHTML='<div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Chart library still loading — try again in a moment</div>';
+    setTimeout(loadTelemetry,800);return;
+  }
+  document.getElementById('telemCharts').innerHTML='<div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Loading telemetry data...</div>';
+  try{
+    const[r1,r2]=await Promise.all([
+      fetch(`/.netlify/functions/fetch-telemetry?session_key=${sess}&driver=${d1}`).then(r=>r.json()),
+      fetch(`/.netlify/functions/fetch-telemetry?session_key=${sess}&driver=${d2}`).then(r=>r.json()),
+    ]);
+    if(r1.error||r2.error){
+      document.getElementById('telemCharts').innerHTML=`<div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Telemetry unavailable for this session\u2014try a different one</div>`;
+      return;
+    }
+    renderTelemetryCharts(r1,r2);
+    const e1=telemDrvByNum(d1),e2=telemDrvByNum(d2);
+    const n1=e1?e1[0]:'Driver 1',n2=e2?e2[0]:'Driver 2';
+    const c1=e1?e1[1].tc:'#E8002D',c2=e2?e2[1].tc:'#27F4D2';
+    document.getElementById('telemLegend').style.display='flex';
+    document.getElementById('telemDot1').style.background=c1;
+    document.getElementById('telemDot2').style.background=c2;
+    document.getElementById('telemName1').textContent=n1;
+    document.getElementById('telemName2').textContent=n2;
+    const gap=(r1.lap_time-r2.lap_time);
+    const gapStr=gap>0?`+${gap.toFixed(3)}s slower`:`${gap.toFixed(3)}s faster`;
+    document.getElementById('telemLapInfo').innerHTML=`<div class="card" style="padding:10px 14px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="font-weight:700;color:${c1}">${n1.split(' ').pop()} L${r1.lap_number}: ${r1.lap_time?.toFixed(3)}s</span><span style="font-weight:700;color:${c2}">${n2.split(' ').pop()} L${r2.lap_number}: ${r2.lap_time?.toFixed(3)}s</span></div><div style="text-align:center;font-size:11px;color:var(--muted);margin-top:4px">${n1.split(' ').pop()} ${gapStr} vs ${n2.split(' ').pop()}</div></div>`;
+    window.gtag&&gtag('event','telemetry_compared',{driver_1:d1,driver_2:d2,session:sess});
+  }catch(err){
+    document.getElementById('telemCharts').innerHTML='<div class="empty" style="padding:40px 20px;text-align:center;color:var(--muted)">Failed to load telemetry</div>';
+  }
+}
+
+function renderTelemetryCharts(d1Data,d2Data){
+  // Destroy previous charts
+  Object.keys(S.telemChart).forEach(k=>{if(S.telemChart[k]){S.telemChart[k].destroy();S.telemChart[k]=null}});
+  const e1=telemDrvByNum(d1Data.driver_number),e2=telemDrvByNum(d2Data.driver_number);
+  const c1=e1?e1[1].tc:'#E8002D',c2=e2?e2[1].tc:'#27F4D2';
+  const d1Start=d1Data.data[0]?.ts||0,d2Start=d2Data.data[0]?.ts||0;
+  const mk=(data,start,key)=>data.map(p=>({x:+((p.ts-start)/1000).toFixed(2),y:p[key]}));
+  const container=document.getElementById('telemCharts');
+  container.innerHTML=`
+    <canvas id="chartSpeed" style="height:180px;max-height:180px"></canvas>
+    <canvas id="chartThrottle" style="height:100px;max-height:100px"></canvas>
+    <canvas id="chartBrake" style="height:80px;max-height:80px"></canvas>
+    <canvas id="chartGear" style="height:100px;max-height:100px"></canvas>
+  `;
+  const common={
+    responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+    scales:{
+      x:{type:'linear',display:true,title:{display:false},grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#8A8E9A',font:{size:9}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#8A8E9A',font:{size:9}}},
+    },
+    elements:{point:{radius:0},line:{borderWidth:1.5,tension:0.1}},
+  };
+  S.telemChart.speed=new Chart(document.getElementById('chartSpeed'),{type:'line',data:{datasets:[
+    {label:'D1',data:mk(d1Data.data,d1Start,'speed'),borderColor:c1,fill:false},
+    {label:'D2',data:mk(d2Data.data,d2Start,'speed'),borderColor:c2,fill:false},
+  ]},options:{...common,scales:{...common.scales,y:{...common.scales.y,title:{display:true,text:'Speed km/h',color:'#8A8E9A',font:{size:10}}}}}});
+  S.telemChart.throttle=new Chart(document.getElementById('chartThrottle'),{type:'line',data:{datasets:[
+    {label:'D1',data:mk(d1Data.data,d1Start,'throttle'),borderColor:c1,fill:false},
+    {label:'D2',data:mk(d2Data.data,d2Start,'throttle'),borderColor:c2,fill:false},
+  ]},options:{...common,scales:{...common.scales,y:{...common.scales.y,min:0,max:100,title:{display:true,text:'Throttle %',color:'#8A8E9A',font:{size:10}}}}}});
+  S.telemChart.brake=new Chart(document.getElementById('chartBrake'),{type:'line',data:{datasets:[
+    {label:'D1',data:mk(d1Data.data,d1Start,'brake'),borderColor:c1,fill:false,stepped:true},
+    {label:'D2',data:mk(d2Data.data,d2Start,'brake'),borderColor:c2,fill:false,stepped:true},
+  ]},options:{...common,scales:{...common.scales,y:{...common.scales.y,min:0,max:100,title:{display:true,text:'Brake',color:'#8A8E9A',font:{size:10}}}}}});
+  S.telemChart.gear=new Chart(document.getElementById('chartGear'),{type:'line',data:{datasets:[
+    {label:'D1',data:mk(d1Data.data,d1Start,'gear'),borderColor:c1,fill:false,stepped:true},
+    {label:'D2',data:mk(d2Data.data,d2Start,'gear'),borderColor:c2,fill:false,stepped:true},
+  ]},options:{...common,scales:{...common.scales,y:{...common.scales.y,min:0,max:8,title:{display:true,text:'Gear',color:'#8A8E9A',font:{size:10}}}}}});
 }
 
 /* ═══ HISTORICAL RESULTS ═══ */
