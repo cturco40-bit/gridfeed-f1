@@ -392,6 +392,28 @@ body.mo{overflow:hidden}
 .hist-cir{font-size:11px;color:var(--muted)}
 .hist-win{font-size:11px;font-weight:600;color:var(--gold)}
 .winner-card{display:flex;align-items:center;gap:10px;padding:14px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:var(--radius);margin:16px 0;font-weight:700}
+
+/* ═══ BROADCAST LAYOUT (Circuit sub-tab) ═══ */
+.broadcast-layout{display:grid;grid-template-columns:180px 1fr;gap:0;background:#0A0D12;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+@media(max-width:768px){.broadcast-layout{grid-template-columns:1fr}.mini-tower{max-height:200px;overflow-y:auto}}
+.mini-tower{background:#0E1117;border-right:1px solid #1C2333;overflow-y:auto;max-height:400px;scrollbar-width:none}
+.mini-tower::-webkit-scrollbar{display:none}
+.mt-header{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--muted);padding:8px 10px;border-bottom:1px solid #1C2333;text-transform:uppercase;position:sticky;top:0;background:#0E1117;z-index:1}
+.mt-row{display:grid;grid-template-columns:26px 3px 36px 1fr;gap:4px;align-items:center;padding:4px 8px;border-bottom:1px solid rgba(28,35,51,0.5);font-size:11px;transition:background .1s}
+.mt-row:hover{background:rgba(255,255,255,0.03)}
+.mt-row.mt-sel{background:rgba(232,0,45,0.08);border-left:2px solid var(--accent)}
+.mt-row.mt-dnf{opacity:0.35}
+.mt-pos{font-weight:800;font-size:10px;color:var(--muted);text-align:center}
+.mt-row:nth-child(2) .mt-pos{color:var(--gold)}
+.mt-row:nth-child(3) .mt-pos{color:#C0C0C0}
+.mt-row:nth-child(4) .mt-pos{color:#CD7F32}
+.mt-bar{width:3px;height:16px;border-radius:2px}
+.mt-name{font-weight:700;color:#fff;font-size:11px;letter-spacing:0.5px}
+.mt-gap{font-size:9px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-map{padding:12px;display:flex;flex-direction:column;justify-content:center}
+.map-dot{cursor:pointer}
+.map-dot:hover circle{opacity:0.8}
+.map-dot-sel circle{filter:drop-shadow(0 0 6px rgba(255,255,255,0.4))}
 </style>
 </head>
 <body>
@@ -662,7 +684,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification'};
+const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour'}[t]||'tag-analysis'}
 function tAgo(d){if(!d)return'\u2014';const ms=Date.now()-new Date(d).getTime();if(ms<0)return'just now';const m=Math.floor(ms/6e4),h=Math.floor(ms/36e5),dy=Math.floor(ms/864e5);if(m<2)return'just now';if(m<60)return m+'m ago';if(h<24)return h+'h ago';return dy+'d ago'}
 
@@ -1286,7 +1308,63 @@ function renderRaceContent(){
     }else if(S._raceSubTab==='moments'){
       subContent='<div class="rc-sec"><div class="rc-title">Key Moments</div>'+rcHtml+'</div>';
     }else if(S._raceSubTab==='circuit'){
-      subContent=mapSvg||'<div class="empty" style="padding:32px">No circuit data</div>';
+      // Mini timing tower from race results
+      const raceResults=rd.results||[];
+      const towerRows=raceResults.map((r,i)=>{
+        const isDnf=r.p==='DNF'||r.p==='DNS';
+        const lastName=r.d.split(' ').pop().toLowerCase();
+        const abbrEntry=Object.entries(DH).find(([num,name])=>name===lastName);
+        const drvAbbr=abbrEntry?(Object.values(DSTATS).find(d=>d.num===parseInt(abbrEntry[0]))?.abbr||r.d.slice(0,3).toUpperCase()):r.d.split(' ').pop().slice(0,3).toUpperCase();
+        const selected=S._selectedDriver===r.d;
+        return '<div class="mt-row'+(selected?' mt-sel':'')+(isDnf?' mt-dnf':'')+'" '+
+          'onclick="S._selectedDriver=\''+r.d.replace(/'/g,"\\'")+'\';renderRaceContent()" '+
+          'style="cursor:pointer">'+
+          '<span class="mt-pos">'+(isDnf?r.p:'P'+r.p)+'</span>'+
+          '<span class="mt-bar" style="background:'+r.tc+'"></span>'+
+          '<span class="mt-name">'+drvAbbr+'</span>'+
+          '<span class="mt-gap">'+(i===0?'LEADER':(r.g||'').replace('Winner ','').replace(/\+/,'+ '))+'</span>'+
+          '</div>';
+      }).join('');
+
+      // Circuit map with driver dots distributed around the path
+      const circKey=CIRC_MAP[S.selRound];
+      const circPath=CS[circKey];
+      let mapContent='<div class="empty">No circuit data</div>';
+      if(circPath){
+        const finishers=raceResults.filter(r=>r.p!=='DNF'&&r.p!=='DNS');
+        const total=finishers.length||1;
+        const driverDots=finishers.map((r,i)=>{
+          const lastName2=r.d.split(' ').pop().toLowerCase();
+          const abbrEntry2=Object.entries(DH).find(([num,name])=>name===lastName2);
+          const drvAbbr2=abbrEntry2?(Object.values(DSTATS).find(d=>d.num===parseInt(abbrEntry2[0]))?.abbr||'???'):'???';
+          const selected=S._selectedDriver===r.d;
+          const angle=(i/total)*Math.PI*2-Math.PI/2;
+          const cx=300+Math.cos(angle)*140;
+          const cy=200+Math.sin(angle)*120;
+          return '<g class="map-dot'+(selected?' map-dot-sel':'')+'" data-driver="'+r.d+'">'+
+            (selected?'<circle cx="'+cx+'" cy="'+cy+'" r="18" fill="'+r.tc+'" opacity="0.25"/>':'')+
+            '<circle cx="'+cx+'" cy="'+cy+'" r="'+(selected?'10':'7')+'" fill="'+r.tc+'" stroke="'+(selected?'#fff':'rgba(255,255,255,0.3)')+'" stroke-width="'+(selected?'2':'1')+'"/>'+
+            (selected||i<3?'<text x="'+cx+'" y="'+(cy+(selected?24:18))+'" text-anchor="middle" fill="'+(selected?'#fff':'rgba(255,255,255,0.5)')+'" font-size="'+(selected?'10':'7')+'" font-weight="'+(selected?'800':'600')+'" font-family="DM Sans,sans-serif">'+drvAbbr2+'</text>':'')+
+            '</g>';
+        }).join('');
+        mapContent='<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">'+
+          '<rect width="600" height="400" fill="#0A0D12"/>'+
+          '<path d="'+circPath+'" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'+
+          '<path d="'+circPath+'" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>'+
+          driverDots+
+          '</svg>';
+      }
+
+      subContent='<div class="broadcast-layout">'+
+        '<div class="mini-tower">'+
+          '<div class="mt-header">CLASSIFICATION</div>'+
+          towerRows+
+        '</div>'+
+        '<div class="mini-map">'+
+          mapContent+
+          '<div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">'+rd.circuit+' \u2014 Tap a driver to highlight</div>'+
+        '</div>'+
+      '</div>';
     }
 
     el.innerHTML=
