@@ -37,8 +37,13 @@ export default async (request, context) => {
     const desc = escape((article.excerpt || article.title || '').slice(0, 200));
     // Prefer the 1200x630 social card — Twitter's 1.91:1 crop otherwise chops
     // off the top of the square canvas. The site UI still uses image_url.
+    // IMAGE_VERSION cache-buster: Twitter caches og:image URLs permanently.
+    // Bumping this number forces every platform (Twitter, Slack, Discord, etc)
+    // to re-fetch the image the next time they see any article URL. Increment
+    // whenever the canvas layout, fonts, or watermark change.
+    const IMAGE_VERSION = '3';
     const siteImage = article.image_url || 'https://gridfeed.co/og-image.png';
-    const image = siteImage.replace(/\.png$/, '-social.png');
+    const image = siteImage.replace(/\.png$/, '-social.png') + '?v=' + IMAGE_VERSION;
     const canonical = `https://gridfeed.co/article/${slug}`;
 
     const modified = html
