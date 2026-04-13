@@ -312,6 +312,18 @@ body.mo{overflow:hidden}
 .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
 .tm-drv{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer}
 .tm-drv:hover{border-color:var(--accent)}
+.search-wrap{position:relative;flex:1;max-width:300px;min-width:120px}
+.search-input{width:100%;padding:8px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:var(--radius);color:#fff;font-size:13px;font-family:var(--font);outline:none}
+.search-input::placeholder{color:rgba(255,255,255,0.4)}
+.search-input:focus{border-color:var(--accent);background:rgba(255,255,255,0.12)}
+.search-results{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-top:4px;max-height:400px;overflow-y:auto;display:none;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+.search-results.vis{display:block}
+.search-result{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;color:var(--text)}
+.search-result:last-child{border-bottom:none}
+.search-result:hover{background:var(--bg)}
+.search-result-type{font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:2px}
+.search-result-label{font-weight:600}
+.search-result-sub{font-size:11px;color:var(--muted);margin-top:2px}
 .hist-yr{display:inline-block;padding:8px 16px;margin:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--head);font-weight:900;font-size:16px;cursor:pointer;color:var(--text);text-decoration:none}
 .hist-yr:hover,.hist-yr.act{background:var(--accent);color:#fff;border-color:var(--accent)}
 .hist-race{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
@@ -330,6 +342,10 @@ body.mo{overflow:hidden}
 <header class="hdr"><div class="hdr-in">
   <a href="/" onclick="go('home');return false"><img src="/logo.png" alt="GridFeed" class="hdr-logo"/></a>
   <div class="hdr-right">
+    <div class="search-wrap">
+      <input class="search-input" id="searchInput" placeholder="Search drivers, teams, races..." oninput="onSearch(this.value)" autocomplete="off"/>
+      <div class="search-results" id="searchResults"></div>
+    </div>
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
     <button class="notif-btn" id="darkBtn" onclick="toggleDark()" style="font-size:13px">D</button>
     <button class="notif-btn" id="notifBtn" onclick="regPush()">&#128277;</button>
@@ -1393,6 +1409,47 @@ async function showArtView(slug){go('article');history.replaceState({},'','/#/ar
 
 /* ═══ HASH ROUTING ═══ */
 function checkHash(){const h=location.hash;if(h.startsWith('#/article/')){showArtView(h.slice(10));return true}if(h.startsWith('#/driver/')){showDrv(h.slice(9));return true}if(h.startsWith('#/team/')){showTeam(h.slice(7));return true}if(h.startsWith('#/circuit/')){showCircuit(h.slice(10));return true}if(h.startsWith('#/results')){const p=h.slice(10).split('/');showHistory(p[0]?parseInt(p[0]):null,p[1]?parseInt(p[1]):null);return true}return false}
+
+/* ═══ SEARCH ═══ */
+function onSearch(query){
+  const el=document.getElementById('searchResults');if(!el)return;
+  if(!query||query.length<2){el.classList.remove('vis');el.innerHTML='';return}
+  const q=query.toLowerCase();
+  const results=[];
+  // Drivers
+  Object.entries(DSTATS).forEach(([name,d])=>{
+    if(name.toLowerCase().includes(q)||(d.abbr||'').toLowerCase().includes(q)){
+      results.push({type:'Driver',label:name,sub:d.team+' \u00b7 '+d.pts+' pts',url:'/#/driver/'+d.abbr,fn:'showDrv',arg:d.abbr});
+    }
+  });
+  // Teams
+  Object.values(TSTATS).forEach(t=>{
+    if(t.name.toLowerCase().includes(q)||t.slug.includes(q)){
+      results.push({type:'Team',label:t.name,sub:'P'+t.pos+' \u00b7 '+t.pts+' pts',url:'/#/team/'+t.slug,fn:'showTeam',arg:t.slug});
+    }
+  });
+  // Circuits
+  Object.values(CIRCUIT_DATA).forEach(c=>{
+    if(c.name.toLowerCase().includes(q)||c.shortName.toLowerCase().includes(q)||c.country.toLowerCase().includes(q)){
+      results.push({type:'Circuit',label:c.name,sub:c.country+' \u00b7 R'+c.round,url:'/#/circuit/'+c.slug,fn:'showCircuit',arg:c.slug});
+    }
+  });
+  // Articles (use loaded S.arts)
+  if(S.arts&&S.arts.length){
+    S.arts.filter(a=>(a.title||'').toLowerCase().includes(q)).slice(0,5).forEach(a=>{
+      results.push({type:'Article',label:a.title,sub:'Article',url:'/#/article/'+a.slug,fn:'showArtView',arg:a.slug});
+    });
+  }
+  renderSearchResults(results.slice(0,12));
+}
+function renderSearchResults(results){
+  const el=document.getElementById('searchResults');if(!el)return;
+  if(!results.length){el.innerHTML='<div class="search-result"><div class="search-result-sub">No matches</div></div>';el.classList.add('vis');return}
+  el.innerHTML=results.map(r=>`<div class="search-result" onclick="${r.fn}('${r.arg.replace(/'/g,"\\'")}');closeSearch()"><div class="search-result-type">${r.type}</div><div class="search-result-label">${r.label}</div><div class="search-result-sub">${r.sub}</div></div>`).join('');
+  el.classList.add('vis');
+}
+function closeSearch(){const el=document.getElementById('searchResults');if(el)el.classList.remove('vis');const inp=document.getElementById('searchInput');if(inp)inp.value=''}
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap')){const el=document.getElementById('searchResults');if(el)el.classList.remove('vis')}});
 window.addEventListener('hashchange',checkHash);
 
 /* ═══ DARK MODE ═══ */
