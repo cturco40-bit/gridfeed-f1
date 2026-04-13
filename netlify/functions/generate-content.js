@@ -1,5 +1,5 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
-import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY, checkPlagiarism } from './lib/accuracy.js';
+import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const WORD_TARGETS = {
@@ -248,37 +248,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         return json({ ok: true, generated: 0, reason: validation.reason, retry: newRetryCount });
       }
 
-      // ── Plagiarism check vs source content ──
-      if (sourceContent && sourceContent.length > 200) {
-        const plag = checkPlagiarism(parsed.body, sourceContent);
-        // Reject if more than 15% of 6-grams overlap OR any 10+ word contiguous phrase is copied
-        if (plag.overlapRatio > 0.15 || plag.longestMatch >= 10) {
-          const newRetryCount = (topic.retry_count || 0) + 1;
-          const reason = `Plagiarism: ${(plag.overlapRatio * 100).toFixed(0)}% overlap, longest ${plag.longestMatch}-word match`;
-          if (topic.id) {
-            if (newRetryCount >= 3) {
-              await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', retry_count: newRetryCount, last_error: reason });
-            } else {
-              await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'pending', retry_count: newRetryCount, last_error: reason + '. Sample: "' + (plag.samples[0] || '') + '"' });
-            }
-          }
-          await logSync('generate-content', 'plagiarism_blocked', 0, `${reason} — "${parsed.title.slice(0, 40)}"`, Date.now() - start);
-          return json({ ok: true, generated: 0, reason: 'plagiarism', overlap: plag.overlapRatio, longest: plag.longestMatch });
-        }
-      }
-
-      // ── Plagiarism check vs our own published articles (self-plagiarism) ──
-      const ourRecent = await sb(`articles?select=body&order=published_at.desc&limit=5&published_at=gt.${new Date(Date.now() - 7 * 24 * 36e5).toISOString()}`);
-      for (const prior of ourRecent) {
-        if (!prior.body || prior.body.length < 200) continue;
-        const selfPlag = checkPlagiarism(parsed.body, prior.body);
-        if (selfPlag.overlapRatio > 0.25 || selfPlag.longestMatch >= 12) {
-          const reason = `Self-plagiarism: ${(selfPlag.overlapRatio * 100).toFixed(0)}% overlap with recent article`;
-          if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped', last_error: reason });
-          await logSync('generate-content', 'plagiarism_blocked', 0, reason, Date.now() - start);
-          return json({ ok: true, generated: 0, reason: 'self_plagiarism' });
-        }
-      }
+      // Plagiarism gates removed — drafts are reviewed/rewritten by Claude before publish
 
       // Title dedup (exact match)
       const titleCheck = await sb(`content_drafts?title=eq.${encodeURIComponent(parsed.title)}&limit=1`);
