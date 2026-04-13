@@ -714,7 +714,7 @@ function go(t){
   if(t==='compare')initCompare();if(t==='predict')initPredict();if(t==='simulator')initSim();if(t==='telemetry')initTelemetry();
   if(S._tapped)try{navigator.vibrate(10)}catch(e){}
 }
-document.querySelectorAll('.tn,.bn').forEach(b=>b.addEventListener('click',()=>go(b.dataset.t)));
+document.querySelectorAll('.tn,.bn').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.t)go(b.dataset.t)}));
 
 /* ═══ DETECT NEXT RACE ═══ */
 function detectNR(){const now=new Date();S.nr=SCH.find(r=>r.st!=='can'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop()}
