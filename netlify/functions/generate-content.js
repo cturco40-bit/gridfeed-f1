@@ -300,6 +300,10 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       const siteUrl = process.env.URL || 'https://gridfeed.co';
       fetchWT(siteUrl + '/.netlify/functions/notify-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title, content_type: contentType, priority_score: topic.priority || 5, excerpt: (parsed.excerpt || '').slice(0, 200) }) }, 5000).catch(() => {});
 
+      // Self-chain: kick another generate-content so the queue drains in one cron tick
+      // (fire and forget — won't extend this function's runtime)
+      fetchWT(siteUrl + '/.netlify/functions/generate-content', { method: 'POST' }, 60000).catch(() => {});
+
       await logSync('generate-content', 'success', 1, `Draft: "${parsed.title}"`, Date.now() - start);
       return json({ ok: true, generated: 1, title: parsed.title });
 

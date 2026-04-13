@@ -192,10 +192,12 @@ export default async (req, context) => {
       pendingTopics.push({ topic: group.titles[0], id: null });
       recentTitleNorm.add(titleNorm);
 
-      if (score >= 12) {
-        fetchWT('/.netlify/functions/generate-content', { method: 'POST' }, 5000).catch(() => {});
-      }
     }
+
+    // Always fire generate-content after scanning so the queue keeps draining
+    // (use full URL — relative paths fail server-side)
+    const siteUrl = process.env.URL || 'https://gridfeed.co';
+    fetchWT(siteUrl + '/.netlify/functions/generate-content', { method: 'POST' }, 60000).catch(() => {});
 
     // Persist state
     const stateData = { timestamp: new Date().toISOString(), topics_created: topicsCreated, sources_scanned: f1Headlines.length };
