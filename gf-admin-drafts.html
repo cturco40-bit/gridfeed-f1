@@ -118,9 +118,11 @@ input:focus,textarea:focus{border-color:var(--accent)}
 /* ═══ ARTICLE EDITOR ═══ */
 .editor-title{
   width:100%;font-family:var(--head);font-size:28px;font-weight:800;text-transform:uppercase;
-  background:transparent;border:1px solid transparent;padding:8px 0;color:var(--text);
+  background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 14px;color:var(--text);outline:none;
 }
-.editor-title:focus{border-color:var(--border);padding:8px 12px}
+.editor-title:hover{border-color:rgba(255,255,255,.2)}
+.editor-title:focus{border-color:var(--accent);background:var(--bg)}
+.editor-title-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;display:block}
 .tag-row{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .tag-pill{
   font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
@@ -670,7 +672,8 @@ function renderArticleEditor(d){
   const wcClass=wc>=350&&wc<=550?'wc-ok':wc<200||wc>700?'wc-bad':'wc-warn';
   const main=document.getElementById('mainPanel');
   main.innerHTML=`
-    <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" onfocus="isEditing=true" onblur="isEditing=false"/>
+    <label class="editor-title-label" for="edTitle">Title \u2014 click to edit</label>
+    <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
     <div class="tag-row" id="edTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="toggleTag(this,'${t}')">${t}</span>`).join('')}</div>
     <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 GridFeed Pipeline \u00b7 ${d.content_type||'draft'}</div>
     <div class="editor-grid">
