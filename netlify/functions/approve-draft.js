@@ -69,13 +69,14 @@ export default async (req) => {
       await logSync('approve-draft', 'success', 1, `Published (tweet failed): "${cleanTitle}"`, Date.now() - start);
     }
 
-    // 4. Send push notification for published article (non-blocking)
+    // 4. Send push notification to public app subscribers (non-blocking)
     const siteUrl = process.env.URL || 'https://gridfeed.co';
+    const isBreaking = (tags || []).some(t => (t || '').toUpperCase() === 'BREAKING');
     fetchWT(siteUrl + '/.netlify/functions/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: 'New Article Published',
+        title: isBreaking ? '🚨 GridFeed Breaking' : '🏁 GridFeed',
         body: cleanTitle,
         url: '/#/article/' + slug,
         tag: 'article-' + articleId,
