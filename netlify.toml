@@ -56,6 +56,10 @@
 [functions.fetch-historical]
   timeout = 60
 
+[functions.generate-article-image]
+  timeout = 30
+  external_node_modules = ["@napi-rs/canvas"]
+
 [functions.fetch-telemetry]
   timeout = 30
 

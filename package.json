@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
     "web-push": "^3.6.7",
     "xml2js": "^0.6.2"
   }

@@ -84,6 +84,13 @@ export default async (req) => {
       }),
     }, 8000).catch(() => {});
 
+    // 5. Generate broadcast-style article image (fire-and-forget)
+    fetchWT(siteUrl + '/.netlify/functions/generate-article-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article_id: articleId }),
+    }, 30000).catch(() => {});
+
     return json({ ok: true, articleId, slug });
   } catch (err) {
     await logSync('approve-draft', 'error', 0, err.message, Date.now() - start);
