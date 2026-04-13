@@ -56,18 +56,30 @@ export default async (req, context) => {
 
     // ── Subject dedup: check drafts AND published articles ──
     const DRIVER_NAMES = ['Antonelli','Russell','Leclerc','Hamilton','Norris','Piastri','Verstappen','Hadjar','Alonso','Stroll','Gasly','Colapinto','Sainz','Albon','Ocon','Bearman','Lawson','Lindblad','Hulkenberg','Bortoleto','Perez','Bottas'];
-    const SUBJECT_KEYWORDS = ['contract','transfer','penalty','crash','engine','retirement','regulation','budget cap','wind tunnel','sprint','qualifying','practice','safety car','red flag','overtake mode','active aero','aduo','rookie','test','launch','livery','setup','strategy','tyre','pit stop','dnf','points','championship','title','win','podium','pole','fastest lap','australia','china','japan','bahrain','saudi','miami','imola','monaco','spain','canada','austria','britain','silverstone','hungary','belgium','spa','netherlands','italy','monza','azerbaijan','baku','singapore','usa','austin','mexico','brazil','interlagos','vegas','qatar','abu dhabi','f2','f1 academy','fia','crash','injury','sacked','signed','fired'];
+    const TEAM_NAMES = ['mercedes','ferrari','mclaren','red bull','redbull','aston martin','alpine','williams','haas','racing bulls','audi','cadillac','sauber'];
+    const STOPWORDS = new Set(['the','a','an','and','or','but','of','to','in','on','for','with','at','by','from','as','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','can','this','that','these','those','it','its','his','her','their','our','my','your','about','after','before','during','past','three','two','one','first','last','new','how','why','what','when','where','who','which','left','behind','over','years','year','also','still','just','like','than','then','very','so','if','because','more','most','some','any','all','no','not','out','up','down','off','only','own','same']);
     function extractDrivers(text) { return DRIVER_NAMES.filter(d => text.toLowerCase().includes(d.toLowerCase())); }
-    function extractSubjects(text) { const t = text.toLowerCase(); return SUBJECT_KEYWORDS.filter(k => t.includes(k)); }
+    function extractTeams(text) { const t = text.toLowerCase(); return TEAM_NAMES.filter(n => t.includes(n)); }
+    function significantWords(text) {
+      return (text || '').toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 4 && !STOPWORDS.has(w));
+    }
     function topicOverlaps(titleA, titleB) {
       const drA = extractDrivers(titleA), drB = extractDrivers(titleB);
-      const subA = extractSubjects(titleA), subB = extractSubjects(titleB);
+      const tmA = extractTeams(titleA), tmB = extractTeams(titleB);
       const sharedDrivers = drA.filter(d => drB.includes(d));
-      const sharedSubjects = subA.filter(s => subB.includes(s));
-      // Same driver AND same subject = duplicate topic
-      if (sharedDrivers.length > 0 && sharedSubjects.length > 0) return true;
-      // No drivers but same subject keywords (2+) = duplicate
-      if (drA.length === 0 && drB.length === 0 && sharedSubjects.length >= 2) return true;
+      const sharedTeams = tmA.filter(t => tmB.includes(t));
+      const wordsA = new Set(significantWords(titleA));
+      const wordsB = significantWords(titleB);
+      const sharedWords = wordsB.filter(w => wordsA.has(w));
+      // Same driver = duplicate
+      if (sharedDrivers.length > 0) return true;
+      // Same team + 1+ shared theme word
+      if (sharedTeams.length > 0 && sharedWords.length >= 1) return true;
+      // 3+ shared significant words = same story
+      if (sharedWords.length >= 3) return true;
       return false;
     }
 
