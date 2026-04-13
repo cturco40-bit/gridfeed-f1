@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { sb, fetchWT, logSync, json } from './lib/shared.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,9 +68,9 @@ async function loadHeadshot(name) {
   if (!file) return null;
   // Try multiple candidate paths — bundling can place files in different spots
   const candidates = [
-    path.join(__dirname, '..', '..', 'drivers', file + '.png'),
+    path.join(HERE, '..', '..', 'drivers', file + '.png'),
     path.join(process.cwd(), 'drivers', file + '.png'),
-    path.join(__dirname, 'drivers', file + '.png'),
+    path.join(HERE, 'drivers', file + '.png'),
   ];
   for (const p of candidates) {
     try { return await loadImage(p); } catch {}
