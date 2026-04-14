@@ -75,12 +75,10 @@ export default async (req, context) => {
   try {
     if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
 
-    // Rate limit: max 3 drafts per hour
-    const recentDrafts = await sb(`content_drafts?select=id&created_at=gt.${new Date(Date.now() - 36e5).toISOString()}`);
-    if (recentDrafts.length >= 8) {
-      await logSync('generate-content', 'success', 0, `Rate limit: ${recentDrafts.length} drafts in last hour`, Date.now() - start);
-      return json({ ok: true, generated: 0, reason: 'rate_limit' });
-    }
+    // No hourly cap — the subject registry is the rate limiter. If 15 new
+    // stories break that all resolve to different entity:angle keys, we
+    // write 15 drafts. The stale-60m window in monitor-f1 and the
+    // published_subjects check in step 5 below keep volume sane.
 
     // Get pending topics (fetch a few for diversity filtering)
     // Priority DESC first, then fresh topics before retries, then oldest first

@@ -206,7 +206,13 @@ async function pickTopic() {
   };
 }
 
-const SYSTEM_PROMPT = `You are GridFeed, an independent F1 news and analysis platform. Write original editorial content in a direct, opinionated sports journalism voice.
+const SYSTEM_PROMPT = `CRITICAL — READ BEFORE WRITING:
+Leclerc has TWO podiums, not three. His results are P3, P4, P3.
+P4 is NOT a podium. If you write "three podiums" or "three consecutive
+podiums" the article will be rejected and you will have wasted this
+API call. TWO podiums. P3, P4, P3.
+
+You are GridFeed, an independent F1 news and analysis platform. Write original editorial content in a direct, opinionated sports journalism voice.
 
 RULES:
 - Write 400-700 words
