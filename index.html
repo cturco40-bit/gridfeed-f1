@@ -1518,7 +1518,8 @@ function renderRaceContent(){
     const circPath=CS[circKey];
     let mapSvg='';
     if(circPath){
-      mapSvg=`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${circPath}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${circPath}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>${circMarkers(circPath)}</svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">${rd.circuit} \u00b7 Start/Finish \u25b2 \u00b7 Live GPS during sessions</div></div>`;
+      console.log('[race-map] slug:',circKey,'hasPath:',!!circPath,'len:',circPath?.length||0);
+      mapSvg=`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${circPath}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${circPath}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>${circMarkers(circPath,circKey)}</svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">${rd.circuit} \u00b7 Start/Finish \u25b2 \u00b7 Live GPS during sessions</div></div>`;
     }
 
     // Sub-tab navigation (Results / Strategy / Moments / Circuit)
@@ -1597,7 +1598,7 @@ function renderRaceContent(){
           '<svg id="circuitMap" viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0A0D12;touch-action:none;cursor:'+(z>1?'grab':'default')+'">'+
           '<path d="'+circPath+'" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'+
           '<path d="'+circPath+'" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>'+
-          circMarkers(circPath)+
+          circMarkers(circPath,circKey)+
           driverDots+
           '</svg>'+
           '<div class="map-zoom-ctl">'+
@@ -2110,22 +2111,41 @@ const CIRCUIT_DATA={
 // Parse the first two coordinate pairs of a "Mx,yLx,yL..." circuit path and
 // return SVG fragments for a start/finish line (perpendicular to travel) and
 // a directional arrow (along travel). Used on static circuit SVGs.
-function circMarkers(d){
-  if(!d)return'';
-  const nums=d.replace(/[MLZmlz]/g,' ').replace(/,/g,' ').trim().split(/\s+/).map(parseFloat).filter(n=>!isNaN(n));
-  if(nums.length<4)return'';
-  const x1=nums[0],y1=nums[1],x2=nums[2],y2=nums[3];
+//
+// The `label` arg is optional and only used for console diagnostics — pass the
+// circuit slug so marker failures can be traced per-circuit.
+function circMarkers(d,label){
+  if(!d){console.warn('[circMarkers] empty path',label);return''}
+  // Strip commands AND commas with a single char class so paths that use
+  // either "x,y" or "x y" separators both parse. Previously a stray upper/
+  // lower-case cmd inside a subpath (e.g. "Z M") could leave a trailing
+  // alpha and poison parseFloat — now we nuke any a-z alpha entirely.
+  const nums=d.replace(/[A-Za-z]/g,' ').replace(/,/g,' ').trim().split(/\s+/).map(parseFloat).filter(n=>Number.isFinite(n));
+  if(nums.length<4){console.warn('[circMarkers] <4 nums for',label,nums.length);return''}
+  const x1=nums[0],y1=nums[1];
+  // Walk forward until we find a second point that differs from the first by
+  // enough distance to compute a stable tangent. Some circuit paths start
+  // with a duplicated or near-duplicated coordinate which would give a
+  // degenerate direction vector.
+  let x2=nums[2],y2=nums[3],i=2;
+  while(i+1<nums.length&&Math.hypot(nums[i]-x1,nums[i+1]-y1)<4){i+=2}
+  x2=nums[i]??nums[2];y2=nums[i+1]??nums[3];
   const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1;
   const tx=dx/len,ty=dy/len,nx=-ty,ny=tx;
-  const half=12;
+  const half=14;
   const sx1=(x1+nx*half).toFixed(1),sy1=(y1+ny*half).toFixed(1);
   const sx2=(x1-nx*half).toFixed(1),sy2=(y1-ny*half).toFixed(1);
-  // Arrow head sits ~26u downstream of the start line
-  const ax=x1+tx*26,ay=y1+ty*26;
-  const tip=(ax+tx*10).toFixed(1)+','+(ay+ty*10).toFixed(1);
-  const l=(ax-tx*4+nx*7).toFixed(1)+','+(ay-ty*4+ny*7).toFixed(1);
-  const r=(ax-tx*4-nx*7).toFixed(1)+','+(ay-ty*4-ny*7).toFixed(1);
-  return`<line x1="${sx1}" y1="${sy1}" x2="${sx2}" y2="${sy2}" stroke="#E8002D" stroke-width="4" stroke-linecap="round"/><polygon points="${tip} ${l} ${r}" fill="#E8002D"/>`;
+  const ax=x1+tx*30,ay=y1+ty*30;
+  const tip=(ax+tx*12).toFixed(1)+','+(ay+ty*12).toFixed(1);
+  const l=(ax-tx*4+nx*8).toFixed(1)+','+(ay-ty*4+ny*8).toFixed(1);
+  const r=(ax-tx*4-nx*8).toFixed(1)+','+(ay-ty*4-ny*8).toFixed(1);
+  if(label)console.log('[circMarkers]',label,'start:',x1,y1,'->',x2,y2,'len:',len.toFixed(1));
+  // Each shape is drawn twice — once as a thick white halo, once as the red
+  // fill on top — so the marker stays legible against any track colour.
+  return`<line x1="${sx1}" y1="${sy1}" x2="${sx2}" y2="${sy2}" stroke="#fff" stroke-width="7" stroke-linecap="round"/>`+
+    `<line x1="${sx1}" y1="${sy1}" x2="${sx2}" y2="${sy2}" stroke="#E8002D" stroke-width="4" stroke-linecap="round"/>`+
+    `<polygon points="${tip} ${l} ${r}" fill="#fff" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>`+
+    `<polygon points="${tip} ${l} ${r}" fill="#E8002D"/>`;
 }
 
 async function showCircuit(slug){
@@ -2136,7 +2156,8 @@ async function showCircuit(slug){
   // Fetch historical winners from this circuit (last 5 years)
   const{data:circHistory}=await sbq(s=>s.from('historical_races').select('season,round,winner_driver,winner_team,pole_driver').ilike('circuit_name','%'+c.name.split(' ')[0]+'%').order('season',{ascending:false}).limit(5));
   const path=CS[slug]||'';
-  const mapSvg=path?`<div style="background:#0A0D12;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${path}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c.country==='Monaco'||c.type==='Street'?'#E8002D':'#2A3145'}" stroke-width="2" stroke-dasharray="5,4"/>${circMarkers(path)}</svg><div style="text-align:center;font-size:9px;color:var(--muted);margin-top:8px;letter-spacing:1px;text-transform:uppercase">\u25cf Start / Finish \u00b7 Direction of travel</div></div>`:'';
+  console.log('[circuit-profile] slug:',slug,'hasPath:',!!path,'len:',path.length);
+  const mapSvg=path?`<div style="background:#0A0D12;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${path}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c.country==='Monaco'||c.type==='Street'?'#E8002D':'#2A3145'}" stroke-width="2" stroke-dasharray="5,4"/>${circMarkers(path,slug)}</svg><div style="text-align:center;font-size:9px;color:var(--muted);margin-top:8px;letter-spacing:1px;text-transform:uppercase">\u25cf Start / Finish \u00b7 Direction of travel</div></div>`:'';
   const histRows=(circHistory||[]).map(h=>`<div class="hist-race" onclick="showHistory(${h.season},${h.round})"><div class="hist-rnd">${h.season}</div><div class="hist-info"><div class="hist-name">${h.winner_driver||'\u2014'}</div><div class="hist-cir">${h.winner_team||''}</div></div><div class="hist-win">\u2192</div></div>`).join('');
   el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div style="font-size:48px">${c.flag}</div><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${c.shortName}</div><div style="font-size:13px;color:var(--muted)">${c.name} \u00b7 ${c.country}</div></div></div>${mapSvg}<div class="stats-grid">${[[c.laps,'LAPS'],[c.length+' km','LENGTH'],[c.distance+' km','DISTANCE'],['R'+c.round,'2026 ROUND']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Lap Record</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Time</span><span style="font-weight:700;color:var(--gold);font-size:16px">${c.lapRecord.time}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Driver</span><span style="font-weight:600">${c.lapRecord.driver}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Year</span><span style="font-weight:600">${c.lapRecord.year}</span></div></div></div><div class="slabel">Circuit Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Type</span><span style="font-weight:600">${c.type}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">First GP</span><span style="font-weight:600">${c.firstGP}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">2026 Regulations</span><span style="font-weight:600">No DRS \u00b7 Overtake Mode</span></div></div></div>${histRows?`<div class="slabel">Recent Winners</div><div class="card" style="overflow:hidden;margin-bottom:20px">${histRows}</div>`:''}`;
 }

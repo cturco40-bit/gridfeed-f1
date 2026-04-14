@@ -1,4 +1,22 @@
-import { sb, logSync, json, makeSlug } from './lib/shared.js';
+import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
+
+// Same tweet generator used by approve-draft so scheduled articles get the
+// exact same social copy as instant-publish articles.
+function generateTweet(title, articleBody, slug) {
+  const cacheBust = Date.now().toString(36).slice(-6);
+  const url = `https://gridfeed.co/article/${slug}?v=${cacheBust}`;
+  const firstSentence = (articleBody || '').split(/[.!?]/)[0]?.trim() || '';
+  const titleLower = (title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const sentLower = firstSentence.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isDuplicate = !firstSentence || sentLower.includes(titleLower) || titleLower.includes(sentLower);
+  if (!isDuplicate) {
+    const tweet = `${title}\n\n${firstSentence}.\n\n${url}`;
+    if (tweet.length <= 270) return tweet;
+  }
+  const tweet = `${title}\n\n${url}`;
+  if (tweet.length <= 270) return tweet;
+  return title.slice(0, 240) + '...\n\n' + url;
+}
 
 export default async (req, context) => {
   const start = Date.now();
@@ -43,6 +61,37 @@ export default async (req, context) => {
       // ONLY update draft on success
       await sb(`content_drafts?id=eq.${draft.id}`, 'PATCH', { review_status: 'published', published_article_id: articleId });
       published++;
+
+      // Downstream side effects — match approve-draft.js so scheduled drafts
+      // get a tweet draft, a push, and a social image just like immediate ones.
+      const siteUrl = process.env.URL || 'https://gridfeed.co';
+      try {
+        const tweetText = generateTweet(draft.title, draft.body, slug);
+        await sb('tweets', 'POST', { article_id: articleId, tweet_text: tweetText, status: 'pending' });
+      } catch (twErr) {
+        console.warn('[publish-approved] Tweet draft creation failed:', twErr.message);
+      }
+      const isBreaking = (draft.tags || []).some(t => (t || '').toUpperCase() === 'BREAKING');
+      fetchWT(siteUrl + '/.netlify/functions/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: isBreaking ? '🚨 GridFeed Breaking' : '🏁 GridFeed',
+          body: draft.title,
+          url: '/#/article/' + slug,
+          tag: 'article-' + articleId,
+          audience: 'public',
+        }),
+      }, 8000).catch(() => {});
+      try {
+        await fetchWT(siteUrl + '/.netlify/functions/generate-article-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ article_id: articleId }),
+        }, 25000);
+      } catch (imgErr) {
+        console.warn('[publish-approved] Image generation failed:', imgErr.message);
+      }
     }
 
     await logSync('publish-approved', 'success', published, `Published ${published} drafts`, Date.now() - start);

@@ -71,7 +71,7 @@ export default async (req) => {
   const start = Date.now();
   try {
     const body = await req.json();
-    const { id, title, articleBody, excerpt, tags } = body;
+    const { id, title, articleBody, excerpt, tags, publishAt } = body;
 
     if (!id) return json({ error: 'Missing draft id' }, 400);
     if (!articleBody) return json({ error: 'Article body is empty' }, 400);
@@ -79,6 +79,31 @@ export default async (req) => {
     const cleanTitle = fixEncoding(title || 'Untitled');
     const cleanBody = fixEncoding(articleBody || '');
     const cleanExcerpt = fixEncoding(excerpt || '');
+
+    // Scheduled mode — if publishAt is a valid future timestamp (>10s from now),
+    // we don't insert into articles here. The draft is marked approved with
+    // scheduled_publish_at, and publish-approved.js picks it up on its cron tick.
+    // This routes through the same pipeline publish-approved uses for cron
+    // drafts, so scheduled articles get the same slug dedup / title dedup
+    // guards and the same downstream tweet+push+image side-effects.
+    const publishTs = publishAt ? Date.parse(publishAt) : NaN;
+    const isScheduled = Number.isFinite(publishTs) && publishTs > Date.now() + 10_000;
+    if (isScheduled) {
+      await sb(`content_drafts?id=eq.${id}`, 'PATCH', {
+        review_status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: 'admin',
+        title: cleanTitle,
+        body: cleanBody,
+        excerpt: cleanExcerpt,
+        tags: tags || ['ANALYSIS'],
+        scheduled_publish_at: new Date(publishTs).toISOString(),
+      });
+      recordSubjectPublishedLocal(cleanTitle, null).catch(() => {});
+      await logSync('approve-draft', 'success', 1, `Scheduled "${cleanTitle}" for ${new Date(publishTs).toISOString()}`, Date.now() - start);
+      return json({ ok: true, scheduled: true, scheduled_publish_at: new Date(publishTs).toISOString() });
+    }
+
     const slug = makeSlug(cleanTitle);
 
     // 1. Insert into articles
