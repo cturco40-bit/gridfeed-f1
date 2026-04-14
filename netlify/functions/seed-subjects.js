@@ -118,6 +118,17 @@ export default async (req) => {
       }
     }
 
+    // Seed manual permanent blocks for stories that keep regenerating
+    const manualBlocks = [
+      { subject: 'wolff:fired', expires_at: new Date(Date.now() + 90 * 86400e3).toISOString() },
+    ];
+    for (const m of manualBlocks) {
+      try {
+        await sb('published_subjects', 'POST', { subject: m.subject, article_id: null, expires_at: m.expires_at });
+        inserted.push({ key: m.subject, title: '[manual block]' });
+      } catch {}
+    }
+
     await logSync('seed-subjects', 'success', inserted.length, `Seeded ${inserted.length}/${articles.length}, ${skipped.length} skipped`, Date.now() - start);
     return json({
       ok: true,

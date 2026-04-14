@@ -45,10 +45,23 @@ const TIER1 = ['Verstappen','Hamilton','Leclerc','Norris','Antonelli'];
 const CIRCUITS = ['Melbourne','Shanghai','Suzuka','Miami','Montreal','Monaco','Barcelona','Madrid','Spielberg','Silverstone','Spa','Budapest','Zandvoort','Monza','Baku','Singapore','Austin','Mexico','Interlagos','Las Vegas','Lusail','Abu Dhabi','Australia','China','Japan','Austria','Belgium','Hungary','Netherlands','Italy','Azerbaijan','Qatar'];
 const NON_F1 = [
   'nascar','indycar','indy 500','motogp','wec','le mans','rally','wrc',
-  'formula e','super formula','f2','f3','supercars','moto2','moto3','dtm','imsa',
+  'formula e','super formula','formula 2','formula 3','f2 championship',
+  'f3 championship','fia formula 2','fia formula 3','f2','f3',
+  'supercars','moto2','moto3','dtm','imsa',
   'bristol motor','daytona','talladega','darlington','martinsville',
   'phoenix raceway','kansas speedway','richmond raceway','pocono',
   'sonoma raceway','watkins glen',
+];
+
+// YouTube shows / podcasts / fantasy / clickbait sources
+const REJECT_SOURCES = [
+  'wtf1','hot takes','fantasy f1','podcast','youtube','watch:','cheat code',
+];
+
+// Clickbait headline patterns
+const CLICKBAIT_PATTERNS = [
+  'shames','blunt verdict','delivers verdict','nothing special','shock plan',
+  'opens up on','reveals he','dramatic u-turn','you won\'t believe','jaw-dropping',
 ];
 const F1_KEYWORDS = [
   'f1','formula 1','formula one','grand prix',
@@ -152,8 +165,8 @@ export default async (req, context) => {
 
     // Rejection counters — surface in sync_log so "0 created" is actually debuggable
     const rejectCounts = {
-      nonF1: 0, noF1Keyword: 0, noSignature: 0,
-      titleDedup: 0, sigDedup: 0, lowScore: 0,
+      nonF1: 0, noF1Keyword: 0, nonEnglish: 0, lowQuality: 0, clickbait: 0,
+      noSignature: 0, titleDedup: 0, sigDedup: 0, lowScore: 0,
       subjectDedup: 0, publishedDup: 0, registryDup: 0, queueFull: 0, accepted: 0,
     };
 
@@ -173,11 +186,25 @@ export default async (req, context) => {
         .filter(w => w.length > 3 && !STOP_WORDS.has(w)));
     };
 
-    // Filter non-F1: reject if any non-F1 keyword present, then require at least one F1 keyword
+    // Filter non-F1 + non-English + low-quality + clickbait. Each gate is
+    // tracked in rejectCounts and logged so 'created 0' is debuggable.
     const f1Headlines = headlines.filter(h => {
-      const t = h.title.toLowerCase();
-      if (NON_F1.some(kw => t.includes(kw))) { rejectCounts.nonF1++; console.log('REJECT nonF1:', h.title.slice(0, 60)); return false; }
-      if (!F1_KEYWORDS.some(kw => t.includes(kw))) { rejectCounts.noF1Keyword++; console.log('REJECT noF1Keyword:', h.title.slice(0, 60)); return false; }
+      const raw = h.title || '';
+      const t = raw.toLowerCase();
+      if (NON_F1.some(kw => t.includes(kw))) { rejectCounts.nonF1++; console.log('REJECT nonF1:', raw.slice(0, 60)); return false; }
+      if (!F1_KEYWORDS.some(kw => t.includes(kw))) { rejectCounts.noF1Keyword++; console.log('REJECT noF1Keyword:', raw.slice(0, 60)); return false; }
+      // Non-English: accented chars typical of IT/ES/FR + no hard-English F1 anchor
+      if (/[àèìòùáéíóúñ¿¡]/.test(raw) && !/F1|formula|grand prix|championship/i.test(raw)) {
+        rejectCounts.nonEnglish++; console.log('REJECT nonEnglish:', raw.slice(0, 60)); return false;
+      }
+      // YouTube shows / podcasts / fantasy fluff
+      if (REJECT_SOURCES.some(s => t.includes(s))) {
+        rejectCounts.lowQuality++; console.log('REJECT lowQuality:', raw.slice(0, 60)); return false;
+      }
+      // Clickbait phrases
+      if (CLICKBAIT_PATTERNS.some(s => t.includes(s))) {
+        rejectCounts.clickbait++; console.log('REJECT clickbait:', raw.slice(0, 60)); return false;
+      }
       return true;
     });
 
@@ -312,7 +339,7 @@ export default async (req, context) => {
     if (stateRow.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
     else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
-    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup, ${rejectCounts.registryDup} registry-dup`;
+    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.nonEnglish} non-en, ${rejectCounts.lowQuality} low-quality, ${rejectCounts.clickbait} clickbait, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup, ${rejectCounts.registryDup} registry-dup`;
     await logSync('monitor-f1', 'success', topicsCreated, summary, Date.now() - start);
     return json({ ok: true, headlines: headlines.length, topicsCreated, rejectCounts });
   } catch (err) {
