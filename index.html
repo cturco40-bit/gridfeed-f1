@@ -827,7 +827,7 @@ async function loadArts(){
   el.innerHTML='<div class="art-grid">'+data.map(a=>artCard(a)).join('')+'</div>';
 }
 
-function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:1/1;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="showArtView('${a.slug||a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
+function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:16/9;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';return`<div class="art-card" data-tag="${tc}" onclick="showArtView('${a.slug||a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}</div></div>`}
 
 async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
@@ -1852,7 +1852,7 @@ async function showArtView(slugOrId){
   const tag=(data.tags||['ANALYSIS'])[0];
   document.title='GridFeed | '+data.title;
   el.innerHTML=`<button onclick="history.back();go('news')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font);padding:0">\u2190 Back</button>
-${data.image_url?`<div style="aspect-ratio:1/1;width:100%;max-width:520px;border-radius:8px;margin:0 auto 16px;background:url('${data.image_url}') center/cover no-repeat;background-color:#12151E"></div>`:''}
+${data.image_url?`<div style="aspect-ratio:16/9;width:100%;max-width:680px;border-radius:8px;margin:0 auto 16px;background:url('${data.image_url}') center/cover no-repeat;background-color:#12151E"></div>`:''}
 <span class="art-tag ${tagCl(tag)}" style="margin-bottom:12px;display:inline-block">${tag}</span>
 <h1 style="font-family:var(--head);font-size:28px;font-weight:900;line-height:1.15;text-transform:uppercase;margin-bottom:8px">${data.title}</h1>
 <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${data.author||'GridFeed Staff'} | ${new Date(data.published_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
@@ -2248,7 +2248,7 @@ setInterval(checkLive,30000);
     <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Your Daily F1 Fix</div>
     <div style="max-width:600px;margin:0 auto 12px;color:#4A5168">GridFeed is an independent fan site and is not associated with Formula 1, the FIA, or any F1 team. F1, FORMULA 1, FORMULA ONE, FIA FORMULA ONE WORLD CHAMPIONSHIP, and related marks are trademarks of Formula One Licensing BV. Driver photos courtesy of Formula 1.</div>
     <div style="max-width:600px;margin:0 auto 12px;color:#4A5168">Race picks and predictions are editorial analysis only, not financial advice. Gambling involves risk. 18+. Please bet responsibly.</div>
-    <div style="color:#4A5168;margin-top:20px">&copy; 2026 SportsFeed Media. All rights reserved.</div>
+    <div style="color:#4A5168;margin-top:20px">&copy; 2026 GridFeed. All rights reserved.</div>
     <div style="margin-top:8px"><a href="https://twitter.com/GridFeedF1" target="_blank" style="color:#8A8E9A;text-decoration:none">Twitter</a> <span style="margin:0 8px;color:#3A3E4A">&middot;</span> <a href="mailto:hello@gridfeed.co" style="color:#8A8E9A;text-decoration:none">Contact</a></div>
   </div>
 </footer>
