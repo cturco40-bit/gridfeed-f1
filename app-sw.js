@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gridfeed-v62';
+const CACHE_NAME = 'gridfeed-v63';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -35,7 +35,26 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request).catch(() => new Response('[]', { headers: { 'Content-Type': 'application/json' } })));
     return;
   }
-  // Static: cache first, network fallback
+  // HTML navigations ("/" and "/index.html" and any path the SPA owns) use
+  // network-first so code changes land on the next app open without having to
+  // bump CACHE_NAME. Falls back to cached HTML when offline.
+  const isHTML = event.request.mode === 'navigate'
+    || url.pathname === '/'
+    || url.pathname === '/index.html'
+    || url.pathname.endsWith('.html');
+  if (isHTML) {
+    event.respondWith(
+      fetch(event.request).then(res => {
+        if (res.ok && event.request.method === 'GET') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('/index.html') || caches.match('/')))
+    );
+    return;
+  }
+  // Other static assets (icons, logo, manifest, etc.): cache first, network fallback
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(res => {
     if (res.ok && event.request.method === 'GET') {
       const clone = res.clone();
