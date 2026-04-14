@@ -4,6 +4,42 @@ import { validateArticle, fixEncoding } from './lib/accuracy.js';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const DAILY_CAP = 5;
 
+// INLINED subject key extractor — duplicated from lib/subject-registry.js to
+// bypass Netlify's function bundle cache. Keep in sync with seed-subjects.js,
+// monitor-f1.js, and approve-draft.js.
+function getSubjectKeyLocal(title) {
+  const h = (title || '').toLowerCase();
+  if (!h) return null;
+  if (h.includes('aduo')) return 'aduo:engine';
+  if (h.includes('bahrain')) return 'bahrain:calendar';
+  if (h.includes('saudi')) return 'saudi:calendar';
+  if (h.includes('goodwood')) return 'goodwood:general';
+  if (h.includes('formula 2')) return 'f2:calendar';
+  if (h.includes('formula 3')) return 'f3:calendar';
+  if (h.includes('overtake mode')) return 'f1:regulation';
+  if (h.includes('active aero')) return 'f1:regulation';
+  if (/power.*rank|champion.*(stand|check)|all.*drivers/i.test(h)) return 'f1:standings';
+  const drivers = ['antonelli','russell','hamilton','leclerc','norris','piastri','verstappen','bearman','gasly','alonso','stroll','sainz','albon','ocon','lawson','lindblad','hadjar','hulkenberg','bortoleto','perez','bottas','colapinto'];
+  const teams = ['mercedes','ferrari','mclaren','red bull','aston martin','alpine','haas','williams','audi','cadillac','racing bulls'];
+  const entity = drivers.find(d => h.includes(d)) || teams.find(t => h.includes(t)) || '';
+  if (!entity) return null;
+  const NOISE = new Set(['the','a','an','in','at','of','for','and','is','has','with','from','after','how','why','what','not','his','her','f1','formula','grand','prix','race','driver','team','season','championship','points','2026']);
+  const SYNONYMS = { leads:'leads',lead:'leads',leading:'leads',extends:'leads',dominates:'leads',dominant:'leads',dominance:'leads',standings:'leads', crash:'crash',crashes:'crash',incident:'crash',collision:'crash', contract:'contract',signs:'contract',deal:'contract',extension:'contract', departs:'departs',leaves:'departs',exit:'departs',departure:'departs',fired:'departs',sacked:'departs', start:'start',launch:'start',getaway:'start',clutch:'start', penalty:'penalty',penalised:'penalty',stewards:'penalty', upgrade:'upgrade',development:'upgrade',floor:'upgrade', engine:'engine',power:'engine',unit:'engine',reliability:'engine', hire:'hire',hires:'hire',recruit:'hire',appoint:'hire', pace:'pace',speed:'pace',fastest:'pace',performance:'pace',deficit:'pace', wins:'wins',win:'wins',victory:'wins',winner:'wins', pole:'pole',qualifying:'pole',qualified:'pole', preview:'preview',expect:'preview',watch:'preview',prediction:'preview',predict:'preview', rankings:'rankings',ranked:'rankings',rating:'rankings', rookie:'rookie',debut:'rookie',youngest:'rookie',teenager:'rookie' };
+  const words = h.split(/[\s\-:,.']+/).filter(w => w.length > 3 && !NOISE.has(w) && w !== entity);
+  const sorted = words.sort((a, b) => b.length - a.length);
+  const angle = SYNONYMS[sorted[0]] || sorted[0] || 'general';
+  return entity + ':' + angle;
+}
+
+async function isSubjectPublishedLocal(key) {
+  if (!key) return false;
+  const now = new Date().toISOString();
+  try {
+    const rows = await sb(`published_subjects?subject=eq.${encodeURIComponent(key)}&or=(expires_at.is.null,expires_at.gt.${now})&select=id&limit=1`);
+    return (rows || []).length > 0;
+  } catch { return false; }
+}
+
 // ═══ VERIFIED 2026 DATA — update after each race ═══
 const STANDINGS = {
   races: 3,
@@ -221,12 +257,15 @@ async function generateArticle(topic) {
 export default async (req) => {
   const start = Date.now();
   try {
-    // 1. Rate limit — max 5 editorial drafts per 24h
-    const since = new Date(Date.now() - 24 * 36e5).toISOString();
-    const recent = await sb(`content_drafts?generation_model=eq.GridFeed%20Editorial&created_at=gt.${since}&select=id`);
-    if ((recent || []).length >= DAILY_CAP) {
-      await logSync('generate-editorial', 'success', 0, `Daily cap reached: ${recent.length}/${DAILY_CAP}`, Date.now() - start);
-      return json({ ok: true, generated: 0, reason: 'daily_cap', count: recent.length });
+    // 1. Rate limit — max 5 editorial drafts per calendar day (not rolling
+    // 24h). Count ONLY drafts with generation_model='GridFeed Editorial'
+    // created today so the news pipeline output doesn't eat our budget.
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayDrafts = await sb(`content_drafts?generation_model=eq.GridFeed%20Editorial&created_at=gte.${todayStart.toISOString()}&select=id`);
+    if ((todayDrafts || []).length >= DAILY_CAP) {
+      await logSync('generate-editorial', 'success', 0, `Daily cap reached: ${todayDrafts.length}/${DAILY_CAP}`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'daily_cap', count: todayDrafts.length });
     }
 
     // 2. Pick a topic
@@ -251,6 +290,28 @@ export default async (req) => {
       return json({ ok: true, generated: 0, reason: 'duplicate_title' });
     }
 
+    // 5b. Subject registry — reject if this subject was already published
+    const newKey = getSubjectKeyLocal(article.title);
+    if (newKey && await isSubjectPublishedLocal(newKey)) {
+      await logSync('generate-editorial', 'success', 0, `Subject already published: ${newKey} — "${article.title.slice(0, 40)}"`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'subject_published', key: newKey });
+    }
+
+    // 5c. Recent-draft dedup — reject if a draft with the same subject key
+    // was created in the last 8 hours (catches back-to-back editorial runs
+    // picking different templates that resolve to the same subject)
+    if (newKey) {
+      const eightHoursAgo = new Date(Date.now() - 8 * 36e5).toISOString();
+      const recentDrafts = await sb(`content_drafts?select=title&created_at=gte.${eightHoursAgo}&order=created_at.desc&limit=20`);
+      for (const draft of (recentDrafts || [])) {
+        const draftKey = getSubjectKeyLocal(draft.title);
+        if (draftKey && draftKey === newKey) {
+          await logSync('generate-editorial', 'success', 0, `Recent draft subject dupe: ${newKey}`, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'recent_draft', key: newKey });
+        }
+      }
+    }
+
     // 6. Save draft (matches generate-content.js column shape)
     const tags = Array.isArray(article.tags) && article.tags.length ? article.tags : ['ANALYSIS'];
     await sb('content_drafts', 'POST', {
@@ -266,6 +327,18 @@ export default async (req) => {
       race_id: null,
     });
 
+    // 6b. Register the subject with a 48h expiry so the NEXT editorial run
+    // sees it and skips. Shorter than the news-pipeline 7-day window because
+    // editorial pieces are allowed to re-cover the same subject quicker —
+    // but not within the same work session.
+    if (newKey) {
+      await sb('published_subjects', 'POST', {
+        subject: newKey,
+        article_id: null,
+        expires_at: new Date(Date.now() + 48 * 36e5).toISOString(),
+      }).catch(() => {});
+    }
+
     // 7. Notify admin (fire and forget)
     const siteUrl = process.env.URL || 'https://gridfeed.co';
     fetchWT(siteUrl + '/.netlify/functions/notify-draft', {
@@ -274,8 +347,8 @@ export default async (req) => {
       body: JSON.stringify({ title: article.title, content_type: 'editorial', priority_score: 6, excerpt: (article.excerpt || '').slice(0, 200) }),
     }, 5000).catch(() => {});
 
-    await logSync('generate-editorial', 'success', 1, `${topic.type}: "${article.title}"`, Date.now() - start);
-    return json({ ok: true, generated: 1, type: topic.type, title: article.title });
+    await logSync('generate-editorial', 'success', 1, `${topic.type}: "${article.title}" [${newKey || 'no-key'}]`, Date.now() - start);
+    return json({ ok: true, generated: 1, type: topic.type, title: article.title, subject_key: newKey });
   } catch (err) {
     await logSync('generate-editorial', 'error', 0, err.message, Date.now() - start);
     return json({ error: err.message }, 500);
