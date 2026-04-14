@@ -113,11 +113,18 @@ export default async (req, context) => {
     );
     feedResults.forEach(r => { if (r.status === 'fulfilled') headlines.push(...r.value); });
 
+    // Rejection counters — surface in sync_log so "0 created" is actually debuggable
+    const rejectCounts = {
+      nonF1: 0, noF1Keyword: 0, noSignature: 0,
+      titleDedup: 0, sigDedup: 0, lowScore: 0,
+      subjectDedup: 0, queueFull: 0, accepted: 0,
+    };
+
     // Filter non-F1: reject if any non-F1 keyword present, then require at least one F1 keyword
     const f1Headlines = headlines.filter(h => {
       const t = h.title.toLowerCase();
-      if (NON_F1.some(kw => t.includes(kw))) return false;
-      if (!F1_KEYWORDS.some(kw => t.includes(kw))) return false;
+      if (NON_F1.some(kw => t.includes(kw))) { rejectCounts.nonF1++; console.log('REJECT nonF1:', h.title.slice(0, 60)); return false; }
+      if (!F1_KEYWORDS.some(kw => t.includes(kw))) { rejectCounts.noF1Keyword++; console.log('REJECT noF1Keyword:', h.title.slice(0, 60)); return false; }
       return true;
     });
 
@@ -125,51 +132,55 @@ export default async (req, context) => {
     const sigGroups = {};
     for (const h of f1Headlines) {
       const sig = makeSignature(h.title);
-      if (!sig) continue;
+      if (!sig) { rejectCounts.noSignature++; console.log('REJECT noSignature:', h.title.slice(0, 60)); continue; }
       if (!sigGroups[sig]) sigGroups[sig] = { titles: [], sources: [], regions: new Set() };
       sigGroups[sig].titles.push(h.title);
       sigGroups[sig].sources.push(h);
       sigGroups[sig].regions.add(h.region);
     }
 
-    // Load existing topics from last 24h for title-level dedup (any status)
-    // Subject-level dedup window tightened from 24h -> 6h so the pipeline can
-    // produce follow-ups on the same drivers/teams as new angles emerge
-    const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 6 * 36e5).toISOString());
+    // Subject-dedup window tightened from 6h -> 3h so follow-up angles on the
+    // same driver aren't blocked for most of the day
+    const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 3 * 36e5).toISOString());
     const recentTitleNorm = new Set(pendingTopics.map(t => normalizeTitle(t.topic)));
 
     for (const [sig, group] of Object.entries(sigGroups)) {
       if (!sig) continue;
 
-      // Title-level dedup: skip if exact same headline already created as topic in 24h
+      // Title-level dedup: skip if exact same headline already created as topic in 3h
       const titleNorm = normalizeTitle(group.titles[0]);
-      if (recentTitleNorm.has(titleNorm)) continue;
+      if (recentTitleNorm.has(titleNorm)) { rejectCounts.titleDedup++; console.log('REJECT titleDedup:', group.titles[0].slice(0, 60)); continue; }
 
       // Signature dedup (2h window)
       const sigExists = await sb(`topic_signatures?signature=eq.${encodeURIComponent(sig)}&created_at=gt.${new Date(Date.now() - 2 * 36e5).toISOString()}&limit=1`);
-      if (sigExists.length) continue;
+      if (sigExists.length) { rejectCounts.sigDedup++; console.log('REJECT sigDedup:', group.titles[0].slice(0, 60), '| sig:', sig); continue; }
 
       const score = scoreStory(group.titles[0], group.regions.size);
-      if (score < 3) continue;
+      if (score < 3) { rejectCounts.lowScore++; console.log('REJECT lowScore', score, ':', group.titles[0].slice(0, 60)); continue; }
 
-      // Subject-level dedup: check if same driver+circuit already pending
+      // Subject-level dedup: require BOTH driver AND circuit overlap.
+      // Previously if the new headline had no circuit, sameCircuit defaulted
+      // to true, so any Antonelli headline blocked every subsequent Antonelli
+      // headline regardless of angle. Now we only block when both driver AND
+      // circuit match — different-angle follow-ups survive.
       const entities = extractEntities(group.titles[0]);
-      if (entities.drivers.length > 0) {
+      if (entities.drivers.length > 0 && entities.circuits.length > 0) {
         const subjectDupe = pendingTopics.some(pt => {
           const ptLower = pt.topic.toLowerCase();
           const sameDriver = entities.drivers.some(d => ptLower.includes(d.toLowerCase()));
-          const sameCircuit = entities.circuits.length === 0 || entities.circuits.some(c => ptLower.includes(c.toLowerCase()));
+          const sameCircuit = entities.circuits.some(c => ptLower.includes(c.toLowerCase()));
           return sameDriver && sameCircuit;
         });
         if (subjectDupe) {
-          // Same subject from different source — record signature but skip topic
+          rejectCounts.subjectDedup++;
+          console.log('REJECT subjectDedup:', group.titles[0].slice(0, 60));
           await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
           continue;
         }
       }
 
       // Re-check queue limit
-      if (topicsCreated + recentTopics.length >= 15) break;
+      if (topicsCreated + recentTopics.length >= 15) { rejectCounts.queueFull++; break; }
 
       // Breaking news keyword boost
       const BREAKING_KEYWORDS = ['breaking','confirmed','exclusive','shock','sacked','fired','signed','crash','injured','penalty','disqualified','retires','dies','died'];
@@ -191,6 +202,8 @@ export default async (req, context) => {
         source_url: sourceUrl,
       });
       topicsCreated++;
+      rejectCounts.accepted++;
+      console.log('ACCEPTED:', group.titles[0].slice(0, 60));
 
       // Add to dedup set for this run
       pendingTopics.push({ topic: group.titles[0], id: null });
@@ -209,8 +222,9 @@ export default async (req, context) => {
     if (stateRow.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
     else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
-    await logSync('monitor-f1', 'success', topicsCreated, `Scanned ${f1Headlines.length} headlines, created ${topicsCreated} topics`, Date.now() - start);
-    return json({ ok: true, headlines: f1Headlines.length, topicsCreated });
+    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup`;
+    await logSync('monitor-f1', 'success', topicsCreated, summary, Date.now() - start);
+    return json({ ok: true, headlines: headlines.length, topicsCreated, rejectCounts });
   } catch (err) {
     await logSync('monitor-f1', 'error', 0, err.message, Date.now() - start, err.stack);
     return json({ error: err.message }, 500);
