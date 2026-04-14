@@ -94,7 +94,48 @@ const RSS_FEEDS = [
   { url: 'https://www.gptoday.net/en/rss', source: 'GPToday', region: 'NL' },
   { url: 'https://www.marca.com/rss/motor/formula1.xml', source: 'Marca', region: 'ES' },
   { url: 'https://br.motorsport.com/rss/f1/news/', source: 'Motorsport Brasil', region: 'BR' },
+  { url: 'https://theathletic.com/rss/f1', source: 'The Athletic F1', region: 'US' },
+  { url: 'https://www.formula1.com/en/latest/all.html.rss', source: 'Formula1.com', region: 'INT' },
+  { url: 'https://es.autosport.com/rss/news/all', source: 'Autosport ES', region: 'ES' },
 ];
+
+// Trusted non-English sources that get machine-translated instead of filtered.
+// Maps source name -> ISO language name (for the content-generator prompt note).
+const TRANSLATE_SOURCES = {
+  'Gazzetta': 'Italian',
+  'Motorsport Italia': 'Italian',
+  'Auto Motor Sport': 'German',
+  'Marca': 'Spanish',
+  'Autosport ES': 'Spanish',
+  'Motorsport Brasil': 'Portuguese',
+  'GPblog': 'Dutch',
+  'GPToday': 'Dutch',
+};
+const LANG_CODE = { Italian: 'it', German: 'de', Spanish: 'es', Portuguese: 'pt', Dutch: 'nl' };
+
+async function translateHeadline(title, summary, language) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  const prompt = `Translate this F1 news headline and summary to English. Return only the translation, no preamble. Headline: ${title}\nSummary: ${summary || ''}`;
+  try {
+    const res = await fetchWT('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    }, 15000);
+    if (!res.ok) return null;
+    const j = await res.json();
+    const text = (j?.content?.[0]?.text || '').trim();
+    if (!text) return null;
+    // First line = headline, remainder = summary
+    const [head, ...rest] = text.split(/\n+/);
+    return { title: head.replace(/^Headline:\s*/i, '').trim(), summary: rest.join(' ').replace(/^Summary:\s*/i, '').trim() };
+  } catch { return null; }
+}
 
 function makeSignature(title) {
   const t = title.toLowerCase();
@@ -156,6 +197,7 @@ export default async (req, context) => {
             title: i.title?._ || i.title || '',
             link: i.link?.$ ? i.link.$.href : (i.link || ''),
             pubDate: i.pubDate || i.published || i.updated || null,
+            summary: (i.description?._ || i.description || i.summary?._ || i.summary || '').toString().replace(/<[^>]+>/g, '').trim().slice(0, 500),
             source: f.source, region: f.region,
           })).filter(i => i.title);
         } catch { return []; }
@@ -221,10 +263,10 @@ export default async (req, context) => {
       const raw = h.title || '';
       const t = raw.toLowerCase();
       if (NON_F1.some(kw => t.includes(kw))) { rejectCounts.nonF1++; console.log('REJECT nonF1:', raw.slice(0, 60)); return false; }
+      // Non-English headlines from trusted foreign sources are allowed through;
+      // they get translated later. Headlines with non-ASCII accents from
+      // untrusted sources still fall through the F1 keyword gate above.
       if (!F1_KEYWORDS.some(kw => t.includes(kw))) { rejectCounts.noF1Keyword++; console.log('REJECT noF1Keyword:', raw.slice(0, 60)); return false; }
-      if (/[àèìòùáéíóúñ¿¡ç]/.test(raw) && !/F1|formula|grand prix|championship/i.test(raw)) {
-        rejectCounts.nonEnglish++; console.log('REJECT nonEnglish:', raw.slice(0, 60)); return false;
-      }
       if (REJECT_SOURCES.some(s => t.includes(s))) {
         rejectCounts.lowQuality++; console.log('REJECT lowQuality:', raw.slice(0, 60)); return false;
       }
@@ -237,9 +279,34 @@ export default async (req, context) => {
       return true;
     });
 
+    // Translation pass — foreign-source headlines from the trusted list get
+    // machine-translated to English before signature/scoring/dedup so the
+    // downstream logic (all English-keyword based) can reason about them.
+    // Untrusted non-English sources simply fall through — if the F1 keyword
+    // gate passed them, they stay original, and if not, they were already
+    // rejected above.
+    const translatedHeadlines = [];
+    for (const h of f1Headlines) {
+      const lang = TRANSLATE_SOURCES[h.source];
+      if (!lang) { translatedHeadlines.push(h); continue; }
+      const tr = await translateHeadline(h.title, h.summary, lang);
+      if (!tr || !tr.title) {
+        rejectCounts.translationFailed = (rejectCounts.translationFailed || 0) + 1;
+        console.log('REJECT translationFailed:', h.title.slice(0, 60));
+        continue;
+      }
+      translatedHeadlines.push({
+        ...h,
+        title: tr.title,
+        summary: tr.summary || h.summary,
+        originalTitle: h.title,
+        source_language: LANG_CODE[lang] || 'xx',
+      });
+    }
+
     // Group by signature
     const sigGroups = {};
-    for (const h of f1Headlines) {
+    for (const h of translatedHeadlines) {
       const sig = makeSignature(h.title);
       if (!sig) { rejectCounts.noSignature++; console.log('REJECT noSignature:', h.title.slice(0, 60)); continue; }
       if (!sigGroups[sig]) sigGroups[sig] = { titles: [], sources: [], regions: new Set() };
@@ -340,6 +407,8 @@ export default async (req, context) => {
 
       // Pick best source URL (prefer first source with a link)
       const sourceUrl = group.sources.find(s => s.link)?.link || null;
+      // If any source in the group was translated, carry the language through
+      const srcLang = group.sources.find(s => s.source_language)?.source_language || 'en';
 
       // Insert signature + topic
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
@@ -348,6 +417,7 @@ export default async (req, context) => {
         content_type: isBreaking || score >= 12 ? 'breaking' : isRumour ? 'analysis' : 'analysis',
         priority, status: 'pending', triggered_by: 'monitor-f1',
         source_url: sourceUrl,
+        source_language: srcLang,
       });
       topicsCreated++;
       rejectCounts.accepted++;

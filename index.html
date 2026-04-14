@@ -332,6 +332,13 @@ body.mo{overflow:hidden}
 .mb-16{margin-bottom:16px}
 .muted{color:var(--muted);font-size:11px}
 .drv-img{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:top center;flex-shrink:0}
+[data-drv],[data-team]{cursor:pointer}
+[data-drv]:hover,[data-team]:hover{color:var(--accent)}
+.drv-img.status-pit{box-shadow:0 0 0 3px #F5A623}
+.drv-img.status-out{box-shadow:0 0 0 3px #FFFFFF}
+.drv-img.status-overtake{box-shadow:0 0 0 3px #9B59B6}
+.drv-img.status-boost{box-shadow:0 0 0 3px #3498DB}
+.drv-img.status-dnf{box-shadow:0 0 0 3px #666666;filter:grayscale(.6) opacity(.7)}
 .drv-img-sm{width:24px;height:24px;border-radius:50%;object-fit:cover;object-position:top center;flex-shrink:0}
 .drv-img-lg{width:96px;height:96px;border-radius:50%;object-fit:cover;object-position:top center}
 .drv-img-xl{width:120px;height:120px;border-radius:50%;object-fit:cover;object-position:top center}
@@ -530,6 +537,8 @@ body.mo{overflow:hidden}
           <rect width="600" height="460" fill="#0A0D12"/>
           <path id="lmTrack" fill="none" stroke="#1C2333" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d=""/>
           <path id="lmCentre" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="6,5" d=""/>
+          <line id="lmStart" x1="0" y1="0" x2="0" y2="0" stroke="#E8002D" stroke-width="4" stroke-linecap="round" visibility="hidden"/>
+          <polygon id="lmArrow" points="0,0 0,0 0,0" fill="#E8002D" visibility="hidden"/>
           <g id="lmDots"></g>
         </svg>
         <div class="drv-card" id="drvCard" style="display:none">
@@ -762,6 +771,9 @@ const SCH=[
 /* ═══ NAV ═══ */
 function go(t){
   closeMore();
+  // Remember the last "real" tab so driver/team/article back buttons can
+  // return to it instead of falling off the history stack.
+  if(t!=='driver'&&t!=='team'&&t!=='article'&&t!=='circuit')S.prevTab=t;
   S.tab=t;
   document.querySelectorAll('.tn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
   document.querySelectorAll('.bn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
@@ -773,6 +785,15 @@ function go(t){
   if(S._tapped)try{navigator.vibrate(10)}catch(e){}
 }
 document.querySelectorAll('.tn,.bn').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.t)go(b.dataset.t)}));
+
+// Global delegation — any element carrying data-drv / data-team opens the
+// respective profile. Apply the 'ln' class to get the hover cursor + accent.
+document.addEventListener('click',e=>{
+  const d=e.target.closest('[data-drv]');
+  if(d&&d.dataset.drv){e.preventDefault();e.stopPropagation();showDrv(d.dataset.drv);return}
+  const t=e.target.closest('[data-team]');
+  if(t&&t.dataset.team){e.preventDefault();e.stopPropagation();showTeam(t.dataset.team)}
+},true);
 
 /* ═══ DETECT NEXT RACE ═══ */
 function detectNR(){const now=new Date();S.nr=SCH.find(r=>r.st!=='can'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop()}
@@ -800,13 +821,13 @@ async function initHome(){
     <div style="margin-bottom:16px">
       <div style="font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">2026 Championship Leader</div>
       <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
-        <div style="font-family:var(--head);font-size:26px;font-weight:900;color:#fff;text-transform:uppercase;line-height:1">${lName}</div>
+        <div data-drv="${lData.abbr||''}" style="font-family:var(--head);font-size:26px;font-weight:900;color:#fff;text-transform:uppercase;line-height:1">${lName}</div>
         <div style="font-family:var(--head);font-size:36px;font-weight:900;color:var(--gold);line-height:1">${lData.pts}<span style="font-size:12px;color:var(--muted);font-weight:700;margin-left:4px;letter-spacing:1px">PTS</span></div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-top:6px">${lData.wins} win${lData.wins!==1?'s':''} \u00b7 ${lData.pods} podium${lData.pods!==1?'s':''}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08)">
-      ${rest.map((entry,i)=>{const[name,d]=entry;const last=name.split(' ').pop();return`<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ${d.tc};border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0"><div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px"><span>P${i+2}</span><span style="opacity:0.5">\u00b7</span><span style="font-size:9px;text-transform:uppercase">${d.team}</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-top:2px"><span class="podium-name-full" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${last}</span><span class="podium-name-abbr" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px">${d.abbr||last.slice(0,3).toUpperCase()}</span><span style="font-family:var(--head);font-size:20px;font-weight:900;color:var(--gold);line-height:1;flex-shrink:0">${d.pts}</span></div></div>`}).join('')}
+      ${rest.map((entry,i)=>{const[name,d]=entry;const last=name.split(' ').pop();return`<div data-drv="${d.abbr||''}" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ${d.tc};border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0"><div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px"><span>P${i+2}</span><span style="opacity:0.5">\u00b7</span><span style="font-size:9px;text-transform:uppercase">${d.team}</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-top:2px"><span class="podium-name-full" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${last}</span><span class="podium-name-abbr" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px">${d.abbr||last.slice(0,3).toUpperCase()}</span><span style="font-family:var(--head);font-size:20px;font-weight:900;color:var(--gold);line-height:1;flex-shrink:0">${d.pts}</span></div></div>`}).join('')}
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
       <div style="font-size:10px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;font-weight:700;margin-bottom:8px">\u25b6 ${r.r?'Round '+r.r+' \u2014 ':''}Next: ${r.n}</div>
@@ -835,7 +856,7 @@ async function loadPicks(){
   const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
   const el=document.getElementById('homePicks');
   if(!data?.length){el.innerHTML='<div class="card"><div class="card-body muted">No picks yet.</div></div>';return}
-  el.innerHTML=`<div class="card"><div class="card-body" style="padding:10px 14px">${data.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="pk-type ${pkCl(p.pick_type)}" style="font-size:8px;padding:2px 6px">${p.pick_type}</span><span style="font-weight:600;font-size:12px;flex:1">${p.driver_name||''}</span><span style="font-family:var(--head);font-weight:700;color:var(--gold)">${p.odds||''}</span></div>`).join('')}</div></div>`;
+  el.innerHTML=`<div class="card"><div class="card-body" style="padding:10px 14px">${data.map(p=>{const ab=p.driver_name?abbrByName(p.driver_name):'';return`<div ${ab?`data-drv="${ab}"`:''} style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="pk-type ${pkCl(p.pick_type)}" style="font-size:8px;padding:2px 6px">${p.pick_type}</span><span style="font-weight:600;font-size:12px;flex:1">${p.driver_name||''}</span><span style="font-family:var(--head);font-weight:700;color:var(--gold)">${p.odds||''}</span></div>`}).join('')}</div></div>`;
 }
 
 function renderSched(){
@@ -854,7 +875,7 @@ async function loadMini(){
   try{const res=await fetchWT(JOLPICA+'/2026/driverStandings.json');if(!res.ok)throw 0;const j=await res.json();
     const top5=(j?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings||[]).slice(0,5);
     if(!top5.length){el.innerHTML='<div class="card-body empty">No data.</div>';return}
-    el.innerHTML=`<div style="padding:6px 0">${top5.map((e,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 12px;font-size:12px"><span class="pn ${i<3?'p'+(i+1):''}" style="min-width:18px;font-size:12px">P${i+1}</span><span class="cdot" style="background:${TC[e.Constructors?.[0]?.constructorId]||'var(--muted)'}"></span><span style="font-weight:600;flex:1">${e.Driver?.familyName||''}</span><span style="font-weight:700">${e.points}</span></div>`).join('')}</div>`;
+    el.innerHTML=`<div style="padding:6px 0">${top5.map((e,i)=>{const fam=e.Driver?.familyName||'';const ab=abbrByName(fam)||'';return`<div ${ab?`data-drv="${ab}"`:''} style="display:flex;align-items:center;gap:6px;padding:5px 12px;font-size:12px"><span class="pn ${i<3?'p'+(i+1):''}" style="min-width:18px;font-size:12px">P${i+1}</span><span class="cdot" style="background:${TC[e.Constructors?.[0]?.constructorId]||'var(--muted)'}"></span><span style="font-weight:600;flex:1">${fam}</span><span style="font-weight:700">${e.points}</span></div>`}).join('')}</div>`;
   }catch{el.innerHTML='<div class="card-body empty">Standings unavailable.</div>'}
 }
 
@@ -912,7 +933,7 @@ async function initPicks(){
   if(S.nr)document.getElementById('picksTitle').textContent=S.nr.n+' Picks';
   const el=document.getElementById('picksGrid');
   if(!S.picks.length){el.innerHTML='<div class="empty" style="grid-column:1/-1">No picks set yet.</div>';return}
-  el.innerHTML=S.picks.map(p=>`<div class="pk"><div class="pk-hd"><span class="pk-type ${pkCl(p.pick_type)}">${p.pick_type}</span><span class="pk-lock">\ud83d\udd12 Locked</span></div><div class="pk-bd"><div class="pk-drv">${p.driver_name||''}</div><div class="pk-mkt">${p.market||''}</div><div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="pk-odds">${p.odds||''}</span>${p.edge?`<span class="pk-edge">+${Number(p.edge).toFixed(1)}%</span>`:''}</div><div class="pk-an">${p.analysis||''}</div></div></div>`).join('');
+  el.innerHTML=S.picks.map(p=>{const ab=p.driver_name?abbrByName(p.driver_name):'';return`<div class="pk"><div class="pk-hd"><span class="pk-type ${pkCl(p.pick_type)}">${p.pick_type}</span><span class="pk-lock">\ud83d\udd12 Locked</span></div><div class="pk-bd"><div class="pk-drv" ${ab?`data-drv="${ab}"`:''}>${p.driver_name||''}</div><div class="pk-mkt">${p.market||''}</div><div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="pk-odds">${p.odds||''}</span>${p.edge?`<span class="pk-edge">+${Number(p.edge).toFixed(1)}%</span>`:''}</div><div class="pk-an">${p.analysis||''}</div></div></div>`}).join('');
   const rec=rr.data?.[0];if(rec){const roi=rec.roi>=0?'+'+rec.roi+'%':rec.roi+'%';document.getElementById('bRec').innerHTML=`<div class="brec"><div class="brec-s"><div class="brec-n w">${rec.wins||0}</div><div class="brec-l">Wins</div></div><div class="brec-d"></div><div class="brec-s"><div class="brec-n l">${rec.losses||0}</div><div class="brec-l">Losses</div></div><div class="brec-d"></div><div class="brec-s"><div class="brec-n r">${roi}</div><div class="brec-l">ROI</div></div></div>`}
 }
 
@@ -1061,9 +1082,26 @@ function buildTrack(hist){
   if(!hist?.length||!S.circBounds)return;
   const p1=hist.filter(l=>l.driver_number===S.p1Num).sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(p1.length<10)return;
-  const d='M '+p1.map(p=>{const{sx,sy}=normCoord(p.x,p.y);return sx+','+sy}).join(' L ')+' Z';
+  const pts=p1.map(p=>normCoord(p.x,p.y));
+  const d='M '+pts.map(p=>p.sx+','+p.sy).join(' L ')+' Z';
   document.getElementById('trackPath')?.setAttribute('d',d);
   document.getElementById('trackCentre')?.setAttribute('d',d);
+  document.getElementById('lmTrack')?.setAttribute('d',d);
+  document.getElementById('lmCentre')?.setAttribute('d',d);
+  drawStartMark(pts);
+}
+function drawStartMark(pts){
+  const line=document.getElementById('lmStart'),arr=document.getElementById('lmArrow');
+  if(!line||!arr||pts.length<5)return;
+  const a=pts[0],b=pts[Math.min(4,pts.length-1)];
+  const dx=b.sx-a.sx,dy=b.sy-a.sy,len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len,ny=dx/len,half=14;
+  line.setAttribute('x1',a.sx+nx*half);line.setAttribute('y1',a.sy+ny*half);
+  line.setAttribute('x2',a.sx-nx*half);line.setAttribute('y2',a.sy-ny*half);
+  line.setAttribute('visibility','visible');
+  const tx=dx/len,ty=dy/len,ax=a.sx+tx*22,ay=a.sy+ty*22,w=6;
+  arr.setAttribute('points',`${ax+tx*8},${ay+ty*8} ${ax-tx*4+nx*w},${ay-ty*4+ny*w} ${ax-tx*4-nx*w},${ay-ty*4-ny*w}`);
+  arr.setAttribute('visibility','visible');
 }
 
 function processLocs(locs){
@@ -1480,7 +1518,7 @@ function renderRaceContent(){
     const circPath=CS[circKey];
     let mapSvg='';
     if(circPath){
-      mapSvg=`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${circPath}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${circPath}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/></svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">${rd.circuit} \u00b7 Live GPS tracking during sessions</div></div>`;
+      mapSvg=`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:12px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${circPath}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${circPath}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>${circMarkers(circPath)}</svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">${rd.circuit} \u00b7 Start/Finish \u25b2 \u00b7 Live GPS during sessions</div></div>`;
     }
 
     // Sub-tab navigation (Results / Strategy / Moments / Circuit)
@@ -1559,6 +1597,7 @@ function renderRaceContent(){
           '<svg id="circuitMap" viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0A0D12;touch-action:none;cursor:'+(z>1?'grab':'default')+'">'+
           '<path d="'+circPath+'" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>'+
           '<path d="'+circPath+'" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/>'+
+          circMarkers(circPath)+
           driverDots+
           '</svg>'+
           '<div class="map-zoom-ctl">'+
@@ -1648,7 +1687,7 @@ function renderRaceContent(){
 // initRes is patched below in boot to call initRaceBrowser when non-live
 
 /* ═══ LIVE SESSION HUB ═══ */
-S.livePoller=null;S.liveLB=[];S.liveRC=[];S.liveStints={};S.liveWx=null;S.prevPos={};S.selDrv=null;S.flNum=null;S.trackBuilt=false;
+S.livePoller=null;S.liveLB=[];S.liveRC=[];S.liveStints={};S.liveWx=null;S.prevPos={};S.selDrv=null;S.flNum=null;S.trackBuilt=false;S.livePits={};S.carDataHasOvertake=null;
 
 async function checkLive(){
   try{
@@ -1674,13 +1713,14 @@ async function checkLive(){
 
 async function fetchLive(){
   try{
-    const[lb,rc,st,wx,loc,sp]=await Promise.allSettled([
+    const[lb,rc,st,wx,loc,sp,pit]=await Promise.allSettled([
       sbq(s=>s.from('leaderboard').select('*').eq('session_type','race').order('position',{ascending:true}).limit(22)),
       sbq(s=>s.from('race_control').select('*').order('date',{ascending:false}).limit(12)),
       sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
       sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
       sbq(s=>s.from('car_locations').select('driver_number,x,y,date').order('date',{ascending:false}).limit(500)),
       sbq(s=>s.from('lap_times').select('driver_number,st_speed,lap_number').not('st_speed','is',null).order('st_speed',{ascending:false}).limit(100)),
+      sbq(s=>s.from('pit_stops').select('driver_number,lap_number,date,stop_duration').order('date',{ascending:false}).limit(200)),
     ]);
     if(lb.status==='fulfilled'&&lb.value.data)procLB(lb.value.data);
     if(rc.status==='fulfilled'&&rc.value.data){S.liveRC=rc.value.data;checkBans()}
@@ -1688,6 +1728,7 @@ async function fetchLive(){
     if(wx.status==='fulfilled'&&wx.value.data?.[0])procWx(wx.value.data[0]);
     if(loc.status==='fulfilled'&&loc.value.data)processLocs(loc.value.data);
     if(sp.status==='fulfilled'&&sp.value.data)S.liveSpeeds=sp.value.data;
+    if(pit.status==='fulfilled'&&pit.value.data)procPits(pit.value.data);
     S.lastPoll=performance.now();
     if(S.tab==='results'){renderTwr();renderRC();renderStrat();renderMap();loadRaceBlog();renderSpeedTrap(S.liveSpeeds)}
   }catch(e){console.warn('[GF] Live fetch:',e.message)}
@@ -1726,6 +1767,22 @@ function procLB(data){
     const fl=document.getElementById('lapFill');if(fl)fl.style.width=pct+'%'}
 }
 function procStints(data){const st={};data.forEach(s=>{if(!st[s.driver_number])st[s.driver_number]=[];st[s.driver_number].push(s)});S.liveStints=st}
+function procPits(data){const p={};data.forEach(r=>{const prev=p[r.driver_number];if(!prev||new Date(r.date)>new Date(prev.date))p[r.driver_number]=r});S.livePits=p}
+function drvStatus(e){
+  if(e.status==='retired'||e.dnf||e.retired)return'dnf';
+  const p=S.livePits[e.driver_number];
+  if(p){
+    const ageS=(Date.now()-new Date(p.date).getTime())/1000;
+    const dur=parseFloat(p.stop_duration)||25;
+    if(ageS>=0&&ageS<dur+5)return'pit';
+    if(ageS<dur+45)return'out';
+  }
+  if(S.carDataHasOvertake){
+    if(e.overtake_mode)return'overtake';
+    if(e.ers_boost)return'boost';
+  }
+  return'';
+}
 function procWx(w){S.liveWx=w;const r=w.rainfall||false;
   const m={wxT:w.track_temp?Math.round(w.track_temp)+'°C':'—',wxA:w.air_temp?Math.round(w.air_temp)+'°C':'—',wxH:w.humidity?Math.round(w.humidity)+'%':'—',wxR:r?'🌧 WET':'DRY'};
   Object.entries(m).forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=v})}
@@ -1749,7 +1806,9 @@ function renderTwr(){
     const ar=ch?(up?'\u25b2':'\u25bc'):'';const ac=up?'tr-up':'tr-dn';
     const cp=e.compound||'M';const tc=TYC[cp]||'#888';const tt=TYT[cp]||'#fff';
     const drv=S.drvCache[e.driver_number]||{};const sel=S.selDrv===e.driver_number;
-    return`<div class="twr-row${sel?' sel':''}" onclick="selDrvNum(${e.driver_number})"><div class="tr-pos${i===0?' tr-p1':i===1?' tr-p2':i===2?' tr-p3':''}">P${i+1}</div><div class="tr-bar" style="background:${drv.tc||'#888'}"></div><img class="drv-img" src="${driverImg(e.driver_number)}" style="border:2px solid ${drv.tc||'#888'}" loading="lazy" alt="${drv.name||''}" onerror="drvFallback(this,${e.driver_number})"><div class="tr-nm">${drv.abbr||'D'+e.driver_number}</div><div class="tr-ty" style="background:${tc};color:${tt}">${cp}</div><div class="tr-gp">${i===0?'\u2014':(e.gap_str||'\u2014')}</div><div class="tr-lt">${e.time_str||'\u2014'}</div><div class="tr-ar ${ac}">${ar}</div></div>`;
+    const stc=drvStatus(e);const sc=stc?' status-'+stc:'';
+    const abr=drv.abbr||'D'+e.driver_number;
+    return`<div class="twr-row${sel?' sel':''}" onclick="selDrvNum(${e.driver_number})"><div class="tr-pos${i===0?' tr-p1':i===1?' tr-p2':i===2?' tr-p3':''}">P${i+1}</div><div class="tr-bar" style="background:${drv.tc||'#888'}"></div><img class="drv-img${sc}" src="${driverImg(e.driver_number)}" style="border:2px solid ${drv.tc||'#888'}" loading="lazy" alt="${drv.name||''}" onerror="drvFallback(this,${e.driver_number})"><div class="tr-nm" data-drv="${abr}">${abr}</div><div class="tr-ty" style="background:${tc};color:${tt}">${cp}</div><div class="tr-gp">${i===0?'\u2014':(e.gap_str||'\u2014')}</div><div class="tr-lt">${e.time_str||'\u2014'}</div><div class="tr-ar ${ac}">${ar}</div></div>`;
   }).join('');
 }
 
@@ -1838,7 +1897,7 @@ function initSim(){const el=document.getElementById('simTable');if(!el)return;co
 function resetSim(){S._simR={};initSim()}
 
 /* ═══ DRIVER PROFILE (Phase 8) ═══ */
-function showDrv(abbr){const entry=Object.entries(DSTATS).find(([_,d])=>d.abbr===abbr);if(!entry)return;const[name,d]=entry;go('driver');history.replaceState({},'','/#/driver/'+abbr);const el=document.getElementById('driverProfile');if(!el)return;const pos=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).findIndex(([n])=>n===name)+1;el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">< Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><img class="drv-img-xl" src="${driverImg(d.num)}" style="border:3px solid ${d.tc}" loading="lazy" alt="${name}" onerror="drvFallback(this,${d.num})"><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${name}</div><div style="font-size:13px;color:var(--muted)">${d.team} | #${d.num}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">${[['POS','P'+pos],['PTS',d.pts],['WINS',d.wins],['PODS',d.pods]].map(([l,v])=>`<div class="card" style="padding:12px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--gold)">${v}</div><div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:2px">${l}</div></div>`).join('')}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${['R1','R2','R3'].map((r,i)=>{const res=d.results[i];const isDnf=res==='DNF';return`<div style="flex:1;text-align:center;background:${isDnf?'rgba(232,0,45,.1)':'var(--card)'};border:1px solid var(--border);border-radius:6px;padding:10px"><div style="font-size:9px;color:var(--muted);margin-bottom:4px">${r}</div><div style="font-size:18px;font-weight:900;color:${isDnf?'var(--accent)':res<=3?'var(--gold)':'var(--text)'}">${isDnf?'DNF':'P'+res}</div></div>`}).join('')}</div>`}
+function showDrv(abbr){const entry=Object.entries(DSTATS).find(([_,d])=>d.abbr===abbr);if(!entry)return;const[name,d]=entry;go('driver');history.replaceState({},'','/#/driver/'+abbr);const el=document.getElementById('driverProfile');if(!el)return;const pos=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).findIndex(([n])=>n===name)+1;el.innerHTML=`<button onclick="go(S.prevTab||'standings')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><img class="drv-img-xl" src="${driverImg(d.num)}" style="border:3px solid ${d.tc}" loading="lazy" alt="${name}" onerror="drvFallback(this,${d.num})"><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${name}</div><div style="font-size:13px;color:var(--muted)">${d.team} | #${d.num}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">${[['POS','P'+pos],['PTS',d.pts],['WINS',d.wins],['PODS',d.pods]].map(([l,v])=>`<div class="card" style="padding:12px;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--gold)">${v}</div><div style="font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:2px">${l}</div></div>`).join('')}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${['R1','R2','R3'].map((r,i)=>{const res=d.results[i];const isDnf=res==='DNF';return`<div style="flex:1;text-align:center;background:${isDnf?'rgba(232,0,45,.1)':'var(--card)'};border:1px solid var(--border);border-radius:6px;padding:10px"><div style="font-size:9px;color:var(--muted);margin-bottom:4px">${r}</div><div style="font-size:18px;font-weight:900;color:${isDnf?'var(--accent)':res<=3?'var(--gold)':'var(--text)'}">${isDnf?'DNF':'P'+res}</div></div>`}).join('')}</div>`}
 
 /* ═══ ARTICLE VIEW (Phase 4) ═══ */
 async function showArtView(slugOrId){
@@ -2019,7 +2078,7 @@ function showTeam(slug){
   const drvCards=t.drivers.map(num=>{const entry=Object.entries(DSTATS).find(([_,d])=>d.num===num);if(!entry)return'';const[name,d]=entry;const pos=Object.entries(DSTATS).sort((a,b)=>b[1].pts-a[1].pts).findIndex(([n])=>n===name)+1;return`<div class="tm-drv" onclick="showDrv('${d.abbr}')"><img class="drv-img" src="${driverImg(num)}" style="border:2px solid ${t.color}" loading="lazy" onerror="drvFallback(this,${num})"><div style="flex:1"><div style="font-weight:700;font-size:13px">${name}</div><div style="font-size:11px;color:var(--muted)">#${num} · P${pos} · ${d.pts} pts</div></div><div style="font-size:11px;color:var(--muted)">${d.wins}W ${d.pods}P</div></div>`}).join('');
   const raceLabels=['R1','R2','R3'];
   const results=raceLabels.map((r,i)=>{const rows=t.drivers.map(num=>{const entry=Object.entries(DSTATS).find(([_,d])=>d.num===num);if(!entry)return'';const[name,d]=entry;const res=d.results[i];const isDnf=res==='DNF'||res==='DNS';return`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:600">${name.split(' ').pop()}</span><span style="font-size:12px;font-weight:800;color:${isDnf?'var(--accent)':res<=3?'var(--gold)':'var(--text)'}">${isDnf?res:'P'+res}</span></div>`}).join('');return`<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${r}</div>${rows}</div>`}).join('');
-  el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div class="team-header" style="border-left:4px solid ${t.color}"><h1>${t.name}</h1><div class="team-meta">${t.hq} \u00b7 Est. ${t.founded}</div></div><div class="stats-grid">${[['P'+t.pos,'POS'],[t.pts,'PTS'],[t.wins,'WINS'],[t.podiums,'PODS']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Drivers</div><div style="margin-bottom:20px">${drvCards}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${results}</div><div class="slabel">Team Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Principal</span><span style="font-weight:600">${t.principal}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Power Unit</span><span style="font-weight:600">${t.engine}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">World Championships</span><span style="font-weight:600">${t.titles}</span></div></div></div>`;
+  el.innerHTML=`<button onclick="go(S.prevTab||'standings')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div class="team-header" style="border-left:4px solid ${t.color}"><h1>${t.name}</h1><div class="team-meta">${t.hq} \u00b7 Est. ${t.founded}</div></div><div class="stats-grid">${[['P'+t.pos,'POS'],[t.pts,'PTS'],[t.wins,'WINS'],[t.podiums,'PODS']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Drivers</div><div style="margin-bottom:20px">${drvCards}</div><div class="slabel">Race Results</div><div style="display:flex;gap:6px;margin-bottom:20px">${results}</div><div class="slabel">Team Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Principal</span><span style="font-weight:600">${t.principal}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Power Unit</span><span style="font-weight:600">${t.engine}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">World Championships</span><span style="font-weight:600">${t.titles}</span></div></div></div>`;
 }
 
 /* ═══ CIRCUIT PROFILES ═══ */
@@ -2048,6 +2107,27 @@ const CIRCUIT_DATA={
   abudhabi:{slug:'abudhabi',name:'Yas Marina Circuit',shortName:'Yas Marina',country:'UAE',flag:'\u{1F1E6}\u{1F1EA}',laps:58,length:5.281,distance:306.183,lapRecord:{driver:'Norris',time:'1:25.637',year:2024},firstGP:2009,type:'Permanent',round:22},
 };
 
+// Parse the first two coordinate pairs of a "Mx,yLx,yL..." circuit path and
+// return SVG fragments for a start/finish line (perpendicular to travel) and
+// a directional arrow (along travel). Used on static circuit SVGs.
+function circMarkers(d){
+  if(!d)return'';
+  const nums=d.replace(/[MLZmlz]/g,' ').replace(/,/g,' ').trim().split(/\s+/).map(parseFloat).filter(n=>!isNaN(n));
+  if(nums.length<4)return'';
+  const x1=nums[0],y1=nums[1],x2=nums[2],y2=nums[3];
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1;
+  const tx=dx/len,ty=dy/len,nx=-ty,ny=tx;
+  const half=12;
+  const sx1=(x1+nx*half).toFixed(1),sy1=(y1+ny*half).toFixed(1);
+  const sx2=(x1-nx*half).toFixed(1),sy2=(y1-ny*half).toFixed(1);
+  // Arrow head sits ~26u downstream of the start line
+  const ax=x1+tx*26,ay=y1+ty*26;
+  const tip=(ax+tx*10).toFixed(1)+','+(ay+ty*10).toFixed(1);
+  const l=(ax-tx*4+nx*7).toFixed(1)+','+(ay-ty*4+ny*7).toFixed(1);
+  const r=(ax-tx*4-nx*7).toFixed(1)+','+(ay-ty*4-ny*7).toFixed(1);
+  return`<line x1="${sx1}" y1="${sy1}" x2="${sx2}" y2="${sy2}" stroke="#E8002D" stroke-width="4" stroke-linecap="round"/><polygon points="${tip} ${l} ${r}" fill="#E8002D"/>`;
+}
+
 async function showCircuit(slug){
   const c=CIRCUIT_DATA[slug];if(!c)return;
   go('circuit');history.replaceState({},'','/#/circuit/'+slug);
@@ -2056,7 +2136,7 @@ async function showCircuit(slug){
   // Fetch historical winners from this circuit (last 5 years)
   const{data:circHistory}=await sbq(s=>s.from('historical_races').select('season,round,winner_driver,winner_team,pole_driver').ilike('circuit_name','%'+c.name.split(' ')[0]+'%').order('season',{ascending:false}).limit(5));
   const path=CS[slug]||'';
-  const mapSvg=path?`<div style="background:#0A0D12;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${path}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c.country==='Monaco'||c.type==='Street'?'#E8002D':'#2A3145'}" stroke-width="2" stroke-dasharray="5,4"/></svg></div>`:'';
+  const mapSvg=path?`<div style="background:#0A0D12;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${path}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c.country==='Monaco'||c.type==='Street'?'#E8002D':'#2A3145'}" stroke-width="2" stroke-dasharray="5,4"/>${circMarkers(path)}</svg><div style="text-align:center;font-size:9px;color:var(--muted);margin-top:8px;letter-spacing:1px;text-transform:uppercase">\u25cf Start / Finish \u00b7 Direction of travel</div></div>`:'';
   const histRows=(circHistory||[]).map(h=>`<div class="hist-race" onclick="showHistory(${h.season},${h.round})"><div class="hist-rnd">${h.season}</div><div class="hist-info"><div class="hist-name">${h.winner_driver||'\u2014'}</div><div class="hist-cir">${h.winner_team||''}</div></div><div class="hist-win">\u2192</div></div>`).join('');
   el.innerHTML=`<button onclick="history.back();go(S.tab||'home')" style="font-size:13px;color:var(--muted);margin-bottom:16px;cursor:pointer;background:none;border:none;font-family:var(--font)">\u2190 Back</button><div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div style="font-size:48px">${c.flag}</div><div><div style="font-family:var(--head);font-size:24px;font-weight:900;text-transform:uppercase">${c.shortName}</div><div style="font-size:13px;color:var(--muted)">${c.name} \u00b7 ${c.country}</div></div></div>${mapSvg}<div class="stats-grid">${[[c.laps,'LAPS'],[c.length+' km','LENGTH'],[c.distance+' km','DISTANCE'],['R'+c.round,'2026 ROUND']].map(([v,l])=>`<div class="stat-cell"><div class="stat-num">${v}</div><div class="stat-label">${l}</div></div>`).join('')}</div><div class="slabel">Lap Record</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Time</span><span style="font-weight:700;color:var(--gold);font-size:16px">${c.lapRecord.time}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Driver</span><span style="font-weight:600">${c.lapRecord.driver}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Year</span><span style="font-weight:600">${c.lapRecord.year}</span></div></div></div><div class="slabel">Circuit Info</div><div class="card" style="margin-bottom:20px"><div class="card-body" style="font-size:12px;line-height:2;color:var(--dim)"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Type</span><span style="font-weight:600">${c.type}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">First GP</span><span style="font-weight:600">${c.firstGP}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">2026 Regulations</span><span style="font-weight:600">No DRS \u00b7 Overtake Mode</span></div></div></div>${histRows?`<div class="slabel">Recent Winners</div><div class="card" style="overflow:hidden;margin-bottom:20px">${histRows}</div>`:''}`;
 }

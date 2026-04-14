@@ -603,6 +603,10 @@ function selectPublished(id){
       <input class="editor-title" id="pubEdTitle" value="${esc(a.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
       <div class="tag-row" id="pubEdTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="togglePubTag(this,'${t}')">${t}</span>`).join('')}</div>
       <textarea class="editor-excerpt" id="pubEdExcerpt" placeholder="Excerpt..." onfocus="isEditing=true" onblur="isEditing=false">${esc(a.excerpt||'')}</textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px">Subject \u2014 article body</span>
+        <button type="button" class="copy-subject-btn" onclick="copyPublishedBody(this)" title="Copy article body">\u29C9 Copy</button>
+      </div>
       <textarea class="editor-body" id="pubEdBody" placeholder="Article body..." onfocus="isEditing=true" onblur="isEditing=false">${esc(a.body||'')}</textarea>
       <div style="display:flex;gap:10px;margin-top:14px">
         <button class="act-btn act-approve" onclick="savePublished('${a.id}')">\u{1F4BE} Save Changes</button>
@@ -613,6 +617,21 @@ function selectPublished(id){
 }
 
 function togglePubTag(el,t){el.classList.toggle('active')}
+
+async function copyPublishedBody(btn){
+  const body=document.getElementById('pubEdBody')?.value?.trim()||'';
+  if(!body)return;
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(body);
+    }else{
+      const ta=document.createElement('textarea');
+      ta.value=body;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    }
+    if(btn){const orig=btn.innerHTML;btn.innerHTML='\u2713 Copied';btn.classList.add('copied');setTimeout(()=>{btn.innerHTML=orig;btn.classList.remove('copied')},1500)}
+  }catch(e){console.warn('Copy failed',e)}
+}
 function getPubTags(){return Array.from(document.querySelectorAll('#pubEdTags .tag-pill.active')).map(el=>el.textContent.trim())}
 
 async function savePublished(id){

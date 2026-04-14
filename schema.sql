@@ -186,8 +186,10 @@ create table if not exists content_topics (
   priority        int default 5,
   status          text default 'pending', -- pending | drafted | published | skipped
   triggered_by    text, -- cron | news_detector | manual
+  source_language text default 'en', -- en | it | de | es | pt | nl (non-en = translated)
   created_at      timestamptz default now()
 );
+alter table content_topics add column if not exists source_language text default 'en';
 
 -- ==================== SCHEDULE ====================
 create table if not exists schedule (

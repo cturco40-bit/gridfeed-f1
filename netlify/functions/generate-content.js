@@ -257,6 +257,15 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         `OUTPUT: Return ONLY valid JSON with no markdown fences:\n{"title":"...","excerpt":"first 150 chars","body":"full article","tags":["RACE"],"content_type":"${contentType}"}`
       );
 
+      // Translated-source note — headline/summary came from a foreign-language
+      // feed and were machine-translated. Tell Claude so it doesn't mistake
+      // translation artifacts for facts.
+      if (topic.source_language && topic.source_language !== 'en') {
+        const LANG_NAME = { it: 'Italian', de: 'German', es: 'Spanish', pt: 'Portuguese', nl: 'Dutch' };
+        const langName = LANG_NAME[topic.source_language] || topic.source_language;
+        systemPrompt += `\n\nThis story originated from a ${langName} source. The headline and summary have been translated. Write the article in English.`;
+      }
+
       // Feed previous validation error back to Claude on retry
       if (topic.last_error && (topic.retry_count || 0) > 0) {
         systemPrompt += '\n\nRETRY ATTEMPT ' + topic.retry_count + ' OF 3.';
