@@ -1,5 +1,6 @@
 import { sb, fetchWT, logSync, json, makeSlug } from './lib/shared.js';
 import { fixEncoding } from './lib/accuracy.js';
+import { recordSubjectPublished } from './lib/subject-registry.js';
 
 function generateTweet(title, articleBody, slug) {
   // Cache-buster: Twitter caches per-URL permanently, so even after we fix
@@ -59,6 +60,9 @@ export default async (req) => {
       review_status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: 'admin',
       published_article_id: articleId, title: cleanTitle, body: cleanBody, excerpt: cleanExcerpt, tags,
     });
+
+    // 2b. Record the article subject so the same angle can't be re-drafted
+    recordSubjectPublished(cleanTitle, cleanBody, articleId).catch(() => {});
 
     // 3. Create tweet draft as pending — needs manual approval before posting
     try {

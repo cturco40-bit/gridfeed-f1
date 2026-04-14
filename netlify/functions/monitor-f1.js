@@ -1,5 +1,6 @@
 import { parseStringPromise } from 'xml2js';
 import { fetchWT, sb, logSync, json } from './lib/shared.js';
+import { checkSubjectPublished } from './lib/subject-registry.js';
 
 const DRIVERS = ['Verstappen','Hamilton','Leclerc','Norris','Piastri','Russell','Sainz','Alonso','Antonelli','Hadjar','Lindblad','Bottas','Perez','Gasly','Colapinto','Albon','Ocon','Bearman','Lawson','Hulkenberg','Bortoleto','Stroll'];
 const TEAMS = ['Ferrari','Mercedes','McLaren','RedBull','Red Bull','AstonMartin','Aston Martin','Alpine','Williams','Haas','Audi','Cadillac','Racing Bulls'];
@@ -117,7 +118,7 @@ export default async (req, context) => {
     const rejectCounts = {
       nonF1: 0, noF1Keyword: 0, noSignature: 0,
       titleDedup: 0, sigDedup: 0, lowScore: 0,
-      subjectDedup: 0, publishedDup: 0, queueFull: 0, accepted: 0,
+      subjectDedup: 0, publishedDup: 0, registryDup: 0, queueFull: 0, accepted: 0,
     };
 
     // Word-overlap stop list — common F1 vocabulary that would cause every
@@ -203,6 +204,20 @@ export default async (req, context) => {
         }
       }
 
+      // Subject registry: reject if the headline collapses to an
+      // entity:angle key already in published_subjects (semantic dedup)
+      try {
+        const blocked = await checkSubjectPublished(group.titles[0]);
+        if (blocked) {
+          rejectCounts.registryDup++;
+          console.log('REJECT registryDup:', group.titles[0].slice(0, 60), '| key:', blocked);
+          await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
+          continue;
+        }
+      } catch (e) {
+        // Don't let a registry error block the whole pipeline
+      }
+
       // Published-article dedup: reject if 3+ significant word overlap with
       // any recently published article title (stop words excluded)
       const newWords = overlapWords(group.titles[0]);
@@ -264,7 +279,7 @@ export default async (req, context) => {
     if (stateRow.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
     else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
-    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup`;
+    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup, ${rejectCounts.registryDup} registry-dup`;
     await logSync('monitor-f1', 'success', topicsCreated, summary, Date.now() - start);
     return json({ ok: true, headlines: headlines.length, topicsCreated, rejectCounts });
   } catch (err) {
