@@ -1,6 +1,42 @@
 import { parseStringPromise } from 'xml2js';
 import { fetchWT, sb, logSync, json } from './lib/shared.js';
-import { checkSubjectPublished } from './lib/subject-registry.js';
+
+// INLINED subject key extractor — duplicated from lib/subject-registry.js to
+// bypass Netlify's function bundle cache which has been serving stale
+// versions of the imported helper. Keep in sync with seed-subjects.js.
+function getSubjectKeyLocal(title) {
+  const h = (title || '').toLowerCase();
+  if (!h) return null;
+  if (h.includes('aduo')) return 'aduo:engine';
+  if (h.includes('bahrain')) return 'bahrain:calendar';
+  if (h.includes('saudi')) return 'saudi:calendar';
+  if (h.includes('goodwood')) return 'goodwood:general';
+  if (h.includes('formula 2')) return 'f2:calendar';
+  if (h.includes('formula 3')) return 'f3:calendar';
+  if (h.includes('overtake mode')) return 'f1:regulation';
+  if (h.includes('active aero')) return 'f1:regulation';
+  if (/power.*rank|champion.*(stand|check)|all.*drivers/i.test(h)) return 'f1:standings';
+  const drivers = ['antonelli','russell','hamilton','leclerc','norris','piastri','verstappen','bearman','gasly','alonso','stroll','sainz','albon','ocon','lawson','lindblad','hadjar','hulkenberg','bortoleto','perez','bottas','colapinto'];
+  const teams = ['mercedes','ferrari','mclaren','red bull','aston martin','alpine','haas','williams','audi','cadillac','racing bulls'];
+  const entity = drivers.find(d => h.includes(d)) || teams.find(t => h.includes(t)) || '';
+  if (!entity) return null;
+  const NOISE = new Set(['the','a','an','in','at','of','for','and','is','has','with','from','after','how','why','what','not','his','her','f1','formula','grand','prix','race','driver','team','season','championship','points','2026']);
+  const SYNONYMS = { leads:'leads',lead:'leads',leading:'leads',extends:'leads',dominates:'leads',dominant:'leads',dominance:'leads',standings:'leads', crash:'crash',crashes:'crash',incident:'crash',collision:'crash', contract:'contract',signs:'contract',deal:'contract',extension:'contract', departs:'departs',leaves:'departs',exit:'departs',departure:'departs',fired:'departs',sacked:'departs', start:'start',launch:'start',getaway:'start',clutch:'start', penalty:'penalty',penalised:'penalty',stewards:'penalty', upgrade:'upgrade',development:'upgrade',floor:'upgrade', engine:'engine',power:'engine',unit:'engine',reliability:'engine', hire:'hire',hires:'hire',recruit:'hire',appoint:'hire', pace:'pace',speed:'pace',fastest:'pace',performance:'pace',deficit:'pace', wins:'wins',win:'wins',victory:'wins',winner:'wins', pole:'pole',qualifying:'pole',qualified:'pole', preview:'preview',expect:'preview',watch:'preview',prediction:'preview',predict:'preview', rankings:'rankings',ranked:'rankings',rating:'rankings', rookie:'rookie',debut:'rookie',youngest:'rookie',teenager:'rookie' };
+  const words = h.split(/[\s\-:,.']+/).filter(w => w.length > 3 && !NOISE.has(w) && w !== entity);
+  const sorted = words.sort((a, b) => b.length - a.length);
+  const angle = SYNONYMS[sorted[0]] || sorted[0] || 'general';
+  return entity + ':' + angle;
+}
+
+async function checkSubjectPublishedLocal(title) {
+  const key = getSubjectKeyLocal(title);
+  if (!key) return null;
+  const now = new Date().toISOString();
+  try {
+    const rows = await sb(`published_subjects?subject=eq.${encodeURIComponent(key)}&or=(expires_at.is.null,expires_at.gt.${now})&select=id&limit=1`);
+    return (rows || []).length ? key : null;
+  } catch { return null; }
+}
 
 const DRIVERS = ['Verstappen','Hamilton','Leclerc','Norris','Piastri','Russell','Sainz','Alonso','Antonelli','Hadjar','Lindblad','Bottas','Perez','Gasly','Colapinto','Albon','Ocon','Bearman','Lawson','Hulkenberg','Bortoleto','Stroll'];
 const TEAMS = ['Ferrari','Mercedes','McLaren','RedBull','Red Bull','AstonMartin','Aston Martin','Alpine','Williams','Haas','Audi','Cadillac','Racing Bulls'];
@@ -205,17 +241,14 @@ export default async (req, context) => {
       }
 
       // Subject registry: reject if the headline collapses to an
-      // entity:angle key already in published_subjects (semantic dedup)
-      try {
-        const blocked = await checkSubjectPublished(group.titles[0]);
-        if (blocked) {
-          rejectCounts.registryDup++;
-          console.log('REJECT registryDup:', group.titles[0].slice(0, 60), '| key:', blocked);
-          await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
-          continue;
-        }
-      } catch (e) {
-        // Don't let a registry error block the whole pipeline
+      // entity:angle key already in published_subjects (semantic dedup).
+      // Uses INLINED extractor + lookup to bypass the bundle cache.
+      const blocked = await checkSubjectPublishedLocal(group.titles[0]);
+      if (blocked) {
+        rejectCounts.registryDup++;
+        console.log('REJECT registryDup:', group.titles[0].slice(0, 60), '| key:', blocked);
+        await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
+        continue;
       }
 
       // Published-article dedup: reject if 3+ significant word overlap with
