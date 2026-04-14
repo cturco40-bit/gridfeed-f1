@@ -1056,9 +1056,22 @@ if('serviceWorker' in navigator){
         if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner(nw);
       });
     });
+    // Immediate check on every app open (home-screen launch, tab open, etc.)
+    // — don't wait 5 min for the first tick.
+    reg.update().catch(()=>{});
     // Poll every 5 minutes so users on long sessions still see updates quickly
     setInterval(()=>reg.update().catch(()=>{}),3e5);
   }).catch(()=>{});
+  // Foreground return (tab switch, app resume from background) — check again
+  // so a user who left the app open for hours still picks up a new build the
+  // moment they come back, without waiting for the next 5-min tick.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      navigator.serviceWorker.getRegistration('/app-sw.js')
+        .then(reg=>{if(reg)reg.update().catch(()=>{})})
+        .catch(()=>{});
+    }
+  });
 }
 
 /* ═══ URL ROUTING ═══ */
