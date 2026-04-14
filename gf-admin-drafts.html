@@ -45,9 +45,14 @@ input:focus,textarea:focus{border-color:var(--accent)}
 
 /* ═══ HEADER ═══ */
 .admin-header{
-  height:56px;background:var(--surface);border-bottom:1px solid var(--border);
+  min-height:56px;background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;align-items:center;padding:0 20px;gap:16px;position:sticky;top:0;z-index:100;
+  padding-top:env(safe-area-inset-top,0);
+  padding-left:max(20px,env(safe-area-inset-left));
+  padding-right:max(20px,env(safe-area-inset-right));
+  box-sizing:content-box;
 }
+body{padding-top:0}
 .hdr-logo{font-family:var(--font);font-weight:900;font-size:18px;letter-spacing:2px;white-space:nowrap}
 .hdr-logo .g{color:#fff}.hdr-logo .f{color:var(--accent)}
 .hdr-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-left:4px}
@@ -73,7 +78,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .hdr-refresh:hover{background:var(--card);color:var(--text)}
 
 /* ═══ LAYOUT ═══ */
-.admin-layout{display:flex;height:calc(100vh - 56px)}
+.admin-layout{display:flex;height:calc(100dvh - 56px - env(safe-area-inset-top,0))}
 .admin-sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .admin-main{flex:1;overflow-y:auto;padding:24px;background:var(--bg)}
 
@@ -247,9 +252,9 @@ input:focus,textarea:focus{border-color:var(--accent)}
   .editor-grid{grid-template-columns:1fr;gap:12px}
   .hdr-center,.hdr-pills{display:none}
   .mobile-nav{display:block}
-  .admin-header{padding:0 12px}
+  .admin-header{padding:0 12px;padding-top:env(safe-area-inset-top,0);padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
   .hdr-logo{font-size:16px}
-  .admin-layout{height:calc(100dvh - 56px);max-width:100vw;overflow-x:hidden}
+  .admin-layout{height:calc(100dvh - 56px - env(safe-area-inset-top,0));max-width:100vw;overflow-x:hidden}
   /* Mobile sidebar list items */
   .mob-list{padding:0}
   .mob-list .sidebar-item{background:var(--card);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;padding:12px}
