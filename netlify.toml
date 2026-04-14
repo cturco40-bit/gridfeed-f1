@@ -91,9 +91,12 @@
   schedule = "0 5 * * *"
   timeout = 60
 
-[functions.blog-scheduler]
-  schedule = "*/15 * * * *"
-  timeout = 60
+# blog-scheduler DISABLED 2026-04-14 — duplicated generate-editorial.js
+# without any dedup / subject registry checks, producing dozens of
+# duplicate drafts per day. File kept in repo for reference.
+# [functions.blog-scheduler]
+#   schedule = "*/15 * * * *"
+#   timeout = 60
 
 [functions.generate-tweets]
   schedule = "*/10 * * * *"

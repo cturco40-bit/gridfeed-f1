@@ -36,6 +36,13 @@ function parseAIResponse(data) {
 export default async (req, context) => {
   const start = Date.now();
   let generated = 0;
+  // DISABLED 2026-04-14 — this function duplicated generate-editorial.js
+  // and generate-content.js without any dedup, producing dozens of
+  // duplicate drafts per day. The schedule is commented out in
+  // netlify.toml; this early-return is the belt for any direct HTTP call.
+  await logSync('blog-scheduler', 'success', 0, 'Disabled — see commit 2026-04-14', Date.now() - start);
+  return json({ ok: true, disabled: true });
+  // eslint-disable-next-line no-unreachable
   try {
     if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const dow = new Date().getDay();
