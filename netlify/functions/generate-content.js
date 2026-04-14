@@ -163,6 +163,15 @@ export default async (req, context) => {
         }
       }
 
+      // If a source_url was provided but fetch returned essentially nothing,
+      // mark the topic failed immediately instead of sending empty text to
+      // Claude (which would otherwise hallucinate to fill the void)
+      if (topic.source_url && (!sourceContent || sourceContent.length < 100)) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Empty source content' }).catch(() => {});
+        await logSync('generate-content', 'success', 0, `Empty source skipped: ${topicText.slice(0, 50)}`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'empty_source' });
+      }
+
       // No source: still write but keep it short and fact-based to avoid hallucination
       const noSource = !sourceContent && ['breaking', 'analysis'].includes(contentType);
 

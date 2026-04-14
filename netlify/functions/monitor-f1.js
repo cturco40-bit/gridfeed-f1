@@ -117,7 +117,23 @@ export default async (req, context) => {
     const rejectCounts = {
       nonF1: 0, noF1Keyword: 0, noSignature: 0,
       titleDedup: 0, sigDedup: 0, lowScore: 0,
-      subjectDedup: 0, queueFull: 0, accepted: 0,
+      subjectDedup: 0, publishedDup: 0, queueFull: 0, accepted: 0,
+    };
+
+    // Word-overlap stop list — common F1 vocabulary that would cause every
+    // headline to "overlap" with every other regardless of subject
+    const STOP_WORDS = new Set([
+      'the','a','an','in','at','of','for','and','is','has','with','from','after',
+      'how','why','what','not','his','her','him','that','this','they','them',
+      'their','will','can','cant','dont','have','been','were','more','less',
+      'formula','grand','prix','race','racing','f1','2026','team','driver',
+      'drivers','teams','season','championship','points','points','round',
+      'rounds','circuit','track','gp','weekend','sport','news','update',
+      'first','second','third','latest','says','said','tell','tells','told',
+    ]);
+    const overlapWords = (title) => {
+      return new Set((title || '').toLowerCase().split(/[^a-z0-9]+/)
+        .filter(w => w.length > 3 && !STOP_WORDS.has(w)));
     };
 
     // Filter non-F1: reject if any non-F1 keyword present, then require at least one F1 keyword
@@ -143,6 +159,14 @@ export default async (req, context) => {
     // same driver aren't blocked for most of the day
     const pendingTopics = await sb('content_topics?select=topic,id&created_at=gt.' + new Date(Date.now() - 3 * 36e5).toISOString());
     const recentTitleNorm = new Set(pendingTopics.map(t => normalizeTitle(t.topic)));
+
+    // Check incoming headlines against recently published article titles so
+    // we don't re-report our own stories from different angles
+    const publishedRaw = await sb('articles?select=title&status=eq.published&order=published_at.desc&limit=20');
+    const publishedWordSets = (publishedRaw || []).map(a => ({
+      title: a.title || '',
+      words: overlapWords(a.title),
+    }));
 
     for (const [sig, group] of Object.entries(sigGroups)) {
       if (!sig) continue;
@@ -177,6 +201,24 @@ export default async (req, context) => {
           await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
           continue;
         }
+      }
+
+      // Published-article dedup: reject if 3+ significant word overlap with
+      // any recently published article title (stop words excluded)
+      const newWords = overlapWords(group.titles[0]);
+      let publishedMatch = null;
+      if (newWords.size >= 3) {
+        for (const pub of publishedWordSets) {
+          let overlap = 0;
+          for (const w of newWords) { if (pub.words.has(w)) overlap++; }
+          if (overlap >= 3) { publishedMatch = pub.title; break; }
+        }
+      }
+      if (publishedMatch) {
+        rejectCounts.publishedDup++;
+        console.log('REJECT publishedDup:', group.titles[0].slice(0, 60), '| matches:', publishedMatch.slice(0, 40));
+        await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
+        continue;
       }
 
       // Re-check queue limit
@@ -222,7 +264,7 @@ export default async (req, context) => {
     if (stateRow.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
     else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
-    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup`;
+    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup`;
     await logSync('monitor-f1', 'success', topicsCreated, summary, Date.now() - start);
     return json({ ok: true, headlines: headlines.length, topicsCreated, rejectCounts });
   } catch (err) {
