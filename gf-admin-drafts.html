@@ -130,6 +130,9 @@ input:focus,textarea:focus{border-color:var(--accent)}
   color:var(--dim);transition:all .15s;
 }
 .tag-pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.copy-subject-btn{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border-radius:3px;background:var(--card);color:var(--dim);border:1px solid var(--border);cursor:pointer;transition:all .15s;font-family:var(--font)}
+.copy-subject-btn:hover{background:var(--bg);color:var(--text);border-color:var(--accent)}
+.copy-subject-btn.copied{background:var(--green);color:#fff;border-color:var(--green)}
 .meta-row{font-size:11px;color:var(--muted);margin:8px 0 16px;display:flex;gap:12px;flex-wrap:wrap}
 .editor-grid{display:grid;grid-template-columns:1fr 320px;gap:20px}
 @media(max-width:1200px){.editor-grid{grid-template-columns:1fr}}
@@ -766,7 +769,10 @@ function renderArticleEditor(d){
   const wcClass=wc>=350&&wc<=550?'wc-ok':wc<200||wc>700?'wc-bad':'wc-warn';
   const main=document.getElementById('mainPanel');
   main.innerHTML=`
-    <label class="editor-title-label" for="edTitle">Title \u2014 click to edit</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <label class="editor-title-label" for="edTitle">Title \u2014 click to edit</label>
+      <button type="button" class="copy-subject-btn" onclick="copyDraftSubject('${d.id}',this)" title="Copy title">\u29C9 Copy</button>
+    </div>
     <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
     <div class="tag-row" id="edTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="toggleTag(this,'${t}')">${t}</span>`).join('')}</div>
     <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 GridFeed Pipeline \u00b7 ${d.content_type||'draft'}</div>
@@ -832,6 +838,26 @@ function getSelectedTags(){
 }
 
 function toggleTag(el){el.classList.toggle('active')}
+
+async function copyDraftSubject(id,btn){
+  const title=document.getElementById('edTitle')?.value?.trim()||'';
+  if(!title)return;
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(title);
+    }else{
+      const ta=document.createElement('textarea');
+      ta.value=title;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    }
+    if(btn){
+      const orig=btn.innerHTML;
+      btn.innerHTML='\u2713 Copied';
+      btn.classList.add('copied');
+      setTimeout(()=>{btn.innerHTML=orig;btn.classList.remove('copied')},1500);
+    }
+  }catch(e){console.warn('Copy failed',e)}
+}
 
 function getPublishTime(){
   const v=document.querySelector('#edTiming input[name="timing"]:checked')?.value;
