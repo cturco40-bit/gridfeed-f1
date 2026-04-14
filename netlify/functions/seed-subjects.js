@@ -10,13 +10,29 @@ import { getSubjectKey } from './lib/subject-registry.js';
 
 const NEXT_RACE_DAYS = 7;
 
+console.log('SEED v2 — title-only with topic entities + standings regex');
+
 export default async (req) => {
   const start = Date.now();
+
+  // Debug: prove the new getSubjectKey logic is wired up
+  const testKeys = {
+    'Power Rankings: All 11 Teams Ranked':
+      getSubjectKey('Power Rankings: All 11 Teams Ranked'),
+    'ADUO Explained: Engine Catch-Up':
+      getSubjectKey('ADUO Explained: Engine Catch-Up'),
+    'Bahrain and Saudi Arabia Cancelled':
+      getSubjectKey('Bahrain and Saudi Arabia Cancelled'),
+    'Championship Check: Where All 22 Drivers Stand':
+      getSubjectKey('Championship Check: Where All 22 Drivers Stand'),
+  };
+  console.log('TEST KEYS:', JSON.stringify(testKeys));
+
   try {
     // 1. Pull every published article (cap 500 — plenty of headroom)
     const articles = await sb('articles?status=eq.published&select=id,title,published_at&order=published_at.desc&limit=500');
     if (!articles?.length) {
-      return json({ ok: true, message: 'No published articles to seed' });
+      return json({ ok: true, message: 'No published articles to seed', testKeys });
     }
 
     // 2. Wipe existing rows so the seed is deterministic
@@ -55,6 +71,8 @@ export default async (req) => {
     await logSync('seed-subjects', 'success', inserted.length, msg, Date.now() - start);
     return json({
       ok: true,
+      version: 'v2-title-only',
+      testKeys,
       total_articles: articles.length,
       inserted: inserted.length,
       skipped: skipped.length,
