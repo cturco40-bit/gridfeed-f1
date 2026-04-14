@@ -828,6 +828,7 @@ async function initHome(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08)">
       ${rest.map((entry,i)=>{const[name,d]=entry;const last=name.split(' ').pop();return`<div data-drv="${d.abbr||''}" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ${d.tc};border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0"><div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px"><span>P${i+2}</span><span style="opacity:0.5">\u00b7</span><span style="font-size:9px;text-transform:uppercase">${d.team}</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-top:2px"><span class="podium-name-full" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${last}</span><span class="podium-name-abbr" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px">${d.abbr||last.slice(0,3).toUpperCase()}</span><span style="font-family:var(--head);font-size:20px;font-weight:900;color:var(--gold);line-height:1;flex-shrink:0">${d.pts}</span></div></div>`}).join('')}
     </div>
+    <div onclick="go('standings')" style="margin-top:10px;padding:6px 2px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;text-align:right;letter-spacing:.5px">View all standings \u2192</div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
       <div style="font-size:10px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;font-weight:700;margin-bottom:8px">\u25b6 ${r.r?'Round '+r.r+' \u2014 ':''}Next: ${r.n}</div>
       <div class="hero-cd">
@@ -889,10 +890,11 @@ function renderSched(){
   const done=SCH.filter(r=>r.st==='done');
   const up=SCH.filter(r=>r.st==='up').slice(0,2);
   const rows=[...done,...up];
-  card.innerHTML=rows.map(r=>{
+  const rowsHtml=rows.map(r=>{
     const isDone=r.st==='done',isNext=S.nr?.r===r.r;
     return`<div class="sch-row" style="padding:10px 14px;${isDone?'opacity:0.5':''}"><span class="sch-flag" style="font-size:16px">${r.fl}</span><div class="sch-info"><div class="sch-name" style="font-size:12px;font-weight:700">R${r.r} \u00b7 ${r.n.replace(' Grand Prix','').replace(' GP','')}</div><div style="font-size:10px;color:var(--muted)">${r.dl}</div></div>${isDone?`<span style="font-size:10px;color:var(--muted);font-weight:600">${r.w||'\u2713'}</span>`:isNext?'<span class="sch-badge sb-next">Next</span>':''}</div>`;
   }).join('');
+  card.innerHTML=rowsHtml+'<div onclick="go(\'schedule\')" style="padding:8px 12px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;border-top:1px solid var(--border);text-align:right">View full schedule \u2192</div>';
 }
 
 async function loadMini(){
