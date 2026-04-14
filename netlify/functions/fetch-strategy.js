@@ -54,4 +54,3 @@ export default async (req, context) => {
   }
 };
 
-export const config = { schedule: '*/2 * * * *' };

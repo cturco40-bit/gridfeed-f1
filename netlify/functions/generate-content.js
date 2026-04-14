@@ -322,4 +322,3 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
   }
 };
 
-export const config = { schedule: '*/5 * * * *' };

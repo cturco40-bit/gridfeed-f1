@@ -204,13 +204,10 @@ export function checkPlagiarism(article, source) {
 
 /* ═══ VALIDATION CONSTANTS ═══ */
 
-const BANNED_WORDS = [
-  'fascinating','incredible','stunning',
-  'masterclass','wheelhouse','showcase','monumental',
-  'sensational','breathtaking','unraveling',
-  'it is worth noting','it remains to be seen',
-  'needless to say','make no mistake',
-];
+// Style-police banned words list removed — was rejecting legitimate words like
+// "masterclass", "unraveling", "monumental", killing drafts that Claude could
+// easily polish in review. Factual validation only from here on.
+const BANNED_WORDS = [];
 
 const DRIVER_SPELLINGS = {
   'antinelli': 'Antonelli',
@@ -373,17 +370,23 @@ export function validateArticle(article) {
   console.log('[validateArticle] PASSED circuit types');
 
   // ── F. LEAD SENTENCE RULE ──
-  const firstSentence = (article.body || '').split(/[.!?]/)[0] || '';
+  // Only enforce a specific-opener rule on recap-style content. For everything
+  // else (team principals, engineers, regulations, etc.) a missing driver name
+  // in the first sentence is fine — the story may be about Stella, Binotto,
+  // Wolff, a team decision, or a regulation change. We only reject when the
+  // body is effectively empty so Claude has nothing to review.
+  const body0 = (article.body || '').trim();
+  if (body0.length < 60) {
+    console.log('[validateArticle] REJECTED — Body too short to publish');
+    return { valid: false, reason: 'Body too short' };
+  }
+  const firstSentence = body0.split(/[.!?]/)[0] || '';
   const hasName = SURNAMES.some(s => firstSentence.includes(s));
   const hasNumber = /\d/.test(firstSentence);
   const isRaceContent = ['race_recap','qualifying_recap','practice_analysis'].includes(article.content_type);
-  if (isRaceContent && (!hasName || !hasNumber)) {
-    console.log('[validateArticle] REJECTED — Lead sentence missing name(' + hasName + ') or number(' + hasNumber + '):', firstSentence.slice(0, 80));
-    return { valid: false, reason: 'Lead sentence missing driver name or number' };
-  }
-  if (!isRaceContent && !hasName && !hasNumber) {
-    console.log('[validateArticle] REJECTED — Lead sentence has no name or number at all:', firstSentence.slice(0, 80));
-    return { valid: false, reason: 'Lead sentence missing driver name or number' };
+  if (isRaceContent && !hasName && !hasNumber) {
+    console.log('[validateArticle] REJECTED — Race recap lead missing name AND number:', firstSentence.slice(0, 80));
+    return { valid: false, reason: 'Race recap lead missing driver name AND number' };
   }
   console.log('[validateArticle] PASSED lead sentence');
 

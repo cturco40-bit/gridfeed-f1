@@ -120,4 +120,3 @@ JSON only.`;
   }
 };
 
-export const config = { schedule: '0 6 * * *' };
