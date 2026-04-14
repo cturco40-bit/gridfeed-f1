@@ -2061,6 +2061,7 @@ async function showCircuit(slug){
 
 /* ═══ TELEMETRY COMPARISON ═══ */
 S.telemChart=S.telemChart||{speed:null,throttle:null,brake:null,gear:null};
+const TELEM_COLORS=['#E8002D','#3B82F6'];
 S.telemSessionsLoaded=false;
 
 async function initTelemetry(){
@@ -2122,7 +2123,8 @@ async function loadTelemetry(){
     renderTelemetryCharts(r1,r2);
     const e1=telemDrvByNum(d1),e2=telemDrvByNum(d2);
     const n1=e1?e1[0]:'Driver 1',n2=e2?e2[0]:'Driver 2';
-    const c1=e1?e1[1].tc:'#E8002D',c2=e2?e2[1].tc:'#27F4D2';
+    // Fixed comparison colors so same-team teammates don't render in matching shades
+    const c1=TELEM_COLORS[0],c2=TELEM_COLORS[1];
     document.getElementById('telemLegend').style.display='flex';
     document.getElementById('telemDot1').style.background=c1;
     document.getElementById('telemDot2').style.background=c2;
@@ -2140,8 +2142,8 @@ async function loadTelemetry(){
 function renderTelemetryCharts(d1Data,d2Data){
   // Destroy previous charts
   Object.keys(S.telemChart).forEach(k=>{if(S.telemChart[k]){S.telemChart[k].destroy();S.telemChart[k]=null}});
-  const e1=telemDrvByNum(d1Data.driver_number),e2=telemDrvByNum(d2Data.driver_number);
-  const c1=e1?e1[1].tc:'#E8002D',c2=e2?e2[1].tc:'#27F4D2';
+  // Fixed comparison colors regardless of team — teammates are otherwise indistinguishable
+  const c1=TELEM_COLORS[0],c2=TELEM_COLORS[1];
   const d1Start=d1Data.data[0]?.ts||0,d2Start=d2Data.data[0]?.ts||0;
   const mk=(data,start,key)=>data.map(p=>({x:+((p.ts-start)/1000).toFixed(2),y:p[key]}));
   const container=document.getElementById('telemCharts');
