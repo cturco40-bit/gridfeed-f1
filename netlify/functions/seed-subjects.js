@@ -10,7 +10,9 @@ import { getSubjectKey } from './lib/subject-registry.js';
 
 const NEXT_RACE_DAYS = 7;
 
-console.log('SEED v2 — title-only with topic entities + standings regex');
+// Build marker: bumped to force Netlify to redeploy this function
+const BUILD_MARKER = 'seed-subjects-v3-' + 'force-rebuild';
+console.log('SEED v3 — title-only with topic entities + standings regex', BUILD_MARKER);
 
 export default async (req) => {
   const start = Date.now();
@@ -71,7 +73,8 @@ export default async (req) => {
     await logSync('seed-subjects', 'success', inserted.length, msg, Date.now() - start);
     return json({
       ok: true,
-      version: 'v2-title-only',
+      version: 'v3-force-rebuild',
+      build_marker: BUILD_MARKER,
       testKeys,
       total_articles: articles.length,
       inserted: inserted.length,
