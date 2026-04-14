@@ -776,10 +776,7 @@ function renderArticleEditor(d){
   const wcClass=wc>=350&&wc<=550?'wc-ok':wc<200||wc>700?'wc-bad':'wc-warn';
   const main=document.getElementById('mainPanel');
   main.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <label class="editor-title-label" for="edTitle">Title \u2014 click to edit</label>
-      <button type="button" class="copy-subject-btn" onclick="copyDraftSubject('${d.id}',this)" title="Copy title">\u29C9 Copy</button>
-    </div>
+    <label class="editor-title-label" for="edTitle">Title \u2014 click to edit</label>
     <input class="editor-title" id="edTitle" value="${esc(d.title||'')}" placeholder="Article title..." onfocus="isEditing=true" onblur="isEditing=false"/>
     <div class="tag-row" id="edTags">${TAGS.map(t=>`<span class="tag-pill ${tags.includes(t)?'active':''}" onclick="toggleTag(this,'${t}')">${t}</span>`).join('')}</div>
     <div class="meta-row">Generated ${timeAgo(d.created_at)} \u00b7 GridFeed Pipeline \u00b7 ${d.content_type||'draft'}</div>
@@ -793,6 +790,10 @@ function renderArticleEditor(d){
     <div class="editor-grid">
       <div>
         <textarea class="editor-excerpt" id="edExcerpt" placeholder="Excerpt / lead paragraph..." onfocus="isEditing=true" onblur="isEditing=false">${esc(d.excerpt||'')}</textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px">Subject \u2014 article body</span>
+          <button type="button" class="copy-subject-btn" onclick="copyDraftSubject('${d.id}',this)" title="Copy article body">\u29C9 Copy</button>
+        </div>
         <textarea class="editor-body" id="edBody" placeholder="Article body..." oninput="updateWc()" onfocus="isEditing=true" onblur="isEditing=false">${esc(d.body||'')}</textarea>
         <div class="word-count ${wcClass}" id="edWc">${wc} words \u00b7 Target: 400\u2013500</div>
       </div>
@@ -847,14 +848,16 @@ function getSelectedTags(){
 function toggleTag(el){el.classList.toggle('active')}
 
 async function copyDraftSubject(id,btn){
-  const title=document.getElementById('edTitle')?.value?.trim()||'';
-  if(!title)return;
+  // Copies the article BODY (the subject matter you paste into Claude for
+  // review). Title and tags stay editable separately.
+  const body=document.getElementById('edBody')?.value?.trim()||'';
+  if(!body)return;
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(title);
+      await navigator.clipboard.writeText(body);
     }else{
       const ta=document.createElement('textarea');
-      ta.value=title;ta.style.position='fixed';ta.style.opacity='0';
+      ta.value=body;ta.style.position='fixed';ta.style.opacity='0';
       document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
     }
     if(btn){
