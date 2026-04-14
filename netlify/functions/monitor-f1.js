@@ -134,13 +134,12 @@ function scoreStory(title, regionCount) {
 export default async (req, context) => {
   const start = Date.now();
   let topicsCreated = 0;
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  const freshnessCutoff = Date.now() - ONE_HOUR_MS;
   try {
-    // Check recent topic count — max 5 in last hour
-    const recentTopics = await sb(`content_topics?select=id&created_at=gt.${new Date(Date.now() - 36e5).toISOString()}`);
-    if (recentTopics.length >= 15) {
-      await logSync('monitor-f1', 'success', 0, `Topic queue full (${recentTopics.length} in last hour)`, Date.now() - start);
-      return json({ ok: true, skipped: 'queue_full' });
-    }
+    // No daily cap anymore — the 60-min freshness window + seen_urls dedup +
+    // subject registry act as the natural rate limit.
+    const recentTopics = [];
 
     // Fetch all RSS in parallel
     const headlines = [];
@@ -153,9 +152,10 @@ export default async (req, context) => {
           const parsed = await parseStringPromise(xml, { explicitArray: false, trim: true });
           const items = parsed?.rss?.channel?.item || parsed?.feed?.entry || [];
           const arr = Array.isArray(items) ? items : [items];
-          return arr.slice(0, 8).map(i => ({
+          return arr.slice(0, 12).map(i => ({
             title: i.title?._ || i.title || '',
             link: i.link?.$ ? i.link.$.href : (i.link || ''),
+            pubDate: i.pubDate || i.published || i.updated || null,
             source: f.source, region: f.region,
           })).filter(i => i.title);
         } catch { return []; }
@@ -165,10 +165,39 @@ export default async (req, context) => {
 
     // Rejection counters — surface in sync_log so "0 created" is actually debuggable
     const rejectCounts = {
+      stale: 0, seenUrl: 0, gossip: 0,
       nonF1: 0, noF1Keyword: 0, nonEnglish: 0, lowQuality: 0, clickbait: 0,
       noSignature: 0, titleDedup: 0, sigDedup: 0, lowScore: 0,
       subjectDedup: 0, publishedDup: 0, registryDup: 0, queueFull: 0, accepted: 0,
     };
+
+    // Freshness gate — only consider headlines whose pubDate is < 60 min old.
+    // Items without a pubDate pass (we'll let the seen_urls dedup catch
+    // repeats from feeds that don't expose timestamps).
+    const beforeFresh = headlines.length;
+    const freshHeadlines = headlines.filter(h => {
+      if (!h.pubDate) return true;
+      const ts = Date.parse(h.pubDate);
+      if (!isFinite(ts)) return true;
+      if (ts < freshnessCutoff) { rejectCounts.stale++; return false; }
+      return true;
+    });
+
+    // seen_urls dedup — track every URL we've ever ingested so a headline
+    // that re-appears in different feeds only ever produces one topic
+    const freshAfterUrls = [];
+    for (const h of freshHeadlines) {
+      if (!h.link) { freshAfterUrls.push(h); continue; }
+      try {
+        const existing = await sb('seen_urls?url=eq.' + encodeURIComponent(h.link) + '&select=url&limit=1');
+        if ((existing || []).length) { rejectCounts.seenUrl++; continue; }
+        await sb('seen_urls', 'POST', { url: h.link, headline: (h.title || '').slice(0, 300) }).catch(() => {});
+      } catch {}
+      freshAfterUrls.push(h);
+    }
+
+    // Gossip filter — celebrity / lifestyle junk the feeds sometimes slip in
+    const GOSSIP = ['wag','girlfriend','wedding','baby','net worth','salary','dating','girlfriend','romance'];
 
     // Word-overlap stop list — common F1 vocabulary that would cause every
     // headline to "overlap" with every other regardless of subject
@@ -186,24 +215,24 @@ export default async (req, context) => {
         .filter(w => w.length > 3 && !STOP_WORDS.has(w)));
     };
 
-    // Filter non-F1 + non-English + low-quality + clickbait. Each gate is
-    // tracked in rejectCounts and logged so 'created 0' is debuggable.
-    const f1Headlines = headlines.filter(h => {
+    // Filter non-F1 + non-English + low-quality + clickbait + gossip. Each
+    // gate is tracked in rejectCounts and logged so 'created 0' is debuggable.
+    const f1Headlines = freshAfterUrls.filter(h => {
       const raw = h.title || '';
       const t = raw.toLowerCase();
       if (NON_F1.some(kw => t.includes(kw))) { rejectCounts.nonF1++; console.log('REJECT nonF1:', raw.slice(0, 60)); return false; }
       if (!F1_KEYWORDS.some(kw => t.includes(kw))) { rejectCounts.noF1Keyword++; console.log('REJECT noF1Keyword:', raw.slice(0, 60)); return false; }
-      // Non-English: accented chars typical of IT/ES/FR + no hard-English F1 anchor
-      if (/[àèìòùáéíóúñ¿¡]/.test(raw) && !/F1|formula|grand prix|championship/i.test(raw)) {
+      if (/[àèìòùáéíóúñ¿¡ç]/.test(raw) && !/F1|formula|grand prix|championship/i.test(raw)) {
         rejectCounts.nonEnglish++; console.log('REJECT nonEnglish:', raw.slice(0, 60)); return false;
       }
-      // YouTube shows / podcasts / fantasy fluff
       if (REJECT_SOURCES.some(s => t.includes(s))) {
         rejectCounts.lowQuality++; console.log('REJECT lowQuality:', raw.slice(0, 60)); return false;
       }
-      // Clickbait phrases
       if (CLICKBAIT_PATTERNS.some(s => t.includes(s))) {
         rejectCounts.clickbait++; console.log('REJECT clickbait:', raw.slice(0, 60)); return false;
+      }
+      if (GOSSIP.some(s => t.includes(s))) {
+        rejectCounts.gossip++; console.log('REJECT gossip:', raw.slice(0, 60)); return false;
       }
       return true;
     });
@@ -296,8 +325,10 @@ export default async (req, context) => {
         continue;
       }
 
-      // Re-check queue limit
-      if (topicsCreated + recentTopics.length >= 15) { rejectCounts.queueFull++; break; }
+      // No queue cap — freshness window + seen_urls dedup + subject registry
+      // provide the natural rate limit. Keep the break only as a sanity cap
+      // to prevent pathological multi-thousand-topic runs.
+      if (topicsCreated >= 50) { rejectCounts.queueFull++; break; }
 
       // Breaking news keyword boost
       const BREAKING_KEYWORDS = ['breaking','confirmed','exclusive','shock','sacked','fired','signed','crash','injured','penalty','disqualified','retires','dies','died'];
@@ -339,7 +370,7 @@ export default async (req, context) => {
     if (stateRow.length) await sb('monitor_state?key=eq.last_run', 'PATCH', { value: stateData, updated_at: new Date().toISOString() });
     else await sb('monitor_state', 'POST', { key: 'last_run', value: stateData, updated_at: new Date().toISOString() }).catch(() => {});
 
-    const summary = `Scanned ${headlines.length} headlines: ${rejectCounts.accepted} accepted, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-F1-kw, ${rejectCounts.nonEnglish} non-en, ${rejectCounts.lowQuality} low-quality, ${rejectCounts.clickbait} clickbait, ${rejectCounts.noSignature} no-sig, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.publishedDup} pub-dup, ${rejectCounts.registryDup} registry-dup`;
+    const summary = `Scanned ${headlines.length}: ${rejectCounts.accepted} new, ${rejectCounts.stale} stale(>1h), ${rejectCounts.seenUrl} seen-url, ${rejectCounts.nonEnglish} non-en, ${rejectCounts.lowQuality} low-q, ${rejectCounts.clickbait} clickbait, ${rejectCounts.gossip} gossip, ${rejectCounts.nonF1} non-F1, ${rejectCounts.noF1Keyword} no-kw, ${rejectCounts.titleDedup} title-dup, ${rejectCounts.sigDedup} sig-dup, ${rejectCounts.lowScore} low-score, ${rejectCounts.subjectDedup} subject-dup, ${rejectCounts.registryDup} registry-dup`;
     await logSync('monitor-f1', 'success', topicsCreated, summary, Date.now() - start);
     return json({ ok: true, headlines: headlines.length, topicsCreated, rejectCounts });
   } catch (err) {

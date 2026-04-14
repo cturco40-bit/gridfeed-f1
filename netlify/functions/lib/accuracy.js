@@ -456,6 +456,50 @@ export function validateArticle(article) {
     return { valid: false, reason: 'DRS mentioned in 2026 content — system abolished, use Overtake Mode' };
   }
 
+  // ── L2. HAMILTON CHAMPION COUNT ──
+  if (/six[\s-]time\s+(world\s+)?champion/i.test(combined) && combined.includes('hamilton')) {
+    console.log('[validateArticle] REJECTED — Hamilton 6-time');
+    return { valid: false, reason: 'Hamilton is a SEVEN-time champion, not six' };
+  }
+
+  // ── L3. GASLY AT HAAS ──
+  // "Gasly" and "Haas" in the same sentence without "Alpine" nearby = wrong team
+  const gaslyHaasMatch = combined.match(/[^.]*gasly[^.]*haas[^.]*\./i) || combined.match(/[^.]*haas[^.]*gasly[^.]*\./i);
+  if (gaslyHaasMatch && !/alpine/i.test(gaslyHaasMatch[0])) {
+    console.log('[validateArticle] REJECTED — Gasly at Haas');
+    return { valid: false, reason: 'Gasly drives for Alpine, not Haas' };
+  }
+
+  // ── L4. TITLE ALREADY DECIDED ──
+  if (/mercedes\s+(has|have)\s+(already\s+)?won\s+the\s+(2026\s+)?championship/i.test(combined)) {
+    console.log('[validateArticle] REJECTED — Mercedes already won the title');
+    return { valid: false, reason: 'Championship not decided — 3 of 22 races complete' };
+  }
+
+  // ── L5. LECLERC LEFT FERRARI ──
+  if (/leclerc[^.]{0,40}(left|departed|moved from|has exited)\s+ferrari/i.test(combined)) {
+    console.log('[validateArticle] REJECTED — Leclerc left Ferrari');
+    return { valid: false, reason: 'Leclerc still drives for Ferrari in 2026' };
+  }
+
+  // ── L6. WRONG DEFENDING CHAMPION (expanded) ──
+  if (/(russell|verstappen)[^.]{0,30}defending\s+champion/i.test(combined)) {
+    console.log('[validateArticle] REJECTED — Wrong defending champion (russell/verstappen)');
+    return { valid: false, reason: 'Norris is the 2025 defending champion' };
+  }
+
+  // ── L7. UNVERIFIED FINANCIAL CLAIMS ──
+  // Block large $ amounts unless clearly attributed to a source
+  const dollarMatches = combined.match(/\$\s*\d{2,4}\s*(million|billion|m\b|bn\b)/gi) || [];
+  if (dollarMatches.length) {
+    const attrWords = ['reported','reports','according to','told','said','confirmed','revealed','stated'];
+    const hasAttribution = attrWords.some(w => combined.includes(w));
+    if (!hasAttribution) {
+      console.log('[validateArticle] REJECTED — Unverified $ amount');
+      return { valid: false, reason: 'Unverified financial claim (no source attribution)' };
+    }
+  }
+
   // ── M. TITLE + LENGTH ──
   if (!article.title || article.title.length < 15) { console.log('[validateArticle] REJECTED — Title too short'); return { valid: false, reason: 'Title too short' }; }
 

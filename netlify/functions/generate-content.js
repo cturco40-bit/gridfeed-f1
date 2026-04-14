@@ -1,5 +1,41 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
 import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
+import { qualityCheck } from './lib/quality-check.js';
+
+// INLINED subject key extractor + registry helpers (matches monitor-f1.js,
+// approve-draft.js, seed-subjects.js, generate-editorial.js). Bypasses the
+// Netlify function bundle cache.
+function getSubjectKeyLocal(title) {
+  const h = (title || '').toLowerCase();
+  if (!h) return null;
+  if (h.includes('aduo')) return 'aduo:engine';
+  if (h.includes('bahrain')) return 'bahrain:calendar';
+  if (h.includes('saudi')) return 'saudi:calendar';
+  if (h.includes('goodwood')) return 'goodwood:general';
+  if (h.includes('formula 2')) return 'f2:calendar';
+  if (h.includes('formula 3')) return 'f3:calendar';
+  if (h.includes('overtake mode')) return 'f1:regulation';
+  if (h.includes('active aero')) return 'f1:regulation';
+  if (/power.*rank|champion.*(stand|check)|all.*drivers/i.test(h)) return 'f1:standings';
+  const drivers = ['antonelli','russell','hamilton','leclerc','norris','piastri','verstappen','bearman','gasly','alonso','stroll','sainz','albon','ocon','lawson','lindblad','hadjar','hulkenberg','bortoleto','perez','bottas','colapinto'];
+  const teams = ['mercedes','ferrari','mclaren','red bull','aston martin','alpine','haas','williams','audi','cadillac','racing bulls'];
+  const entity = drivers.find(d => h.includes(d)) || teams.find(t => h.includes(t)) || '';
+  if (!entity) return null;
+  const NOISE = new Set(['the','a','an','in','at','of','for','and','is','has','with','from','after','how','why','what','not','his','her','f1','formula','grand','prix','race','driver','team','season','championship','points','2026']);
+  const SYNONYMS = { leads:'leads',lead:'leads',leading:'leads',extends:'leads',dominates:'leads',dominant:'leads',dominance:'leads',standings:'leads', crash:'crash',crashes:'crash',incident:'crash',collision:'crash', contract:'contract',signs:'contract',deal:'contract',extension:'contract', departs:'departs',leaves:'departs',exit:'departs',departure:'departs',fired:'departs',sacked:'departs', start:'start',launch:'start',getaway:'start',clutch:'start', penalty:'penalty',penalised:'penalty',stewards:'penalty', upgrade:'upgrade',development:'upgrade',floor:'upgrade', engine:'engine',power:'engine',unit:'engine',reliability:'engine', hire:'hire',hires:'hire',recruit:'hire',appoint:'hire', pace:'pace',speed:'pace',fastest:'pace',performance:'pace',deficit:'pace', wins:'wins',win:'wins',victory:'wins',winner:'wins', pole:'pole',qualifying:'pole',qualified:'pole', preview:'preview',expect:'preview',watch:'preview',prediction:'preview',predict:'preview', rankings:'rankings',ranked:'rankings',rating:'rankings', rookie:'rookie',debut:'rookie',youngest:'rookie',teenager:'rookie' };
+  const words = h.split(/[\s\-:,.']+/).filter(w => w.length > 3 && !NOISE.has(w) && w !== entity);
+  const sorted = words.sort((a, b) => b.length - a.length);
+  const angle = SYNONYMS[sorted[0]] || sorted[0] || 'general';
+  return entity + ':' + angle;
+}
+async function isSubjectPublishedLocal(key) {
+  if (!key) return false;
+  const now = new Date().toISOString();
+  try {
+    const rows = await sb(`published_subjects?subject=eq.${encodeURIComponent(key)}&or=(expires_at.is.null,expires_at.gt.${now})&select=id&limit=1`);
+    return (rows || []).length > 0;
+  } catch { return false; }
+}
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const WORD_TARGETS = {
@@ -166,10 +202,33 @@ export default async (req, context) => {
       // If a source_url was provided but fetch returned essentially nothing,
       // mark the topic failed immediately instead of sending empty text to
       // Claude (which would otherwise hallucinate to fill the void)
-      if (topic.source_url && (!sourceContent || sourceContent.length < 100)) {
+      if (topic.source_url && (!sourceContent || sourceContent.length < 200)) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Empty source content' }).catch(() => {});
         await logSync('generate-content', 'success', 0, `Empty source skipped: ${topicText.slice(0, 50)}`, Date.now() - start);
         return json({ ok: true, generated: 0, reason: 'empty_source' });
+      }
+
+      // Paywall detection — common indicator strings that mean we got the
+      // marketing wrapper instead of the article body
+      if (sourceContent) {
+        const lc = sourceContent.toLowerCase();
+        if (lc.includes('subscribe to read') || lc.includes('premium content')
+          || lc.includes('create an account to continue') || lc.includes('sign in to read more')
+          || lc.includes('become a subscriber')) {
+          if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Paywalled source' }).catch(() => {});
+          await logSync('generate-content', 'success', 0, `Paywalled source skipped: ${topicText.slice(0, 50)}`, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'paywalled' });
+        }
+      }
+
+      // Subject registry check — reject topics whose subject key is already
+      // blocked. This catches topics that were queued before the registry
+      // was seeded but would produce duplicate content.
+      const topicKey = getSubjectKeyLocal(topicText);
+      if (topicKey && await isSubjectPublishedLocal(topicKey)) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject already published: ' + topicKey }).catch(() => {});
+        await logSync('generate-content', 'success', 0, `Subject blocked (${topicKey}): ${topicText.slice(0, 50)}`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'subject_blocked', key: topicKey });
       }
 
       // No source: still write but keep it short and fact-based to avoid hallucination
@@ -289,6 +348,15 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         return json({ ok: true, generated: 0, reason: 'duplicate_hash' });
       }
 
+      // Quality check — catches runaway generation, leaked metadata, orphan
+      // fragments, empty markers, bad title length
+      const qc = qualityCheck(parsed.title, parsed.body);
+      if (!qc.valid) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Quality: ' + qc.errors.join('; ') }).catch(() => {});
+        await logSync('generate-content', 'quality_failed', 0, `Quality failed: ${qc.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'quality_failed', errors: qc.errors });
+      }
+
       // Insert draft
       console.log('[generate-content] About to insert draft, validation result was:', validation.valid, '— title:', parsed.title.slice(0, 60));
       // Force BREAKING tag for breaking content type so it shows in article cards
@@ -307,6 +375,17 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       // Record hash + mark topic drafted
       await sb('content_hashes', 'POST', { hash: h, type: contentType, source: 'generate-content' });
       if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
+
+      // Register subject in the registry with 48h expiry so follow-up
+      // angles on the same driver/team are blocked from drafting again
+      const savedKey = getSubjectKeyLocal(parsed.title) || topicKey;
+      if (savedKey) {
+        await sb('published_subjects', 'POST', {
+          subject: savedKey,
+          article_id: null,
+          expires_at: new Date(Date.now() + 48 * 36e5).toISOString(),
+        }).catch(() => {});
+      }
 
       // Notify
       const siteUrl = process.env.URL || 'https://gridfeed.co';

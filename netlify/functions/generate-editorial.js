@@ -1,8 +1,8 @@
 import { sb, fetchWT, logSync, json } from './lib/shared.js';
 import { validateArticle, fixEncoding } from './lib/accuracy.js';
+import { qualityCheck } from './lib/quality-check.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-const DAILY_CAP = 5;
 
 // INLINED subject key extractor — duplicated from lib/subject-registry.js to
 // bypass Netlify's function bundle cache. Keep in sync with seed-subjects.js,
@@ -151,6 +151,25 @@ function fillTemplate(prompt) {
     .replace(/\{norrisConsecutiveFifths\}/g, STANDINGS.keyStats.norrisConsecutiveFifths);
 }
 
+// Pick a topic whose likely subject key isn't in the blocked set. Each
+// prompt has the subject it's about encoded directly in its text — we
+// extract the key from the prompt with getSubjectKeyLocal and reject any
+// prompt whose key is already covered. Returns null if every prompt is
+// blocked (natural rate limit — wait for new events).
+async function pickTopicFiltered(blockedKeys) {
+  const shuffled = [...EDITORIAL_TYPES].sort(() => Math.random() - 0.5);
+  for (const type of shuffled) {
+    const prompts = [...type.prompts].sort(() => Math.random() - 0.5);
+    for (const prompt of prompts) {
+      const filled = fillTemplate(prompt);
+      const expectedKey = getSubjectKeyLocal(filled);
+      if (expectedKey && blockedKeys.has(expectedKey)) continue;
+      return { type: type.type, prompt, expectedKey };
+    }
+  }
+  return null;
+}
+
 async function pickTopic() {
   // Pull recent article titles + pending draft titles to avoid repeats
   const recentArts = await sb('articles?status=eq.published&select=title,tags&order=published_at.desc&limit=30');
@@ -257,26 +276,42 @@ async function generateArticle(topic) {
 export default async (req) => {
   const start = Date.now();
   try {
-    // 1. Rate limit — max 5 editorial drafts per calendar day (not rolling
-    // 24h). Count ONLY drafts with generation_model='GridFeed Editorial'
-    // created today so the news pipeline output doesn't eat our budget.
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayDrafts = await sb(`content_drafts?generation_model=eq.GridFeed%20Editorial&created_at=gte.${todayStart.toISOString()}&select=id`);
-    if ((todayDrafts || []).length >= DAILY_CAP) {
-      await logSync('generate-editorial', 'success', 0, `Daily cap reached: ${todayDrafts.length}/${DAILY_CAP}`, Date.now() - start);
-      return json({ ok: true, generated: 0, reason: 'daily_cap', count: todayDrafts.length });
-    }
+    // No daily cap — the subject-key gate provides the natural rate limit.
+    // If every prompt in the pool has already been covered in the last 48h
+    // we simply skip this run and try again next hour.
 
-    // 2. Pick a topic
-    const topic = await pickTopic();
-    console.log('[generate-editorial] type:', topic.type);
+    // Build blocked-subject set from registry + recent drafts + recent articles
+    const blockedKeys = new Set();
+    const nowIso = new Date().toISOString();
+    const fortyEightAgo = new Date(Date.now() - 48 * 36e5).toISOString();
+    const thirtyRecent = await sb('articles?status=eq.published&select=title&order=published_at.desc&limit=30').catch(() => []);
+    const draftsRecent = await sb(`content_drafts?select=title&created_at=gte.${fortyEightAgo}&order=created_at.desc&limit=50`).catch(() => []);
+    const registryRows = await sb(`published_subjects?select=subject&or=(expires_at.is.null,expires_at.gt.${nowIso})&limit=200`).catch(() => []);
+    for (const r of (registryRows || [])) if (r.subject) blockedKeys.add(r.subject);
+    for (const r of (thirtyRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
+    for (const r of (draftsRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
+
+    // 2. Pick a topic whose likely subject key is NOT blocked
+    const topic = await pickTopicFiltered(blockedKeys);
+    if (!topic) {
+      await logSync('generate-editorial', 'success', 0, `All subjects covered (${blockedKeys.size} blocked)`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'all_subjects_covered', blocked: blockedKeys.size });
+    }
+    console.log('[generate-editorial] type:', topic.type, '| expectedKey:', topic.expectedKey || 'n/a');
 
     // 3. Generate article
     const article = await generateArticle(topic);
     console.log('[generate-editorial] title:', article.title);
 
-    // 4. Validate factual accuracy (same gates as news pipeline)
+    // 4a. Quality check — catches runaway generation, leaked metadata,
+    // orphan fragments, empty markers, bad title length
+    const qc = qualityCheck(article.title, article.body);
+    if (!qc.valid) {
+      await logSync('generate-editorial', 'quality_failed', 0, `${topic.type}: ${qc.errors.join('; ')} — "${(article.title || '').slice(0, 40)}"`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'quality_failed', errors: qc.errors });
+    }
+
+    // 4b. Validate factual accuracy (same gates as news pipeline)
     const validation = validateArticle(article);
     if (!validation.valid) {
       await logSync('generate-editorial', 'validation_failed', 0, `${topic.type}: ${validation.reason} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);

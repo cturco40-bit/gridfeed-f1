@@ -1,12 +1,19 @@
 import { sb, logSync, json } from './lib/shared.js';
 import { postTweetNow } from './lib/twitter.js';
 
-// Safety caps to prevent Twitter suspension
+// Safety caps to prevent Twitter suspension — type-based limits so social
+// chatter doesn't crowd out live race alerts
 const TWENTY_FOUR_HOURS = 864e5;
-const DAILY_CAP = 40;            // Free tier is ~50/day; stay safely under
-const HOURLY_CAP = 10;           // Avoid bursty behavior that triggers anti-spam
-const MIN_SPACING_MS = 30 * 1000;      // Min 30s between any two tweets (article default)
-const LIVE_MIN_SPACING_MS = 20 * 1000; // Min 20s between live race tweets (faster for breaking events)
+const TYPE_LIMITS = {
+  social:    { hourly: 2,  daily: 15 },
+  article:   { hourly: 10, daily: 30 },
+  live_race: { hourly: 5,  daily: 25 },
+  live:      { hourly: 5,  daily: 25 },
+  recap:     { hourly: 10, daily: 30 },
+};
+const DEFAULT_LIMIT = TYPE_LIMITS.social;
+const MIN_SPACING_MS = 30 * 1000;
+const LIVE_MIN_SPACING_MS = 20 * 1000;
 
 function tooSimilar(a, b) {
   // Compare normalized text — Twitter rejects near-duplicates
@@ -24,23 +31,13 @@ function tooSimilar(a, b) {
 export default async (req, context) => {
   const start = Date.now();
   try {
-    // ── 1. Daily cap ──
+    // Fetch the last 24h of posted tweets once; all cap checks reuse it
     const dayAgo = new Date(Date.now() - TWENTY_FOUR_HOURS).toISOString();
-    const dayPosted = await sb(`tweets?status=eq.posted&posted_at=gt.${dayAgo}&select=id,posted_at,tweet_text,tweet_type`);
-    if (dayPosted.length >= DAILY_CAP) {
-      await logSync('post-tweet', 'success', 0, `Daily cap reached: ${dayPosted.length}/${DAILY_CAP}`, Date.now() - start);
-      return json({ ok: true, posted: 0, reason: 'daily_cap', count: dayPosted.length });
-    }
-
-    // ── 2. Hourly cap ──
     const hourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
-    const hourPosted = dayPosted.filter(t => t.posted_at >= hourAgo);
-    if (hourPosted.length >= HOURLY_CAP) {
-      await logSync('post-tweet', 'success', 0, `Hourly cap reached: ${hourPosted.length}/${HOURLY_CAP}`, Date.now() - start);
-      return json({ ok: true, posted: 0, reason: 'hourly_cap', count: hourPosted.length });
-    }
+    const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+    const dayPosted = await sb(`tweets?status=eq.posted&posted_at=gt.${dayAgo}&select=id,posted_at,tweet_text,tweet_type`);
 
-    // ── 3. Pick next approved tweet (with live race priority) ──
+    // ── 1. Pick next approved tweet (with live race priority) ──
     const queue = await sb(`tweets?status=eq.approved&or=(scheduled_post_at.is.null,scheduled_post_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=5`);
     if (!queue.length) {
       await logSync('post-tweet', 'success', 0, 'No approved tweets ready', Date.now() - start);
@@ -55,7 +52,22 @@ export default async (req, context) => {
     let tweet = queue[0];
     const isLive = tweet.tweet_type === 'live_race';
 
-    // ── 4. Min spacing (live tweets get faster spacing) ──
+    // ── 2. Per-type hourly + daily caps ──
+    const type = tweet.tweet_type || 'social';
+    const typeLimit = TYPE_LIMITS[type] || DEFAULT_LIMIT;
+    const sameTypePosted = dayPosted.filter(t => (t.tweet_type || 'social') === type);
+    const typeHourly = sameTypePosted.filter(t => t.posted_at >= hourAgo).length;
+    const typeDaily = sameTypePosted.filter(t => t.posted_at >= todayStart.toISOString()).length;
+    if (typeHourly >= typeLimit.hourly) {
+      await logSync('post-tweet', 'success', 0, `${type} hourly cap: ${typeHourly}/${typeLimit.hourly}`, Date.now() - start);
+      return json({ ok: true, posted: 0, reason: 'hourly_cap', type, count: typeHourly });
+    }
+    if (typeDaily >= typeLimit.daily) {
+      await logSync('post-tweet', 'success', 0, `${type} daily cap: ${typeDaily}/${typeLimit.daily}`, Date.now() - start);
+      return json({ ok: true, posted: 0, reason: 'daily_cap', type, count: typeDaily });
+    }
+
+    // ── 3. Min spacing (live tweets get faster spacing) ──
     const lastPosted = dayPosted.sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))[0];
     if (lastPosted) {
       const sinceLast = Date.now() - new Date(lastPosted.posted_at).getTime();

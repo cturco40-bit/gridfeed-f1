@@ -52,15 +52,21 @@ function normHead(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').
 export default async (req) => {
   const start = Date.now();
   try {
-    // Rate limit — 5 social tweets per rolling 24h
-    const since = new Date(Date.now() - 24 * 36e5).toISOString();
-    const recent = await sb(`tweets?tweet_type=eq.social&created_at=gt.${since}&select=tweet_text&order=created_at.desc`);
-    if ((recent || []).length >= 5) {
-      await logSync('generate-social', 'success', 0, `Daily cap reached: ${recent.length}/5`, Date.now() - start);
+    // Dual rate limit: max 2 social tweets per hour, max 15 per calendar day
+    const hourAgo = new Date(Date.now() - 36e5).toISOString();
+    const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+    const hourly = await sb(`tweets?tweet_type=eq.social&created_at=gt.${hourAgo}&select=tweet_text&order=created_at.desc`);
+    const daily = await sb(`tweets?tweet_type=eq.social&created_at=gte.${todayStart.toISOString()}&select=id`);
+    if ((hourly || []).length >= 2) {
+      await logSync('generate-social', 'success', 0, `Hourly cap: ${hourly.length}/2`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'hourly_cap' });
+    }
+    if ((daily || []).length >= 15) {
+      await logSync('generate-social', 'success', 0, `Daily cap: ${daily.length}/15`, Date.now() - start);
       return json({ ok: true, generated: 0, reason: 'daily_cap' });
     }
 
-    const recentHeads = new Set((recent || []).map(t => normHead(t.tweet_text)));
+    const recentHeads = new Set((hourly || []).map(t => normHead(t.tweet_text)));
 
     // Pick a template whose head hasn't been used recently
     let text = null;
