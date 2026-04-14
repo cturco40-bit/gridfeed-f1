@@ -140,22 +140,46 @@ function expiresAtFor(subject) {
   return new Date(Date.now() + NEXT_RACE_DAYS * 86400e3).toISOString();
 }
 
-// Reduce a headline / title / body to a canonical "entity:angle" subject
-// key. Returns null if no entity is found in the text.
-export function getSubjectKey(text) {
-  const t = (text || '').toLowerCase();
-  if (!t) return null;
+// Reduce an article TITLE to a canonical "entity:angle" subject key. Only
+// the title is used because the body always mentions multiple drivers/teams,
+// which produces wrong entity matches. Returns null if no entity is found.
+export function getSubjectKey(title) {
+  const h = (title || '').toLowerCase();
+  if (!h) return null;
 
-  // Find first entity match — drivers first, then teams (a driver-specific
-  // angle is more meaningful than a team-wide one)
+  // 1. Topic entities — high-level subjects that aren't drivers or teams.
+  // Check first so something like "Bahrain qualifying" doesn't resolve to a
+  // random driver mentioned later in the headline.
+  const topicEntities = [
+    { match: 'aduo',         key: 'aduo:engine' },
+    { match: 'bahrain',      key: 'bahrain:calendar' },
+    { match: 'saudi',        key: 'saudi:calendar' },
+    { match: 'goodwood',     key: 'goodwood:general' },
+    { match: 'formula 2',    key: 'f2:calendar' },
+    { match: 'formula 3',    key: 'f3:calendar' },
+    { match: 'overtake mode', key: 'f1:regulation' },
+    { match: 'active aero',  key: 'f1:regulation' },
+  ];
+  for (const te of topicEntities) {
+    if (h.includes(te.match)) return te.key;
+  }
+
+  // 2. Standings-overview pattern — articles like "Championship Check",
+  // "Where All 22 Drivers Stand", "Power Rankings" are about the field as a
+  // whole, not any single driver
+  if (/champion.*(stand|check)|all.*drivers|power.*rank/.test(h)) {
+    return 'f1:standings';
+  }
+
+  // 3. Drivers first, then teams (driver-specific angle is more meaningful)
   let entity = null;
-  for (const d of DRIVERS) { if (t.includes(d)) { entity = d; break; } }
-  if (!entity) for (const team of TEAMS) { if (t.includes(team)) { entity = team; break; } }
+  for (const d of DRIVERS) { if (h.includes(d)) { entity = d; break; } }
+  if (!entity) for (const team of TEAMS) { if (h.includes(team)) { entity = team; break; } }
   if (!entity) return null;
 
-  // Tokenise and find the most "meaningful" synonym word — sort tokens by
-  // length descending so longer words win ('championship' over 'in')
-  const tokens = t.split(/[^a-z0-9]+/).filter(w => w.length > 2);
+  // 4. Tokenise the title and find the most meaningful synonym word — sort
+  // tokens by length descending so 'championship' beats 'in'
+  const tokens = h.split(/[^a-z0-9]+/).filter(w => w.length > 2);
   tokens.sort((a, b) => b.length - a.length);
   let angle = 'general';
   for (const w of tokens) { if (SYNONYMS[w]) { angle = SYNONYMS[w]; break; } }
@@ -175,10 +199,10 @@ export async function checkSubjectPublished(text) {
   return (rows || []).length ? key : null;
 }
 
-// Record a subject as published. Safe to call multiple times — duplicates
-// are harmless because the dedup query uses subject + expiry, not unique.
-export async function recordSubjectPublished(title, body, articleId) {
-  const key = getSubjectKey(title) || getSubjectKey(body || '');
+// Record a subject as published. Title only — body is intentionally ignored
+// to keep entity resolution accurate (bodies always mention multiple drivers).
+export async function recordSubjectPublished(title, articleId) {
+  const key = getSubjectKey(title);
   if (!key) return null;
   try {
     await sb('published_subjects', 'POST', {

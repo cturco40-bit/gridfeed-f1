@@ -14,7 +14,7 @@ export default async (req) => {
   const start = Date.now();
   try {
     // 1. Pull every published article (cap 500 — plenty of headroom)
-    const articles = await sb('articles?status=eq.published&select=id,title,body,published_at&order=published_at.desc&limit=500');
+    const articles = await sb('articles?status=eq.published&select=id,title,published_at&order=published_at.desc&limit=500');
     if (!articles?.length) {
       return json({ ok: true, message: 'No published articles to seed' });
     }
@@ -28,7 +28,7 @@ export default async (req) => {
     const skipped = [];
 
     for (const a of articles) {
-      const key = getSubjectKey(a.title) || getSubjectKey(a.body || '');
+      const key = getSubjectKey(a.title);
       if (!key) {
         skipped.push({ id: a.id, title: (a.title || '').slice(0, 60), reason: 'no-entity-match' });
         continue;

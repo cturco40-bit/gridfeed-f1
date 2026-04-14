@@ -62,7 +62,7 @@ export default async (req) => {
     });
 
     // 2b. Record the article subject so the same angle can't be re-drafted
-    recordSubjectPublished(cleanTitle, cleanBody, articleId).catch(() => {});
+    recordSubjectPublished(cleanTitle, articleId).catch(() => {});
 
     // 3. Create tweet draft as pending — needs manual approval before posting
     try {
