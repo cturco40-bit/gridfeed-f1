@@ -174,6 +174,14 @@ body{transition:background-color .2s,color .2s}
 .cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block}
 .gc{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
 .rbar{font-size:10px;color:var(--muted)}
+.form-strip{display:inline-flex;gap:3px;align-items:center}
+.form-dot{width:10px;height:10px;border-radius:50%;border:1px solid var(--border);box-sizing:border-box}
+.fd-gold{background:var(--gold);border-color:var(--gold)}
+.fd-grn{background:#2ea043;border-color:#2ea043}
+.fd-gry{background:#6e7681;border-color:#6e7681}
+.fd-red{background:#e8002d;border-color:#e8002d}
+.fd-mt{background:transparent}
+@media(max-width:480px){.form-strip,.form-col{display:none}}
 
 /* ═══ NEWS FILTERS ═══ */
 .nf{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
@@ -963,10 +971,15 @@ async function initSt(){
 }
 const CID_SLUG={mercedes:'mercedes',ferrari:'ferrari',mclaren:'mclaren',haas:'haas',alpine:'alpine',red_bull:'red-bull',rb:'racing-bulls',audi:'audi',williams:'williams',cadillac:'cadillac',aston_martin:'aston-martin'};
 function abbrByName(name){const last=name.split(' ').pop().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');const e=Object.entries(DSTATS).find(([n])=>n.split(' ').pop().toLowerCase()===last);return e?e[1].abbr:null}
+function formDotCls(r){if(r==null)return'fd-mt';if(r==='DNF'||r==='DNS')return'fd-red';const n=+r;if(!n)return'fd-mt';if(n<=3)return'fd-gold';if(n<=10)return'fd-grn';return'fd-gry'}
+function formStripHtml(results){const last5=(results||[]).slice(-5);const pad=5-last5.length;const dots=[];for(let i=0;i<pad;i++)dots.push('<span class="form-dot fd-mt"></span>');last5.forEach(r=>dots.push(`<span class="form-dot ${formDotCls(r)}"></span>`));return`<span class="form-strip">${dots.join('')}</span>`}
 function renderST(id,entries){
   const el=document.getElementById(id);if(!entries.length){el.innerHTML='<div class="empty">No data.</div>';return}
   const mx=entries[0]?.pts||1;const isCtor=id==='ctorSt';
-  el.innerHTML=`<table class="tt"><thead><tr><th style="width:32px">Pos</th><th>Name</th><th>Points</th></tr></thead><tbody>${entries.map((e,i)=>{let nm;if(isCtor){const slug=CID_SLUG[e.cid];nm=slug?`<a href="/#/team/${slug}" onclick="showTeam('${slug}');return false" style="color:inherit;text-decoration:none">${e.name}</a>`:e.name}else{const ab=abbrByName(e.name);nm=ab?`<a href="/#/driver/${ab}" onclick="showDrv('${ab}');return false" style="color:inherit;text-decoration:none">${e.name}</a>`:e.name}return`<tr><td><span class="pn ${i<3?'p'+(i+1):''}">P${i+1}</span></td><td><div style="display:flex;align-items:center;gap:6px"><span class="cdot" style="background:${e.color}"></span><span class="dn">${nm}</span></div></td><td><div class="pts-w"><div class="pts-bar"><div class="pts-fill" style="width:${(e.pts/mx*100).toFixed(1)}%"></div></div><span class="pts-n">${e.pts}</span></div></td></tr>`}).join('')}</tbody></table>`;
+  // TODO: position trend arrows (▲/▼) — no clean prev_pos data source yet.
+  // Ship when DSTATS carries prev_pos or a leaderboard snapshot table exists.
+  const formTh=isCtor?'':'<th class="form-col" style="width:62px">Form</th>';
+  el.innerHTML=`<table class="tt"><thead><tr><th style="width:32px">Pos</th><th>Name</th>${formTh}<th>Points</th></tr></thead><tbody>${entries.map((e,i)=>{let nm;if(isCtor){const slug=CID_SLUG[e.cid];nm=slug?`<a href="/#/team/${slug}" onclick="showTeam('${slug}');return false" style="color:inherit;text-decoration:none">${e.name}</a>`:e.name}else{const ab=abbrByName(e.name);nm=ab?`<a href="/#/driver/${ab}" onclick="showDrv('${ab}');return false" style="color:inherit;text-decoration:none">${e.name}</a>`:e.name}const formTd=isCtor?'':`<td class="form-col">${formStripHtml(DSTATS[e.name]?.results)}</td>`;return`<tr><td><span class="pn ${i<3?'p'+(i+1):''}">P${i+1}</span></td><td><div style="display:flex;align-items:center;gap:6px"><span class="cdot" style="background:${e.color}"></span><span class="dn">${nm}</span></div></td>${formTd}<td><div class="pts-w"><div class="pts-bar"><div class="pts-fill" style="width:${(e.pts/mx*100).toFixed(1)}%"></div></div><span class="pts-n">${e.pts}</span></div></td></tr>`}).join('')}</tbody></table>`;
 }
 
 /* ═══ SCHEDULE ═══ */
