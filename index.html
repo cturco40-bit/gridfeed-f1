@@ -65,6 +65,11 @@ body::before{content:'';display:block;height:constant(safe-area-inset-top);heigh
 
 /* ═══ TOP NAV (desktop) ═══ */
 .top-nav{background:var(--header);border-bottom:1px solid rgba(255,255,255,.08)}
+.session-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(232,0,45,.12);border:1px solid rgba(232,0,45,.3);border-radius:4px;font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.5px;margin-left:auto;align-self:center;white-space:nowrap}
+.session-chip .chip-label{color:var(--muted);font-size:9px}
+.session-chip .chip-sess{color:#fff;font-family:var(--head)}
+.session-chip .chip-time{font-variant-numeric:tabular-nums}
+@media(max-width:640px){.session-chip{display:none !important}}
 .top-nav-in{max-width:var(--max-w);margin:0 auto;display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .top-nav-in::-webkit-scrollbar{display:none}
 .tn{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);padding:12px 18px;white-space:nowrap;border-bottom:2px solid transparent;min-height:44px;display:flex;align-items:center}
@@ -487,6 +492,7 @@ body{transition:background-color .2s,color .2s}
   <button class="tn" data-t="picks">Picks</button>
   <button class="tn" data-t="standings">Standings</button>
   <button class="tn" data-t="schedule">Schedule</button>
+  <div class="session-chip" id="sessChip" style="display:none"><span class="chip-label">NEXT</span><span class="chip-sess" id="sessChipName">&mdash;</span><span class="chip-time" id="sessChipTime">&mdash;</span></div>
 </div></nav>
 
 <!-- MAIN -->
@@ -805,6 +811,34 @@ document.addEventListener('click',e=>{
 
 /* ═══ DETECT NEXT RACE ═══ */
 function detectNR(){const now=new Date();S.nr=SCH.find(r=>r.st!=='can'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop()}
+
+// Approximate session times derived from race weekend layout (Option B in plan).
+// Race day `r.d` is treated as Sunday race at 14:00 UTC; other sessions offset
+// from that. Good enough for a chip — not authoritative timing.
+function buildSessions(r){
+  const day=864e5,hr=36e5;
+  const R=new Date(r.d+'T14:00:00Z').getTime();
+  if(r.sp)return[{n:'FP1',t:R-2*day-0.5*hr},{n:'SQ',t:R-2*day+3*hr},{n:'SS',t:R-1*day-3*hr},{n:'Q',t:R-1*day+2*hr},{n:'R',t:R}];
+  return[{n:'FP1',t:R-2*day-0.5*hr},{n:'FP2',t:R-2*day+3*hr},{n:'FP3',t:R-1*day-1.5*hr},{n:'Q',t:R-1*day+2*hr},{n:'R',t:R}];
+}
+function getNextSession(){
+  const now=Date.now(),horizon=now+7*864e5;
+  for(const r of SCH){if(r.st==='can'||r.st==='done')continue;for(const s of buildSessions(r)){if(s.t>now&&s.t<=horizon)return s}}
+  return null;
+}
+function fmtSessDelta(ms){const d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';return m+'m'}
+function initSessChip(){
+  const chip=document.getElementById('sessChip');if(!chip)return;
+  if(S.sessCt)clearInterval(S.sessCt);
+  function tick(){
+    const s=getNextSession();
+    if(!s){chip.style.display='none';return}
+    chip.style.display='';
+    document.getElementById('sessChipName').textContent=s.n;
+    document.getElementById('sessChipTime').textContent=fmtSessDelta(s.t-Date.now());
+  }
+  tick();S.sessCt=setInterval(tick,30000);
+}
 
 /* ═══ COUNTDOWN ═══ */
 function startCD(target){
@@ -2384,7 +2418,7 @@ function toggleMap(){
 function initMapToggle(){if(sessionStorage.getItem('gf_map')==='0'){S._mapVis=true;toggleMap()}}
 
 /* ═══ BOOT ═══ */
-detectNR();initHome();initRoute();checkPush();checkLive();initMapToggle();initDark();
+detectNR();initHome();initSessChip();initRoute();checkPush();checkLive();initMapToggle();initDark();
 setInterval(()=>{if(S.tab==='standings')initSt()},18e5);
 setInterval(checkLive,30000);
 </script>
