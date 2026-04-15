@@ -82,6 +82,19 @@ export default async (req, context) => {
 
     // Get pending topics (fetch a few for diversity filtering)
     // Priority DESC first, then fresh topics before retries, then oldest first
+    // Daily cap — prevent runaway generation
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayDrafts = await sb(
+      'content_drafts?created_at=gt.' +
+      todayStart.toISOString() + '&select=id'
+    ).catch(() => []);
+    if ((todayDrafts || []).length >= 30) {
+      await logSync('generate-content', 'success', 0,
+        'Daily cap reached: ' + (todayDrafts||[]).length + ' drafts today',
+        Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'daily_cap' });
+    }
     const allPending = await sb('content_topics?status=eq.pending&order=priority.desc,retry_count.asc,created_at.asc&limit=5');
     if (!allPending.length) {
       await logSync('generate-content', 'success', 0, 'No pending topics', Date.now() - start);
@@ -108,12 +121,12 @@ export default async (req, context) => {
       const wordsA = new Set(significantWords(titleA));
       const wordsB = significantWords(titleB);
       const sharedWords = wordsB.filter(w => wordsA.has(w));
-      // Same driver = duplicate
-      if (sharedDrivers.length > 0) return true;
-      // Same team + 1+ shared theme word
-      if (sharedTeams.length > 0 && sharedWords.length >= 1) return true;
-      // 3+ shared significant words = same story
-      if (sharedWords.length >= 3) return true;
+      // Same driver AND 2+ shared theme words = same story
+      if (sharedDrivers.length > 0 && sharedWords.length >= 2) return true;
+      // Same team + 2+ shared theme words = same story
+      if (sharedTeams.length > 0 && sharedWords.length >= 2) return true;
+      // 4+ shared significant words regardless = same story
+      if (sharedWords.length >= 4) return true;
       return false;
     }
 
@@ -382,17 +395,6 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       // Record hash + mark topic drafted
       await sb('content_hashes', 'POST', { hash: h, type: contentType, source: 'generate-content' });
       if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
-
-      // Register subject in the registry with 48h expiry so follow-up
-      // angles on the same driver/team are blocked from drafting again
-      const savedKey = getSubjectKeyLocal(parsed.title) || topicKey;
-      if (savedKey) {
-        await sb('published_subjects', 'POST', {
-          subject: savedKey,
-          article_id: null,
-          expires_at: new Date(Date.now() + 48 * 36e5).toISOString(),
-        }).catch(() => {});
-      }
 
       // Notify
       const siteUrl = process.env.URL || 'https://gridfeed.co';

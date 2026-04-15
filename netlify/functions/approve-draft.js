@@ -4,7 +4,7 @@ import { fixEncoding } from './lib/accuracy.js';
 // INLINED subject key extractor + recorder — duplicated from
 // lib/subject-registry.js to bypass Netlify's function bundle cache.
 // Keep in sync with seed-subjects.js / monitor-f1.js.
-const SUBJECT_NEXT_RACE_DAYS = 7;
+const SUBJECT_NEXT_RACE_DAYS = 1;
 function getSubjectKeyLocal(title) {
   const h = (title || '').toLowerCase();
   if (!h) return null;
