@@ -60,6 +60,66 @@ const F1_KEYWORDS = [
   ...CIRCUITS.map(c => c.toLowerCase()),
 ];
 
+// Bluesky accounts to monitor for F1 news
+// Public API — no auth required
+const BLUESKY_ACCOUNTS = [
+  'racefans.net.bsky.social',
+  'the-race.com.bsky.social',
+  'autosport.com.bsky.social',
+];
+
+async function fetchBlueskyPosts() {
+  const posts = [];
+  await Promise.allSettled(
+    BLUESKY_ACCOUNTS.map(async (handle) => {
+      try {
+        const res = await fetchWT(
+          'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed' +
+          '?actor=' + encodeURIComponent(handle) + '&limit=10',
+          {}, 8000
+        );
+        if (!res.ok) return;
+        const j = await res.json();
+        const feed = j?.feed || [];
+        const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+        for (const item of feed) {
+          const post = item?.post;
+          if (!post) continue;
+          const text = post?.record?.text || '';
+          const createdAt = post?.record?.createdAt || '';
+          const ts = Date.parse(createdAt);
+          // Only posts from last 6 hours
+          if (isFinite(ts) && ts < cutoff) continue;
+          // Must contain F1 keywords
+          const tLower = text.toLowerCase();
+          if (!F1_KEYWORDS.some(kw => tLower.includes(kw))) continue;
+          // Extract any URL from facets
+          const facets = post?.record?.facets || [];
+          let link = null;
+          for (const facet of facets) {
+            const feat = facet?.features?.[0];
+            if (feat?.$type === 'app.bsky.richtext.facet#link') {
+              link = feat.uri; break;
+            }
+          }
+          const postUrl = 'https://bsky.app/profile/' + handle +
+            '/post/' + (post?.uri || '').split('/').pop();
+          posts.push({
+            title: text.slice(0, 200),
+            link: link || postUrl,
+            pubDate: createdAt,
+            summary: text,
+            source: 'Bluesky:' + handle,
+            region: 'INT',
+            source_language: 'en',
+          });
+        }
+      } catch { /* fail silently per account */ }
+    })
+  );
+  return posts;
+}
+
 const RSS_FEEDS = [
   // Formula1.com removed their RSS feed (old URL 301s to a 404). Google News
   // aggregates F1.com + everything else, so we use it as the F1-wide net.
@@ -87,6 +147,9 @@ const RSS_FEEDS = [
   { url: 'https://theathletic.com/rss/f1', source: 'The Athletic F1', region: 'US' },
   { url: 'https://www.formula1.com/en/latest/all.html.rss', source: 'Formula1.com', region: 'INT' },
   { url: 'https://es.autosport.com/rss/news/all', source: 'Autosport ES', region: 'ES' },
+  { url: 'https://www.racingnews365.com/feed', source: 'RacingNews365', region: 'GB' },
+  { url: 'https://en.f1i.com/feed', source: 'F1i', region: 'FR' },
+  { url: 'https://www.motorsportweek.com/feed/', source: 'Motorsport Week', region: 'GB' },
 ];
 
 // Trusted non-English sources that get machine-translated instead of filtered.
@@ -199,6 +262,12 @@ export default async (req, context) => {
       })
     );
     feedResults.forEach(r => { if (r.status === 'fulfilled') headlines.push(...r.value); });
+
+    // Add Bluesky posts to headline pool
+    try {
+      const bskyPosts = await fetchBlueskyPosts();
+      headlines.push(...bskyPosts);
+    } catch { /* Bluesky failure never kills RSS pipeline */ }
 
     // Rejection counters — surface in sync_log so "0 created" is actually debuggable
     const rejectCounts = {
@@ -401,7 +470,7 @@ export default async (req, context) => {
       await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
       await sb('content_topics', 'POST', {
         topic: group.titles[0],
-        content_type: isBreaking || score >= 12 ? 'breaking' : isRumour ? 'analysis' : 'analysis',
+        content_type: isBreaking || score >= 12 ? 'breaking' : isRumour ? 'rumour' : 'analysis',
         priority, status: 'pending', triggered_by: 'monitor-f1',
         source_url: sourceUrl,
         source_language: srcLang,

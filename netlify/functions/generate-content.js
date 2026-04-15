@@ -43,6 +43,35 @@ const WORD_TARGETS = {
   preview: '400-450', strategy_analysis: '350-400', championship_update: '250-300', morning_briefing: '300-350', analysis: '400-500',
 };
 
+const BREAKING_SYSTEM_ADDENDUM = `
+BREAKING NEWS RULES:
+- Lead with the confirmed fact in the first sentence
+- Name the source in the first paragraph
+- Keep to 200-300 words — brevity is priority
+- No speculation — confirmed facts only
+- End with: "More to follow as this story develops."
+- Use BREAKING tag
+- Do not pad with background or history
+`;
+
+const RUMOUR_SYSTEM_ADDENDUM = `
+RUMOUR ARTICLE RULES:
+- First paragraph MUST name the source outlet
+- Use attribution language throughout:
+  "according to [source]", "per [source]",
+  "reports suggest", "[source] claims"
+- NEVER state rumours as confirmed fact
+- NEVER fabricate quotes — paraphrase only
+- Include this exact paragraph near the end:
+  "GridFeed has not independently verified
+  this report."
+- End with what confirmation would look like:
+  "Official confirmation would be expected
+  from [team/driver/FIA]."
+- Keep to 250-350 words
+- Use RUMOUR tag
+`;
+
 function parseAIResponse(data) {
   const content = data.content || [];
   const textBlocks = content.filter(b => b.type === 'text');
@@ -270,6 +299,13 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         `OUTPUT: Return ONLY valid JSON with no markdown fences:\n{"title":"...","excerpt":"first 150 chars","body":"full article","tags":["RACE"],"content_type":"${contentType}"}`
       );
 
+      // Append mode-specific rules based on content type
+      if (contentType === 'breaking') {
+        systemPrompt = (systemPrompt || '') + BREAKING_SYSTEM_ADDENDUM;
+      } else if (contentType === 'rumour') {
+        systemPrompt = (systemPrompt || '') + RUMOUR_SYSTEM_ADDENDUM;
+      }
+
       // Translated-source note — headline/summary came from a foreign-language
       // feed and were machine-translated. Tell Claude so it doesn't mistake
       // translation artifacts for facts.
@@ -383,6 +419,9 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       let finalTags = parsed.tags || ['ANALYSIS'];
       if (contentType === 'breaking' && !finalTags.includes('BREAKING')) {
         finalTags = ['BREAKING', ...finalTags.filter(t => t !== 'ANALYSIS')];
+      }
+      if (contentType === 'rumour' && !finalTags.includes('RUMOUR')) {
+        finalTags = ['RUMOUR', ...finalTags.filter(t => t !== 'ANALYSIS')];
       }
       await sb('content_drafts', 'POST', {
         title: parsed.title, body: parsed.body, excerpt: parsed.excerpt,
