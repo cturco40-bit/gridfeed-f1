@@ -151,9 +151,9 @@ export default async (req, context) => {
       const wordsB = significantWords(titleB);
       const sharedWords = wordsB.filter(w => wordsA.has(w));
       // Same driver AND 2+ shared theme words = same story
-      if (sharedDrivers.length > 0 && sharedWords.length >= 2) return true;
+      if (sharedDrivers.length > 0 && sharedWords.length >= 3) return true;
       // Same team + 2+ shared theme words = same story
-      if (sharedTeams.length > 0 && sharedWords.length >= 2) return true;
+      if (sharedTeams.length > 0 && sharedWords.length >= 3) return true;
       // 4+ shared significant words regardless = same story
       if (sharedWords.length >= 4) return true;
       return false;
