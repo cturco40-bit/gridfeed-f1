@@ -29,23 +29,37 @@ export default async (req, context) => {
       return json({ ok: true, published: 0 });
     }
 
+    let skipped = 0;
     for (const draft of drafts) {
-      const slug = makeSlug(draft.title || 'untitled');
+      // Drafts with scheduled_publish_at were explicitly approved by an admin
+      // through the UI — bypass the AI-pipeline dedup gates so a manual
+      // schedule always lands.
+      const isUserScheduled = !!draft.scheduled_publish_at;
 
-      // Check slug not taken
+      let slug = makeSlug(draft.title || 'untitled');
+
+      // Check slug not taken. For user-scheduled drafts, suffix on collision
+      // instead of skipping. For AI-pipeline drafts, keep the original skip.
       const existing = await sb(`articles?slug=eq.${encodeURIComponent(slug)}&limit=1`);
-      if (existing.length) continue;
+      if (existing.length) {
+        if (!isUserScheduled) { skipped++; continue; }
+        slug = slug + '-' + Date.now().toString(36).slice(-5);
+      }
 
-      // Title similarity dedup — skip if >60% word overlap with recent article from same author
-      const recentArticles = await sb(`articles?select=title&order=published_at.desc&limit=20`);
-      const titleWords = new Set((draft.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
-      const isDupe = recentArticles.some(a => {
-        const aw = new Set((a.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
-        if (!titleWords.size||!aw.size) return false;
-        let overlap=0; for(const w of titleWords) if(aw.has(w)) overlap++;
-        return overlap/Math.max(titleWords.size,aw.size) > 0.6;
-      });
-      if (isDupe) { console.warn('[publish-approved] Skipping near-duplicate:', draft.title); continue; }
+      if (!isUserScheduled) {
+        // Title similarity dedup — skip if >60% word overlap with a recent article.
+        // Only applied to AI-pipeline drafts; user-scheduled ones already passed
+        // an explicit human approval.
+        const recentArticles = await sb(`articles?select=title&order=published_at.desc&limit=20`);
+        const titleWords = new Set((draft.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
+        const isDupe = recentArticles.some(a => {
+          const aw = new Set((a.title||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2));
+          if (!titleWords.size||!aw.size) return false;
+          let overlap=0; for(const w of titleWords) if(aw.has(w)) overlap++;
+          return overlap/Math.max(titleWords.size,aw.size) > 0.6;
+        });
+        if (isDupe) { console.warn('[publish-approved] Skipping near-duplicate:', draft.title); skipped++; continue; }
+      }
 
       // Insert article FIRST
       const article = await sb('articles', 'POST', {
@@ -94,8 +108,9 @@ export default async (req, context) => {
       }
     }
 
-    await logSync('publish-approved', 'success', published, `Published ${published} drafts`, Date.now() - start);
-    return json({ ok: true, published });
+    const skipMsg = skipped ? ` (skipped ${skipped})` : '';
+    await logSync('publish-approved', 'success', published, `Published ${published} drafts${skipMsg}`, Date.now() - start);
+    return json({ ok: true, published, skipped });
   } catch (err) {
     await logSync('publish-approved', 'error', 0, err.message, Date.now() - start, err.stack);
     return json({ error: err.message }, 500);
