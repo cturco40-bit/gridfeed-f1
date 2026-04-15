@@ -28,16 +28,6 @@ function getSubjectKeyLocal(title) {
   return entity + ':' + angle;
 }
 
-async function checkSubjectPublishedLocal(title) {
-  const key = getSubjectKeyLocal(title);
-  if (!key) return null;
-  const now = new Date().toISOString();
-  try {
-    const rows = await sb(`published_subjects?subject=eq.${encodeURIComponent(key)}&or=(expires_at.is.null,expires_at.gt.${now})&select=id&limit=1`);
-    return (rows || []).length ? key : null;
-  } catch { return null; }
-}
-
 const DRIVERS = ['Verstappen','Hamilton','Leclerc','Norris','Piastri','Russell','Sainz','Alonso','Antonelli','Hadjar','Lindblad','Bottas','Perez','Gasly','Colapinto','Albon','Ocon','Bearman','Lawson','Hulkenberg','Bortoleto','Stroll'];
 const TEAMS = ['Ferrari','Mercedes','McLaren','RedBull','Red Bull','AstonMartin','Aston Martin','Alpine','Williams','Haas','Audi','Cadillac','Racing Bulls'];
 const EVENTS = ['crash','penalty','contract','engine','dnf','pole','fastest','championship','transfer','injury','retire','ban','protest','appeal','fire','safety','overtake'];
@@ -175,11 +165,16 @@ function scoreStory(title, regionCount) {
 export default async (req, context) => {
   const start = Date.now();
   let topicsCreated = 0;
-  const ONE_HOUR_MS = 60 * 60 * 1000;
+  const ONE_HOUR_MS = 6 * 60 * 60 * 1000;
   const freshnessCutoff = Date.now() - ONE_HOUR_MS;
   try {
     // No daily cap anymore — the 60-min freshness window + seen_urls dedup +
     // subject registry act as the natural rate limit.
+    // Clean up seen_urls older than 7 days to prevent table growing indefinitely
+    try {
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      await sb('seen_urls?created_at=lt.' + cutoff, 'DELETE').catch(() => {});
+    } catch {}
     const recentTopics = [];
 
     // Fetch all RSS in parallel
@@ -366,15 +361,7 @@ export default async (req, context) => {
       // Subject registry: reject if the headline collapses to an
       // entity:angle key already in published_subjects (semantic dedup).
       // Uses INLINED extractor + lookup to bypass the bundle cache.
-      const blocked = await checkSubjectPublishedLocal(group.titles[0]);
-      if (blocked) {
-        rejectCounts.registryDup++;
-        console.log('REJECT registryDup:', group.titles[0].slice(0, 60), '| key:', blocked);
-        await sb('topic_signatures', 'POST', { signature: sig, first_seen_title: group.titles[0] }).catch(() => {});
-        continue;
-      }
-
-      // Published-article dedup: reject if 3+ significant word overlap with
+// Published-article dedup: reject if 3+ significant word overlap with
       // any recently published article title (stop words excluded)
       const newWords = overlapWords(group.titles[0]);
       let publishedMatch = null;
