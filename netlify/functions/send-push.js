@@ -37,9 +37,11 @@ export default async (req) => {
       subs.map(s => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload))
     );
 
-    // Remove expired (410 Gone)
-    const expired = results.map((r, i) => r.status === 'rejected' && r.reason?.statusCode === 410 ? subs[i].endpoint : null).filter(Boolean);
-    for (const ep of expired) await sb(`push_subscriptions?endpoint=eq.${encodeURIComponent(ep)}`, 'DELETE');
+    // Remove expired (410 Gone). Scope the delete to this audience so we don't
+    // wipe a sibling row when the same endpoint is subscribed to both
+    // public and admin.
+    const expired = results.map((r, i) => r.status === 'rejected' && r.reason?.statusCode === 410 ? subs[i] : null).filter(Boolean);
+    for (const s of expired) await sb(`push_subscriptions?endpoint=eq.${encodeURIComponent(s.endpoint)}&audience=eq.${s.audience || audience}`, 'DELETE');
 
     const sent = results.filter(r => r.status === 'fulfilled').length;
     await logSync('send-push', 'success', sent, `Sent ${sent}/${subs.length} push notifications`, Date.now() - start);
