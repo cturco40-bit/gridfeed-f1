@@ -4,10 +4,11 @@ import { NEVER_REFUSE, SEASON_CONTEXT, DRIVER_TEAM_MAP, HALLUCINATION_RULES } fr
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
 // Cap how many unlocked drafts can sit in the admin queue per race at once.
-// Prevents the generator from filling the queue with redundant suggestions
-// if an admin takes a day to review — one daily run tops up, doesn't flood.
-const DRAFT_QUEUE_CAP = 6;
-// How many picks to ask Haiku for per run.
+// Small on purpose — the admin wants the AI to be selective, not flood the
+// queue with 20 suggestions. Fewer high-conviction picks > many marginal ones.
+const DRAFT_QUEUE_CAP = 4;
+// Upper bound on picks per run; Haiku can return fewer if it doesn't find
+// that many positive-EV plays. The prompt enforces "fewer is better".
 const PICKS_PER_RUN = 4;
 
 export default async (req, context) => {
@@ -72,18 +73,20 @@ ${SEASON_CONTEXT}
 
 ${DRIVER_TEAM_MAP}
 
-You are a professional F1 betting analyst for GridFeed. You generate draft picks that a human editor will review before publishing.
+You are a professional F1 betting analyst for GridFeed. Your job is to surface ONLY the highest-conviction positive-EV plays for this race. The admin will likely approve every pick you return without reviewing, so be ruthlessly selective — fewer is better.
 
 RULES:
 - Only pick drivers that appear in the ODDS list below. Never invent odds or drivers.
 - Copy the exact decimal odds and bookmaker from the ODDS list into your response.
 - confidence is your true probability estimate 0..1.
-- edge_pct = (confidence * decimal_odds - 1) * 100. Only pick when edge_pct > 0 (positive EV).
+- edge_pct = (confidence * decimal_odds - 1) * 100.
+- HARD FLOOR: do not output any pick with edge_pct < 5. No exceptions. A marginal pick is worse than no pick.
+- Return BETWEEN 2 AND ${PICKS_PER_RUN} picks. If you can't find 2 plays clearing the 5% edge floor, return fewer — even an empty array is acceptable.
 - Assign pick_type:
     BEST BET = confidence >= 0.30 AND edge_pct >= 10
     VALUE    = edge_pct between 5 and 10
-    LONGSHOT = decimal_odds >= 15
-    FADE     = edge_pct < 0 (market is overvaluing this driver; we are advising against)
+    LONGSHOT = decimal_odds >= 15 AND edge_pct >= 5
+    FADE     = do NOT output FADE picks in this mode — admin wants only plays to back, not plays to avoid
 - analysis is 1-2 sentences, cites a concrete number from the form data, no vague language.
 
 FRAMEWORK:
@@ -92,10 +95,10 @@ FRAMEWORK:
 - Circuit history (last 3 visits) = 10%
 - Championship pressure = 5%
 
-Output ONLY a JSON array of exactly ${PICKS_PER_RUN} picks:
+Output ONLY a JSON array (up to ${PICKS_PER_RUN} picks, can be fewer):
 [{"pick_type":"BEST BET","driver_name":"...","odds_decimal":2.10,"bookmaker":"pinnacle","confidence":0.52,"edge_pct":9.2,"analysis":"..."}]
 
-Never refuse. Always produce picks.`;
+Never refuse. If nothing clears the edge floor, return [].`;
 
     const userPrompt = `Generate ${PICKS_PER_RUN} race-winner picks for ${nextRace.name} (${nextRace.circuit}).
 
@@ -121,7 +124,13 @@ Return ONLY the JSON array.`;
     } catch {
       throw new Error('Failed to parse picks: ' + text.slice(0, 200));
     }
-    if (!Array.isArray(picks) || !picks.length) throw new Error('No picks in response');
+    if (!Array.isArray(picks)) throw new Error('Picks response not an array');
+    if (!picks.length) {
+      // Legitimate empty return — AI found nothing clearing the edge floor.
+      // Log as success so the admin sees a clear message instead of a red row.
+      await logSync('generate-picks', 'success', 0, `No positive-EV plays for ${nextRace.name}`, Date.now() - start);
+      return json({ ok: true, picks: 0, reason: 'no_edge' });
+    }
 
     // Verify each pick against cached odds — skip any that doesn't match a real
     // row. This protects against hallucinated drivers / invented odds.

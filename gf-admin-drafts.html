@@ -1283,11 +1283,12 @@ function renderPicksTracker(){
       <div class="source-box"><div class="source-label">Losses</div><div style="font-size:28px;font-weight:900;color:var(--red)">${lost}</div></div>
       <div class="source-box"><div class="source-label">ROI</div><div style="font-size:28px;font-weight:900;color:${profit>=0?'var(--green)':'var(--red)'}">${roi===''||roi==='—'?'—':(profit>=0?'+':'')+roi+'%'}</div></div>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:16px">
-      <button class="act-btn act-regen" onclick="regenPicks()">\u21ba Run generate-picks now</button>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="act-btn act-regen" onclick="regenPicks()">\u21ba Generate picks</button>
       <button class="act-btn" style="background:var(--card);color:var(--text);border:1px solid var(--border)" onclick="refreshOdds()">\u{1F4E1} Refresh odds</button>
+      ${pendingDraft>0?`<button class="act-btn act-approve" onclick="approveAllPicks()">\u2713 Approve all ${pendingDraft}</button>`:''}
     </div>
-    <div class="panel-empty">Select a pick from the sidebar to edit.</div>`;
+    <div class="panel-empty">${pendingDraft>0?'Click a pick to review, or Approve all to lock every draft.':'No drafts waiting. Generate picks or wait for the next cron run.'}</div>`;
 }
 
 async function approvePick(id){
@@ -1339,6 +1340,31 @@ async function savePickDraft(id){
     if(data.error){toast('Save failed: '+data.error,'error');return}
     toast('Edits saved','info');await refreshAll();
   }catch(e){toast('Save failed: '+e.message,'error')}
+}
+
+async function approveAllPicks(){
+  // Lock every unlocked draft in the current picks list. Each call goes
+  // through approve-pick so the DB trigger gets to enforce immutability
+  // consistently — no shortcut UPDATEs that could bypass audit.
+  const pending=picks.filter(p=>!p.locked_at);
+  if(!pending.length){toast('No drafts to approve','info');return}
+  toast(`Approving ${pending.length} picks...`,'info');
+  let ok=0,fail=0;
+  for(const p of pending){
+    try{
+      const res=await fetch('/.netlify/functions/approve-pick',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        // Pass id only — the function already has all the fields stored
+        // from generate-picks. No admin edits to apply.
+        body:JSON.stringify({id:p.id})
+      });
+      const data=await res.json();
+      if(data.error){fail++;console.warn('[approveAll]',p.id,data.error);continue}
+      ok++;
+    }catch(e){fail++;console.warn('[approveAll]',p.id,e.message)}
+  }
+  toast(`\u2713 Locked ${ok}${fail?` \u00b7 ${fail} failed`:''}`,fail?'error':'success');
+  selectedId=null;await refreshAll();
 }
 
 async function regenPicks(){
