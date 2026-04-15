@@ -578,6 +578,7 @@ body{transition:background-color .2s,color .2s}
 <!-- NEWS -->
 <div class="panel" id="p-news">
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">News</h2><div class="spacer"></div><span class="muted" id="newsCt"></span></div>
+  <div class="stabs" id="newsTagBar" style="margin-bottom:12px"></div>
   <div id="newsArts"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:70%"></div></div></div>
 </div>
 
@@ -732,7 +733,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
+const S={tab:'home',sess:'race',nf:'ALL',newsTagFilter:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour',CHAMPIONSHIP:'tag-championship'}[t]||'tag-analysis'}
 // Reusable back-button markup for JS renders. Accepts an inline onclick
 // expression so callers can pass "go('standings')", "showHistory()", etc.
@@ -933,12 +934,17 @@ async function initRes(){
 // selSess/renderTT legacy functions removed with FR object
 
 /* ═══ NEWS ═══ */
+const NEWS_TAGS=['ALL','RACE','QUALIFYING','PREVIEW','ANALYSIS','BREAKING','RUMOUR'];
 async function initNews(){
-  if(S.arts.length<7){const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url').eq('status','published').order('published_at',{ascending:false}).limit(30));S.arts=data||[]}
+  if(S.arts.length<7){const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url,body').eq('status','published').order('published_at',{ascending:false}).limit(30));S.arts=data||[]}
   renderNews();
 }
+function setNewsFilter(tag){S.newsTagFilter=tag;renderNews()}
 function renderNews(){
-  const arts=S.arts;
+  const bar=document.getElementById('newsTagBar');
+  if(bar)bar.innerHTML=NEWS_TAGS.map(t=>`<button class="stab${S.newsTagFilter===t?' act':''}" onclick="setNewsFilter('${t}')">${t}</button>`).join('');
+  const f=S.newsTagFilter;
+  const arts=f&&f!=='ALL'?S.arts.filter(a=>(a.tags||[]).includes(f)):S.arts;
   document.getElementById('newsCt').textContent=arts.length+' articles';
   document.getElementById('newsArts').innerHTML=arts.length?'<div class="art-grid">'+arts.map(a=>artCard(a)).join('')+'</div>':'<div class="empty">No articles.</div>';
 }
