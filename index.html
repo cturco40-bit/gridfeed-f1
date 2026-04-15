@@ -792,7 +792,10 @@ function go(t){
   document.querySelectorAll('.tn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
   document.querySelectorAll('.bn').forEach(b=>b.classList.toggle('act',b.dataset.t===t));
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('act',p.id==='p-'+t));
-  history.replaceState({tab:t},'','?tab='+t);
+  // Use an absolute URL so an existing #/article/... hash (or /article/<slug>
+  // pathname) is dropped — otherwise a refresh after clicking Home would
+  // re-route back into the article view via initRoute/checkHash.
+  history.replaceState({tab:t},'','/?tab='+t);
   if(t==='results')initRes();if(t==='news')initNews();if(t==='picks')initPicks();
   if(t==='standings')initSt();if(t==='schedule')initSched();
   if(t==='compare')initCompare();if(t==='predict')initPredict();if(t==='simulator')initSim();if(t==='telemetry')initTelemetry();
