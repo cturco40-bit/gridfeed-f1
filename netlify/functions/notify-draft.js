@@ -17,7 +17,7 @@ export default async (req, context) => {
       body: JSON.stringify({
         title: `[${label}] ${body.content_type || 'Draft'}`,
         body: body.title || 'New draft ready for review',
-        url: '/gf-admin-drafts',
+        url: '/gf-admin-drafts.html',
         tag: 'draft-' + Date.now(),
         audience: 'admin',
       }),

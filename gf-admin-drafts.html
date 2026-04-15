@@ -1241,20 +1241,35 @@ async function registerPush(){
     toast('Push not supported on this browser','error');return;
   }
   try{
-    const reg=await navigator.serviceWorker.register('/sw.js');
-    const existing=await reg.pushManager.getSubscription();
-    if(existing){
-      const ep=existing.endpoint;
-      await existing.unsubscribe();
-      await fetch('/.netlify/functions/delete-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:ep,audience:'admin'})}).catch(()=>{});
+    // Share the same SW as the public site — otherwise the two registrations
+    // collide on the root scope and whichever loaded last wipes the other's
+    // subscription. app-sw.js already has a push + notificationclick handler.
+    const reg=await navigator.serviceWorker.register('/app-sw.js');
+    await navigator.serviceWorker.ready;
+    // Track admin state in localStorage so it's independent of the native
+    // browser subscription — the same endpoint can be registered for both
+    // public and admin audiences as separate DB rows.
+    if(localStorage.getItem('gf_admin_push')==='on'){
+      const sub=await reg.pushManager.getSubscription();
+      if(sub){
+        await fetch('/.netlify/functions/delete-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint,audience:'admin'})}).catch(()=>{});
+      }
+      localStorage.removeItem('gf_admin_push');
       updateAdminPushBtn(false);
       toast('Admin notifications disabled','success');
       return;
     }
-    const perm=await Notification.requestPermission();
-    if(perm!=='granted'){toast('Permission denied','error');return}
-    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
-    await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'admin'})});
+    // Turn ON: reuse existing native sub if present; otherwise create one.
+    // Never unsubscribe here — we want public push to keep working.
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){toast('Permission denied','error');return}
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    }
+    const res=await fetch('/.netlify/functions/save-subscription',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...sub.toJSON(),audience:'admin'})});
+    if(!res.ok){toast('Save failed: '+res.status,'error');return}
+    localStorage.setItem('gf_admin_push','on');
     updateAdminPushBtn(true);
     toast('Admin notifications enabled','success');
   }catch(e){
@@ -1265,12 +1280,17 @@ async function registerPush(){
 
 async function checkPushStatus(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  // Source of truth for the admin toggle is localStorage — the native sub may
+  // exist independently for public push. Still confirm a native sub is alive;
+  // if it's gone the admin row is stale and we should reset the flag.
+  if(localStorage.getItem('gf_admin_push')!=='on'){updateAdminPushBtn(false);return}
   try{
-    const reg=await navigator.serviceWorker.getRegistration('/sw.js');
-    if(!reg)return;
+    const reg=await navigator.serviceWorker.getRegistration('/app-sw.js');
+    if(!reg){updateAdminPushBtn(false);return}
     const sub=await reg.pushManager.getSubscription();
-    updateAdminPushBtn(!!sub);
-  }catch(e){}
+    if(!sub){localStorage.removeItem('gf_admin_push');updateAdminPushBtn(false);return}
+    updateAdminPushBtn(true);
+  }catch(e){updateAdminPushBtn(false)}
 }
 </script>
 </body>
