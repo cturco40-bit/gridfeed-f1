@@ -2421,6 +2421,20 @@ function toggleMap(){
 function initMapToggle(){if(sessionStorage.getItem('gf_map')==='0'){S._mapVis=true;toggleMap()}}
 
 /* ═══ BOOT ═══ */
+// Refresh the article feeds without a full reload. Throttled so rapid
+// visibility flips / back-to-back pushes don't hammer Supabase.
+let _lastArtRefresh=0;
+async function refreshArticleFeeds(force){
+  const now=Date.now();if(!force&&now-_lastArtRefresh<15000)return;
+  _lastArtRefresh=now;
+  S.arts=[];
+  try{if(document.getElementById('homeArts'))await loadArts()}catch(e){}
+  if(S.tab==='news')try{await initNews()}catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshArticleFeeds(false)});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='REFRESH_ARTICLES')refreshArticleFeeds(true)});
+}
 detectNR();initHome();initSessChip();initRoute();checkPush();checkLive();initMapToggle();initDark();
 setInterval(()=>{if(S.tab==='standings')initSt()},18e5);
 setInterval(checkLive,30000);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gridfeed-v63';
+const CACHE_NAME = 'gridfeed-v64';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -67,6 +67,13 @@ self.addEventListener('fetch', event => {
 // Push notifications
 self.addEventListener('push', event => {
   const data = event.data ? event.data.json() : {};
+  // Article pushes use tag 'article-<id>'. Tell any open client to refresh
+  // its article lists so the new article appears without a manual reload.
+  if ((data.tag || '').startsWith('article-')) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) c.postMessage({ type: 'REFRESH_ARTICLES' });
+    }).catch(() => {});
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || 'GridFeed', {
       body: data.body || '',
