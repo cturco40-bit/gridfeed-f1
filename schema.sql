@@ -99,26 +99,78 @@ create index if not exists idx_driver_odds_race on driver_odds(race_id, market);
 
 -- ==================== BETTING PICKS ====================
 create table if not exists betting_picks (
-  id              uuid primary key default uuid_generate_v4(),
-  race_id         uuid references races(id) on delete cascade,
-  race_name       text,
-  pick_type       text not null, -- BEST BET | VALUE | LONGSHOT | FADE
-  driver_name     text,
-  selection       text,         -- fallback if not driver-specific
-  market          text not null,
-  odds            text,
-  odds_decimal    numeric,
-  implied_prob    numeric,
-  true_prob       numeric,
-  edge            numeric,      -- percentage edge
-  analysis        text,
-  status          text default 'active', -- active | void | won | lost
-  locked          boolean default true,
-  locked_at       timestamptz default now(),
-  result          text,         -- populated after race
-  created_at      timestamptz default now()
+  id               uuid primary key default uuid_generate_v4(),
+  race_id          uuid references races(id) on delete cascade,
+  race_name        text,
+  pick_type        text not null, -- BEST BET | VALUE | LONGSHOT | FADE
+  market_category  text,          -- winner|podium|top6|h2h|pole|fastest_lap|dnf|safety_car|margin|sprint|season_champ|season_h2h|season_wins
+  driver_name      text,
+  selection        text,          -- fallback if not driver-specific
+  market           text not null,
+  odds             text,
+  odds_decimal     numeric,
+  odds_at_pick     numeric,       -- frozen decimal odds at approval; UI reads this, never live
+  odds_captured_at timestamptz,
+  bookmaker        text,          -- pinnacle | draftkings | fanduel | ...
+  implied_prob     numeric,
+  true_prob        numeric,
+  edge             numeric,       -- percentage edge
+  confidence       numeric,       -- AI stated confidence 0..1
+  analysis         text,
+  sources          jsonb,         -- data points the AI cited
+  status           text default 'pending', -- pending | won | lost | push | void
+  locked           boolean default false,   -- AI drafts start unlocked; approve-pick sets true
+  locked_at        timestamptz,              -- null = draft; set = locked + immutable
+  result           text,          -- populated after race
+  settled_at       timestamptz,
+  settlement_notes text,
+  created_at       timestamptz default now()
 );
-create index if not exists idx_picks_race on betting_picks(race_id, status);
+create index if not exists idx_picks_race          on betting_picks(race_id, status);
+create index if not exists idx_picks_status_settled on betting_picks(status, settled_at desc);
+create index if not exists idx_picks_market_cat     on betting_picks(market_category);
+create index if not exists idx_picks_unlocked       on betting_picks(race_id) where locked_at is null;
+
+-- Immutability trigger — once locked_at is set, only status/settled_at/
+-- settlement_notes/result may change. Frozen odds and analysis are final.
+create or replace function guard_betting_pick_lock() returns trigger as $$
+begin
+  if OLD.locked_at is not null then
+    if NEW.race_id        is distinct from OLD.race_id        or
+       NEW.race_name      is distinct from OLD.race_name      or
+       NEW.pick_type      is distinct from OLD.pick_type      or
+       NEW.driver_name    is distinct from OLD.driver_name    or
+       NEW.selection      is distinct from OLD.selection      or
+       NEW.market         is distinct from OLD.market         or
+       NEW.market_category is distinct from OLD.market_category or
+       NEW.odds           is distinct from OLD.odds           or
+       NEW.odds_decimal   is distinct from OLD.odds_decimal   or
+       NEW.odds_at_pick   is distinct from OLD.odds_at_pick   or
+       NEW.odds_captured_at is distinct from OLD.odds_captured_at or
+       NEW.bookmaker      is distinct from OLD.bookmaker      or
+       NEW.implied_prob   is distinct from OLD.implied_prob   or
+       NEW.true_prob      is distinct from OLD.true_prob      or
+       NEW.edge           is distinct from OLD.edge           or
+       NEW.confidence     is distinct from OLD.confidence     or
+       NEW.analysis       is distinct from OLD.analysis       or
+       NEW.sources        is distinct from OLD.sources        or
+       NEW.locked         is distinct from OLD.locked         or
+       NEW.locked_at      is distinct from OLD.locked_at then
+      raise exception 'betting_picks row % is locked; only status/settled_at/settlement_notes/result may change', OLD.id;
+    end if;
+  end if;
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_guard_betting_pick_lock on betting_picks;
+create trigger trg_guard_betting_pick_lock
+  before update on betting_picks
+  for each row execute function guard_betting_pick_lock();
+
+-- Odds cache stays in the existing driver_odds table (see its definition
+-- below) — no separate snapshots table. generate-picks reads the freshest
+-- driver_odds row per (race, market, driver) and snapshots odds_at_pick.
 
 -- ==================== BETTING RECORD ====================
 create table if not exists betting_record (
@@ -285,7 +337,7 @@ alter table sync_log            enable row level security;
 
 -- Public read policies
 create policy "Public read articles"       on articles        for select using (status = 'published');
-create policy "Public read picks"          on betting_picks   for select using (true);
+create policy "Public read picks"          on betting_picks   for select using (locked_at is not null);
 create policy "Public read races"          on races           for select using (true);
 create policy "Public read drivers"        on drivers         for select using (true);
 create policy "Public read constructors"   on constructors    for select using (true);

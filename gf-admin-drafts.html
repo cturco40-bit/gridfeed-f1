@@ -314,6 +314,7 @@ body{padding-top:0}
     <div class="sidebar-tabs">
       <button class="tab-btn active" data-tab="articles" onclick="switchAdminTab('articles',this)">&#128196; Articles <span class="tab-badge" id="badgeArticles"></span></button>
       <button class="tab-btn" data-tab="tweets" onclick="switchAdminTab('tweets',this)">&#128038; Tweets <span class="tab-badge" id="badgeTweets"></span></button>
+      <button class="tab-btn" data-tab="picks" onclick="switchAdminTab('picks',this)">&#127942; Picks <span class="tab-badge" id="badgePicks"></span></button>
       <button class="tab-btn" data-tab="raceblog" onclick="switchAdminTab('raceblog',this)">&#127937; Race Blog <span class="tab-badge" id="badgeRaceBlog"></span></button>
       <button class="tab-btn" data-tab="published" onclick="switchAdminTab('published',this)">&#9999;&#65039; Published</button>
       <button class="tab-btn" data-tab="approved" onclick="switchAdminTab('approved',this)">&#9989; Approved</button>
@@ -352,7 +353,7 @@ const ADMIN_PASS='f3rrar1!';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
 /* ═══ STATE ═══ */
-let drafts=[],tweets=[],syncLogs=[],topics=[],raceBlog=[],publishedArticles=[];
+let drafts=[],tweets=[],syncLogs=[],topics=[],raceBlog=[],publishedArticles=[],picks=[];
 let activeTab='articles',selectedId=null,isEditing=false;
 
 const CRONS=[
@@ -407,8 +408,14 @@ async function refreshAll(){
     pubEdTitle: document.getElementById('pubEdTitle')?.value,
     pubEdBody: document.getElementById('pubEdBody')?.value,
     pubEdExcerpt: document.getElementById('pubEdExcerpt')?.value,
+    pkDriver: document.getElementById('pkDriver')?.value,
+    pkOdds: document.getElementById('pkOdds')?.value,
+    pkBook: document.getElementById('pkBook')?.value,
+    pkAnalysis: document.getElementById('pkAnalysis')?.value,
+    pkConf: document.getElementById('pkConf')?.value,
+    pkEdge: document.getElementById('pkEdge')?.value,
   };
-  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries(),loadPublishedArticles()]);
+  await Promise.all([loadDrafts(),loadTweets(),loadSyncLogs(),loadTopics(),loadRaceBlogEntries(),loadPublishedArticles(),loadPicks()]);
   renderHeader();
   renderSidebar();
   if(selectedId){
@@ -450,6 +457,15 @@ async function loadTopics(){
   const{data}=await sb.from('content_topics').select('*').eq('status','pending').order('priority',{ascending:true}).limit(20);
   topics=data||[];
 }
+async function loadPicks(){
+  // Route through list-picks (service role) because the anon key can't see
+  // unlocked drafts — RLS hides them by design.
+  try{
+    const res=await fetch('/.netlify/functions/list-picks');
+    const data=await res.json();
+    picks=data?.picks||[];
+  }catch(e){picks=[]}
+}
 
 /* ═══ HEADER ═══ */
 function renderHeader(){
@@ -474,6 +490,8 @@ function renderHeader(){
 
   document.getElementById('badgeArticles').textContent=pendingDrafts||'';
   document.getElementById('badgeTweets').textContent=pendingTweets||'';
+  const pendingPicks=picks.filter(p=>!p.locked_at).length;
+  const bp=document.getElementById('badgePicks');if(bp)bp.textContent=pendingPicks||'';
   const bb=document.getElementById('badgeRaceBlog');if(bb)bb.textContent=pendingBlog||'';
   // Mobile badges
   const ma=document.getElementById('mobBadgeArticles');if(ma)ma.textContent=pendingDrafts||'';
@@ -570,6 +588,7 @@ function renderSidebar(){
   const el=document.getElementById('sidebarList');
   if(activeTab==='articles')renderArticleSidebar(el);
   else if(activeTab==='tweets')renderTweetSidebar(el);
+  else if(activeTab==='picks')renderPicksSidebar(el);
   else if(activeTab==='raceblog')renderRaceBlogSidebar(el);
   else if(activeTab==='published')renderPublishedSidebar(el);
   else if(activeTab==='approved')renderApprovedSidebar(el);
@@ -776,6 +795,7 @@ function renderRejectedSidebar(el){
 /* ═══ MAIN PANEL ═══ */
 function renderMainDefault(){
   if(activeTab==='queue'){renderQueuePanel();return}
+  if(activeTab==='picks'){renderPicksTracker();return}
   if(activeTab==='approved'){document.getElementById('mainPanel').innerHTML='<div class="panel-empty">Approved items shown in sidebar</div>';return}
   if(activeTab==='rejected'){document.getElementById('mainPanel').innerHTML='<div class="panel-empty">Rejected items shown in sidebar \u2014 click Restore to move back to pending</div>';return}
   document.getElementById('mainPanel').innerHTML='<div class="panel-empty">Select an item from the sidebar</div>';
@@ -784,6 +804,7 @@ function renderMainDefault(){
 function renderMainForSelected(){
   if(activeTab==='articles'){const d=drafts.find(x=>x.id===selectedId);if(d)renderArticleEditor(d);}
   if(activeTab==='tweets'){const t=tweets.find(x=>x.id===selectedId);if(t)renderTweetEditor(t);}
+  if(activeTab==='picks'){const p=picks.find(x=>x.id===selectedId);if(p)renderPickEditor(p);else renderPicksTracker()}
 }
 
 /* ═══ ARTICLE EDITOR ═══ */
@@ -1136,6 +1157,209 @@ async function saveTweetEdit(id){
   const{error}=await sb.from('tweets').update({tweet_text:text}).eq('id',id);
   if(error){toast('Save failed','error');return}
   toast('Tweet saved','info');await refreshAll();
+}
+
+/* ═══ PICKS TAB ═══
+   Draft picks are AI-generated rows in betting_picks with locked_at=null.
+   Approving LOCKS the row — the DB trigger then forbids any further edits
+   except for settlement fields, so this admin UI is the only place where
+   picks can be mutated. */
+
+function selectPick(id){selectedId=id;renderSidebar();renderMainForSelected()}
+
+function renderPicksSidebar(el){
+  const pending=picks.filter(p=>!p.locked_at);
+  const locked=picks.filter(p=>p.locked_at);
+  if(!picks.length){
+    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No picks yet.<br><button class="act-btn act-regen" style="margin-top:10px" onclick="regenPicks()">\u21ba Generate now</button></div>';
+    return;
+  }
+  const section=(title,arr,cls)=>arr.length?`<div style="padding:10px 12px 4px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)">${title}</div>`+arr.map(p=>{
+    const drv=esc(p.driver_name||p.selection||'—');
+    const odds=p.odds_at_pick?parseFloat(p.odds_at_pick).toFixed(2):(p.odds_decimal?parseFloat(p.odds_decimal).toFixed(2):'—');
+    const stDot=p.locked_at?(p.status==='won'?'dot-approved':p.status==='lost'?'dot-rejected':'dot-pending'):'dot-pending';
+    const stLabel=p.locked_at?(p.status||'pending').toUpperCase():'DRAFT';
+    return `<div class="sidebar-item ${selectedId===p.id?'active':''}" onclick="selectPick('${p.id}')">
+      <div class="si-top"><span class="si-type">${esc(p.pick_type||'')}</span><span class="si-time">${timeAgo(p.created_at)}</span></div>
+      <div class="si-title">${drv} @ ${odds}</div>
+      <div class="si-meta"><div class="si-dot ${stDot}"></div>${esc((p.race_name||'').replace(' Grand Prix','').replace(' GP',''))} \u00b7 ${stLabel}</div>
+    </div>`;
+  }).join(''):'';
+  el.innerHTML=section('Pending review',pending)+section('Locked',locked.slice(0,25));
+}
+
+function pickTypeOptions(current){
+  return ['BEST BET','VALUE','LONGSHOT','FADE'].map(t=>`<option value="${t}"${current===t?' selected':''}>${t}</option>`).join('');
+}
+
+function renderPickEditor(p){
+  const main=document.getElementById('mainPanel');
+  const locked=!!p.locked_at;
+  const odds=p.odds_at_pick??p.odds_decimal??'';
+  const edge=p.edge??'';
+  const conf=p.confidence??'';
+  // Locked picks are read-only — mirrors the DB trigger behaviour in the UI.
+  const ro=locked?'readonly':'';
+  const dis=locked?'disabled':'';
+  const badge=locked?`<span class="hdr-pill pill-${p.status==='won'?'green':p.status==='lost'?'red':'gold'}">${(p.status||'pending').toUpperCase()}</span>`:'<span class="hdr-pill pill-gold">DRAFT \u2014 unlocked</span>';
+  main.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div style="font-family:var(--head);font-size:18px;font-weight:900;text-transform:uppercase">${esc(p.race_name||'')}</div>
+      ${badge}
+    </div>
+    <div class="meta-row">Created ${timeAgo(p.created_at)} \u00b7 ${esc(p.market_category||'winner')} \u00b7 ${esc(p.bookmaker||'—')}${locked?` \u00b7 Locked ${timeAgo(p.locked_at)}`:''}</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:12px">
+      <div>
+        <label class="editor-title-label">Driver</label>
+        <input id="pkDriver" class="editor-title" value="${esc(p.driver_name||'')}" ${ro} onfocus="isEditing=true" onblur="isEditing=false"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+          <div>
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Pick Type</label>
+            <select id="pkType" ${dis} style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font)">${pickTypeOptions(p.pick_type)}</select>
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Odds (dec)</label>
+            <input id="pkOdds" type="number" step="0.01" min="1.01" value="${odds}" ${ro} style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font)"/>
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Bookmaker</label>
+            <input id="pkBook" value="${esc(p.bookmaker||'')}" ${ro} style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font)"/>
+          </div>
+        </div>
+        <label class="editor-title-label" style="margin-top:12px">Analysis</label>
+        <textarea id="pkAnalysis" class="editor-body" ${ro} onfocus="isEditing=true" onblur="isEditing=false">${esc(p.analysis||'')}</textarea>
+      </div>
+      <div>
+        <div class="source-box">
+          <div class="source-label">Numbers</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span style="color:var(--muted)">Market</span><span style="font-weight:600">${esc(p.market||'Race Winner')}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span style="color:var(--muted)">Implied</span><span>${p.implied_prob?(parseFloat(p.implied_prob)*100).toFixed(1)+'%':'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span style="color:var(--muted)">Confidence</span><input id="pkConf" type="number" step="0.01" min="0" max="1" value="${conf}" ${ro} style="width:70px;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:3px;color:var(--text);text-align:right"/></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span style="color:var(--muted)">Edge %</span><input id="pkEdge" type="number" step="0.1" value="${edge}" ${ro} style="width:70px;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:3px;color:var(--text);text-align:right"/></div>
+        </div>
+        <div class="source-box">
+          <div class="source-label">Sources</div>
+          <pre style="font-size:10px;color:var(--dim);white-space:pre-wrap;word-break:break-word;margin:0">${esc(JSON.stringify(p.sources||{},null,2)).slice(0,600)}</pre>
+        </div>
+        ${locked?`
+          <div class="source-box"><div class="source-label">Result</div><div style="font-size:12px;color:var(--dim)">${esc(p.result||'pending settlement')}</div></div>
+          <div style="font-size:11px;color:var(--muted);padding:8px 0">This pick is locked. Only the settlement cron can change status/result.</div>
+        `:`
+          <div class="actions">
+            <button class="act-btn act-approve" onclick="approvePick('${p.id}')">\u2713 Approve &amp; Lock</button>
+            <button class="act-btn act-reject" onclick="rejectPick('${p.id}')">\u2715 Reject</button>
+            <button class="act-btn act-save" onclick="savePickDraft('${p.id}')">\u270e Save Edits</button>
+            <button class="act-btn act-regen" onclick="regenPicks()">\u21ba Regenerate</button>
+          </div>
+          <div class="kb-hints">Once approved, the pick is permanent. Only status/result can change after the race.</div>
+        `}
+      </div>
+    </div>`;
+}
+
+function renderPicksTracker(){
+  const main=document.getElementById('mainPanel');
+  const settled=picks.filter(p=>p.locked_at&&(p.status==='won'||p.status==='lost'||p.status==='push'));
+  const won=settled.filter(p=>p.status==='won').length;
+  const lost=settled.filter(p=>p.status==='lost').length;
+  const push=settled.filter(p=>p.status==='push').length;
+  const pendingLocked=picks.filter(p=>p.locked_at&&p.status==='pending').length;
+  const pendingDraft=picks.filter(p=>!p.locked_at).length;
+  // ROI on 1u flat stakes: sum((won ? (odds-1) : -1)) / units wagered
+  let units=0,profit=0;
+  for(const p of settled){
+    if(p.status==='push'){continue}
+    units+=1;
+    const dec=parseFloat(p.odds_at_pick||p.odds_decimal)||0;
+    profit+=p.status==='won'?(dec-1):-1;
+  }
+  const roi=units>0?((profit/units)*100).toFixed(1):'—';
+  main.innerHTML=`
+    <h3 style="font-family:var(--head);font-size:20px;margin-bottom:12px">Picks Dashboard</h3>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+      <div class="source-box"><div class="source-label">Drafts</div><div style="font-size:28px;font-weight:900;color:var(--gold)">${pendingDraft}</div></div>
+      <div class="source-box"><div class="source-label">Locked</div><div style="font-size:28px;font-weight:900;color:var(--accent)">${pendingLocked}</div></div>
+      <div class="source-box"><div class="source-label">Wins</div><div style="font-size:28px;font-weight:900;color:var(--green)">${won}</div></div>
+      <div class="source-box"><div class="source-label">Losses</div><div style="font-size:28px;font-weight:900;color:var(--red)">${lost}</div></div>
+      <div class="source-box"><div class="source-label">ROI</div><div style="font-size:28px;font-weight:900;color:${profit>=0?'var(--green)':'var(--red)'}">${roi===''||roi==='—'?'—':(profit>=0?'+':'')+roi+'%'}</div></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <button class="act-btn act-regen" onclick="regenPicks()">\u21ba Run generate-picks now</button>
+      <button class="act-btn" style="background:var(--card);color:var(--text);border:1px solid var(--border)" onclick="refreshOdds()">\u{1F4E1} Refresh odds</button>
+    </div>
+    <div class="panel-empty">Select a pick from the sidebar to edit.</div>`;
+}
+
+async function approvePick(id){
+  const payload={
+    id,
+    driver_name: document.getElementById('pkDriver')?.value?.trim(),
+    pick_type:   document.getElementById('pkType')?.value,
+    odds_decimal: parseFloat(document.getElementById('pkOdds')?.value),
+    bookmaker:   document.getElementById('pkBook')?.value?.trim(),
+    analysis:    document.getElementById('pkAnalysis')?.value,
+    confidence:  parseFloat(document.getElementById('pkConf')?.value),
+    edge:        parseFloat(document.getElementById('pkEdge')?.value),
+  };
+  try{
+    const res=await fetch('/.netlify/functions/approve-pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(data.error){toast('Approve failed: '+data.error,'error');return}
+    toast('\u2713 Pick locked','success');
+    selectedId=null;await refreshAll();
+  }catch(e){toast('Approve failed: '+e.message,'error')}
+}
+
+async function rejectPick(id){
+  try{
+    const res=await fetch('/.netlify/functions/reject-pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    const data=await res.json();
+    if(data.error){toast('Reject failed: '+data.error,'error');return}
+    toast('Rejected','info');
+    selectedId=null;await refreshAll();
+  }catch(e){toast('Reject failed: '+e.message,'error')}
+}
+
+async function savePickDraft(id){
+  // Save routes through save-pick.js so edits run with the service role and
+  // bypass RLS. betting_picks has no public update policy by design.
+  const payload={
+    id,
+    driver_name: document.getElementById('pkDriver')?.value?.trim(),
+    pick_type:   document.getElementById('pkType')?.value,
+    odds_decimal: parseFloat(document.getElementById('pkOdds')?.value),
+    bookmaker:   document.getElementById('pkBook')?.value?.trim(),
+    analysis:    document.getElementById('pkAnalysis')?.value,
+    confidence:  parseFloat(document.getElementById('pkConf')?.value),
+    edge:        parseFloat(document.getElementById('pkEdge')?.value),
+  };
+  try{
+    const res=await fetch('/.netlify/functions/save-pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(data.error){toast('Save failed: '+data.error,'error');return}
+    toast('Edits saved','info');await refreshAll();
+  }catch(e){toast('Save failed: '+e.message,'error')}
+}
+
+async function regenPicks(){
+  toast('Generating picks...','info');
+  try{
+    const res=await fetch('/.netlify/functions/generate-picks');
+    const data=await res.json().catch(()=>({}));
+    if(data.error){toast('Regen failed: '+data.error,'error');return}
+    toast(`Generated ${data.picks||0} draft picks`,'success');
+    await refreshAll();
+  }catch(e){toast('Regen failed: '+e.message,'error')}
+}
+
+async function refreshOdds(){
+  toast('Refreshing odds...','info');
+  try{
+    const res=await fetch('/.netlify/functions/fetch-odds');
+    const data=await res.json().catch(()=>({}));
+    if(data.error){toast('Refresh failed: '+data.error,'error');return}
+    toast(`Cached ${data.totalOdds||0} odds`,'success');
+  }catch(e){toast('Refresh failed: '+e.message,'error')}
 }
 
 /* ═══ QUEUE PANEL ═══ */

@@ -879,7 +879,7 @@ function startPicksCountdown(){
 }
 
 async function loadPicks(){
-  const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','active').limit(3));
+  const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','pending').not('locked_at','is',null).order('locked_at',{ascending:false}).limit(3));
   const el=document.getElementById('homePicks');
   if(!data?.length){el.innerHTML=picksCountdownHtml('homePicksCd',true);startPicksCountdown();return}
   el.innerHTML=`<div class="card"><div class="card-body" style="padding:10px 14px">${data.map(p=>{const ab=p.driver_name?abbrByName(p.driver_name):'';return`<div ${ab?`data-drv="${ab}"`:''} style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="pk-type ${pkCl(p.pick_type)}" style="font-size:8px;padding:2px 6px">${p.pick_type}</span><span style="font-weight:600;font-size:12px;flex:1">${p.driver_name||''}</span><span style="font-family:var(--head);font-weight:700;color:var(--gold)">${p.odds||''}</span></div>`}).join('')}</div></div>`;
@@ -938,7 +938,7 @@ function renderNews(){
 /* ═══ PICKS ═══ */
 function pkCl(t){return{'BEST BET':'pk-bb',VALUE:'pk-v',LONGSHOT:'pk-l',FADE:'pk-f'}[t]||'pk-v'}
 async function initPicks(){
-  const[pr,rr]=await Promise.all([sbq(s=>s.from('betting_picks').select('*').eq('status','active')),sbq(s=>s.from('betting_record').select('*').order('created_at',{ascending:false}).limit(1))]);
+  const[pr,rr]=await Promise.all([sbq(s=>s.from('betting_picks').select('*').eq('status','pending').not('locked_at','is',null).order('locked_at',{ascending:false})),sbq(s=>s.from('betting_record').select('*').order('created_at',{ascending:false}).limit(1))]);
   S.picks=pr.data||[];
   if(S.nr)document.getElementById('picksTitle').textContent=S.nr.n+' Picks';
   const el=document.getElementById('picksGrid');

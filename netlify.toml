@@ -91,6 +91,19 @@
   schedule = "0 5 * * *"
   timeout = 60
 
+[functions.settle-picks]
+  # Monday 04:00 UTC — after the race weekend wraps, grade locked picks
+  # against the final leaderboard. Unsupported market categories are
+  # skipped quietly.
+  schedule = "0 4 * * 1"
+  timeout = 60
+
+[functions.approve-pick]
+  timeout = 10
+
+[functions.reject-pick]
+  timeout = 10
+
 # blog-scheduler DISABLED 2026-04-14 — duplicated generate-editorial.js
 # without any dedup / subject registry checks, producing dozens of
 # duplicate drafts per day. File kept in repo for reference.
