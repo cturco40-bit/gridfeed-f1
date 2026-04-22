@@ -1,6 +1,7 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
 import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
 import { qualityCheck } from './lib/quality-check.js';
+import { classifySemanticallyBlocked } from './lib/semantic-classifier.js';
 
 // INLINED subject key extractor + registry helpers (matches monitor-f1.js,
 // approve-draft.js, seed-subjects.js, generate-editorial.js). Bypasses the
@@ -35,6 +36,40 @@ async function isSubjectPublishedLocal(key) {
     const rows = await sb(`published_subjects?subject=eq.${encodeURIComponent(key)}&or=(expires_at.is.null,expires_at.gt.${now})&select=id&limit=1`);
     return (rows || []).length > 0;
   } catch { return false; }
+}
+
+// Light suffix stripper — same rules as generate-editorial.js. Inlined for
+// bundle-cache reasons. Catches "failed"/"failure", "dominance"/"dominant",
+// "retire"/"retirement", etc. when matching topic headlines against blocked
+// slug parts.
+function stemWord(w) {
+  w = (w || '').toLowerCase();
+  if (w.length <= 4) return w;
+  const suffixes = ['ational','ations','ation','ments','ment','nesses','ness','ances','ance','ences','ence','ings','ing','ures','ure','ers','er','ies','ied','ily','ly','ed','es','s','e','y'];
+  for (const s of suffixes) {
+    if (w.length > s.length + 2 && w.endsWith(s)) return w.slice(0, -s.length);
+  }
+  return w;
+}
+
+function stemMatchesBlocked(text, blockedRows) {
+  const stems = new Set(
+    (text || '').toLowerCase().split(/[\s\-:,.'!?()"]+/).filter(Boolean).map(stemWord)
+  );
+  return (blockedRows || []).find(row => {
+    const parts = (row.subject || '').split(':').filter(Boolean);
+    if (!parts.length) return false;
+    return parts.every(part => {
+      const partStem = stemWord(part);
+      if (partStem.length < 3) return false;
+      for (const ws of stems) {
+        if (ws === partStem) return true;
+        if (ws.length >= 4 && ws.startsWith(partStem)) return true;
+        if (partStem.length >= 4 && partStem.startsWith(ws)) return true;
+      }
+      return false;
+    });
+  }) || null;
 }
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -99,8 +134,18 @@ function makeSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').slice(0, 80) + '-' + Date.now().toString(36);
 }
 
+const MAX_CHAIN_HOPS = 10;
+
 export default async (req, context) => {
   const start = Date.now();
+  // Self-chain hop counter — monitor-f1 and the cron kick start chainHop=1;
+  // each self-trigger below increments. Stop chaining at MAX_CHAIN_HOPS so a
+  // single cron tick can't burst through dozens of queued topics.
+  let chainHop = 1;
+  try {
+    const url = new URL(req.url);
+    chainHop = Math.max(1, parseInt(url.searchParams.get('chain') || '1', 10) || 1);
+  } catch { /* non-URL invocation, leave chainHop=1 */ }
   try {
     if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -262,13 +307,45 @@ export default async (req, context) => {
       }
 
       // Subject registry check — reject topics whose subject key is already
-      // blocked. This catches topics that were queued before the registry
-      // was seeded but would produce duplicate content.
+      // blocked. Two passes: (a) exact-key match on the extracted slug, (b)
+      // stem-match against each blocked slug's word parts. The second pass
+      // catches headlines like "Mercedes Extend Lead" where getSubjectKeyLocal
+      // returns mercedes:leads but the registry holds mercedes:dominance.
       const topicKey = getSubjectKeyLocal(topicText);
-      if (topicKey && await isSubjectPublishedLocal(topicKey)) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject already published: ' + topicKey }).catch(() => {});
-        await logSync('generate-content', 'success', 0, `Subject blocked (${topicKey}): ${topicText.slice(0, 50)}`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'subject_blocked', key: topicKey });
+      const nowIsoReg = new Date().toISOString();
+      const blockedRows = await sb(`published_subjects?select=subject,expires_at&or=(expires_at.is.null,expires_at.gt.${nowIsoReg})&limit=200`).catch(() => []);
+
+      if (topicKey) {
+        const exactMatch = (blockedRows || []).find(r => r.subject === topicKey);
+        if (exactMatch) {
+          if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject already published: ' + topicKey }).catch(() => {});
+          console.log(`[generate-content] Skipping topic: ${topicKey} — blocked until ${exactMatch.expires_at || 'permanent'}`);
+          await logSync('generate-content', 'success', 0, `Subject blocked (${topicKey}): ${topicText.slice(0, 50)}`, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'subject_blocked', key: topicKey });
+        }
+      }
+
+      const stemMatch = stemMatchesBlocked(topicText, blockedRows);
+      if (stemMatch) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject stem-match: ' + stemMatch.subject }).catch(() => {});
+        console.log(`[generate-content] Skipping topic: ${stemMatch.subject} — blocked until ${stemMatch.expires_at || 'permanent'}`);
+        await logSync('generate-content', 'success', 0, `Stem-match blocked (${stemMatch.subject}): ${topicText.slice(0, 50)}`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'stem_blocked', key: stemMatch.subject });
+      }
+
+      // Semantic classifier — catches headlines whose wording doesn't trigger
+      // the stem match but still refer to a blocked angle (e.g. "Mercedes
+      // extend lead" vs mercedes:dominance). Permits on any classifier error
+      // so an API outage can't freeze the pipeline.
+      const blockedSubjectList = (blockedRows || []).map(r => r.subject).filter(Boolean);
+      if (blockedSubjectList.length) {
+        const semantic = await classifySemanticallyBlocked(topicText, blockedSubjectList, { timeoutMs: 5000, source: 'generate-content' });
+        if (semantic.blocked) {
+          if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: `Semantic match: ${semantic.matched || '?'} — ${semantic.reason}` }).catch(() => {});
+          console.log(`[generate-content] Skipping topic: ${semantic.matched || '(semantic)'} — ${semantic.reason}`);
+          await logSync('generate-content', 'success', 0, `Semantic blocked (${semantic.matched || '?'}): ${topicText.slice(0, 50)} — ${semantic.reason}`, Date.now() - start);
+          return json({ ok: true, generated: 0, reason: 'semantic_blocked', matched: semantic.matched });
+        }
       }
 
       // No source: still write but keep it short and fact-based to avoid hallucination
@@ -440,8 +517,13 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       fetchWT(siteUrl + '/.netlify/functions/notify-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title, content_type: contentType, priority_score: topic.priority || 5, excerpt: (parsed.excerpt || '').slice(0, 200) }) }, 5000).catch(() => {});
 
       // Self-chain: kick another generate-content so the queue drains in one cron tick
-      // (fire and forget — won't extend this function's runtime)
-      fetchWT(siteUrl + '/.netlify/functions/generate-content', { method: 'POST' }, 60000).catch(() => {});
+      // (fire and forget — won't extend this function's runtime). Capped at
+      // MAX_CHAIN_HOPS so a single cron tick can't burst 20+ drafts in a row.
+      if (chainHop < MAX_CHAIN_HOPS) {
+        fetchWT(siteUrl + '/.netlify/functions/generate-content?chain=' + (chainHop + 1), { method: 'POST' }, 60000).catch(() => {});
+      } else {
+        console.log('[generate-content] chain cap reached (' + chainHop + '/' + MAX_CHAIN_HOPS + ') — not self-chaining');
+      }
 
       await logSync('generate-content', 'success', 1, `Draft: "${parsed.title}"`, Date.now() - start);
       return json({ ok: true, generated: 1, title: parsed.title });

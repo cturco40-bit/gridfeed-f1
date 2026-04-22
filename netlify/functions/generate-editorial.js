@@ -1,8 +1,24 @@
 import { sb, fetchWT, logSync, json } from './lib/shared.js';
 import { validateArticle, fixEncoding } from './lib/accuracy.js';
 import { qualityCheck } from './lib/quality-check.js';
+import { classifySemanticallyBlocked } from './lib/semantic-classifier.js';
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+
+// Permanent editorial blocks — topics we've decided are played out.
+// Seeded into published_subjects with a 90-day expiry. Also drive a keyword
+// match on the raw prompt text because getSubjectKeyLocal won't always
+// produce these exact keys from a phrasing like "midfield battle".
+const PERMANENT_BLOCKS = [
+  'midfield:battle',
+  'regulations:failure',
+  'mercedes:dominance',
+  'verstappen:retire',
+  'verstappen:regulations',
+  'history:reset',
+];
+
+const DAILY_DRAFT_CAP = 30;
 
 // INLINED subject key extractor — duplicated from lib/subject-registry.js to
 // bypass Netlify's function bundle cache. Keep in sync with seed-subjects.js,
@@ -151,19 +167,59 @@ function fillTemplate(prompt) {
     .replace(/\{norrisConsecutiveFifths\}/g, STANDINGS.keyStats.norrisConsecutiveFifths);
 }
 
+// Light suffix stripper so keyword-block matches "failed"/"failure"/"failing",
+// "dominance"/"dominant"/"dominates", "retire"/"retirement", etc. Not a
+// real stemmer — just common English endings stripped longest-first.
+function stemWord(w) {
+  w = (w || '').toLowerCase();
+  if (w.length <= 4) return w;
+  const suffixes = ['ational','ations','ation','ments','ment','nesses','ness','ances','ance','ences','ence','ings','ing','ures','ure','ers','er','ies','ied','ily','ly','ed','es','s','e','y'];
+  for (const s of suffixes) {
+    if (w.length > s.length + 2 && w.endsWith(s)) return w.slice(0, -s.length);
+  }
+  return w;
+}
+
 // Pick a topic whose likely subject key isn't in the blocked set. Each
 // prompt has the subject it's about encoded directly in its text — we
 // extract the key from the prompt with getSubjectKeyLocal and reject any
 // prompt whose key is already covered. Returns null if every prompt is
 // blocked (natural rate limit — wait for new events).
-async function pickTopicFiltered(blockedKeys) {
+async function pickTopicFiltered(blockedKeys, blockedRecords) {
   const shuffled = [...EDITORIAL_TYPES].sort(() => Math.random() - 0.5);
   for (const type of shuffled) {
     const prompts = [...type.prompts].sort(() => Math.random() - 0.5);
     for (const prompt of prompts) {
       const filled = fillTemplate(prompt);
       const expectedKey = getSubjectKeyLocal(filled);
-      if (expectedKey && blockedKeys.has(expectedKey)) continue;
+      if (expectedKey && blockedKeys.has(expectedKey)) {
+        const rec = (blockedRecords || []).find(r => r.subject === expectedKey);
+        console.log(`[generate-editorial] Skipping topic: ${expectedKey} — blocked until ${rec?.expires_at || 'permanent'}`);
+        continue;
+      }
+      const promptStems = new Set(
+        filled.toLowerCase().split(/[\s\-:,.'!?()"]+/).filter(Boolean).map(stemWord)
+      );
+      let matched = null;
+      for (const rec of (blockedRecords || [])) {
+        const parts = (rec.subject || '').split(':').filter(Boolean);
+        if (!parts.length) continue;
+        const hit = parts.every(part => {
+          const partStem = stemWord(part);
+          if (partStem.length < 3) return false;
+          for (const ws of promptStems) {
+            if (ws === partStem) return true;
+            if (ws.length >= 4 && ws.startsWith(partStem)) return true;
+            if (partStem.length >= 4 && partStem.startsWith(ws)) return true;
+          }
+          return false;
+        });
+        if (hit) { matched = rec; break; }
+      }
+      if (matched) {
+        console.log(`[generate-editorial] Skipping topic: ${matched.subject} — blocked until ${matched.expires_at || 'permanent'}`);
+        continue;
+      }
       return { type: type.type, prompt, expectedKey };
     }
   }
@@ -282,9 +338,29 @@ async function generateArticle(topic) {
 export default async (req) => {
   const start = Date.now();
   try {
-    // No daily cap — the subject-key gate provides the natural rate limit.
-    // If every prompt in the pool has already been covered in the last 48h
-    // we simply skip this run and try again next hour.
+    // 0. Daily draft cap — stop generating if DAILY_DRAFT_CAP drafts have
+    // already been created in the last 24h.
+    const twentyFourAgo = new Date(Date.now() - 24 * 36e5).toISOString();
+    const dayDrafts = await sb(`content_drafts?select=id&created_at=gte.${twentyFourAgo}&limit=100`).catch(() => []);
+    if ((dayDrafts || []).length >= DAILY_DRAFT_CAP) {
+      await logSync('generate-editorial', 'success', 0, `Daily cap reached (${dayDrafts.length}/${DAILY_DRAFT_CAP})`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'daily_cap', count: dayDrafts.length });
+    }
+
+    // 0b. Seed permanent editorial blocks (90-day expiry) if missing.
+    const ninetyDaysOut = new Date(Date.now() + 90 * 24 * 36e5).toISOString();
+    const permIn = PERMANENT_BLOCKS.map(encodeURIComponent).join(',');
+    const existingPerm = await sb(`published_subjects?subject=in.(${permIn})&select=subject&limit=20`).catch(() => []);
+    const havePerm = new Set((existingPerm || []).map(r => r.subject));
+    for (const key of PERMANENT_BLOCKS) {
+      if (!havePerm.has(key)) {
+        await sb('published_subjects', 'POST', {
+          subject: key,
+          article_id: null,
+          expires_at: ninetyDaysOut,
+        }).catch(() => {});
+      }
+    }
 
     // Build blocked-subject set from registry + recent drafts + recent articles
     const blockedKeys = new Set();
@@ -292,18 +368,38 @@ export default async (req) => {
     const fortyEightAgo = new Date(Date.now() - 48 * 36e5).toISOString();
     const thirtyRecent = await sb('articles?status=eq.published&select=title&order=published_at.desc&limit=30').catch(() => []);
     const draftsRecent = await sb(`content_drafts?select=title&created_at=gte.${fortyEightAgo}&order=created_at.desc&limit=50`).catch(() => []);
-    const registryRows = await sb(`published_subjects?select=subject&or=(expires_at.is.null,expires_at.gt.${nowIso})&limit=200`).catch(() => []);
-    for (const r of (registryRows || [])) if (r.subject) blockedKeys.add(r.subject);
+    const registryRows = await sb(`published_subjects?select=subject,expires_at&or=(expires_at.is.null,expires_at.gt.${nowIso})&limit=200`).catch(() => []);
+    const blockedRecords = [];
+    for (const r of (registryRows || [])) {
+      if (r.subject) {
+        blockedKeys.add(r.subject);
+        blockedRecords.push({ subject: r.subject, expires_at: r.expires_at });
+      }
+    }
     for (const r of (thirtyRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
     for (const r of (draftsRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
 
-    // 2. Pick a topic whose likely subject key is NOT blocked
-    const topic = await pickTopicFiltered(blockedKeys);
+    // 2. Pick a topic whose likely subject key is NOT blocked and whose
+    // prompt text doesn't match any blocked subject's keyword parts
+    // (stem-matched so "regulations failed" catches regulations:failure).
+    const topic = await pickTopicFiltered(blockedKeys, blockedRecords);
     if (!topic) {
       await logSync('generate-editorial', 'success', 0, `All subjects covered (${blockedKeys.size} blocked)`, Date.now() - start);
       return json({ ok: true, generated: 0, reason: 'all_subjects_covered', blocked: blockedKeys.size });
     }
     console.log('[generate-editorial] type:', topic.type, '| expectedKey:', topic.expectedKey || 'n/a');
+
+    // 2b. Semantic classifier — last-line check on the chosen prompt before
+    // we spend a full-article Claude call. Catches angles that slip through
+    // stem matching (e.g. a Mercedes deep-dive prompt with no literal form
+    // of "dominance"). Permits on any classifier error.
+    const filledForClassifier = fillTemplate(topic.prompt);
+    const semantic = await classifySemanticallyBlocked(filledForClassifier, Array.from(blockedKeys), { timeoutMs: 5000, source: 'generate-editorial' });
+    if (semantic.blocked) {
+      console.log(`[generate-editorial] Skipping topic: ${semantic.matched || '(semantic)'} — ${semantic.reason}`);
+      await logSync('generate-editorial', 'success', 0, `Semantic blocked (${semantic.matched || '?'}): "${filledForClassifier.slice(0, 60)}" — ${semantic.reason}`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'semantic_blocked', matched: semantic.matched });
+    }
 
     // 3. Generate article
     const article = await generateArticle(topic);
