@@ -158,16 +158,64 @@ function buildTweet(template, vars) {
   return Object.entries(vars).reduce((s, [k, v]) => s.replaceAll('{' + k + '}', v || ''), template);
 }
 
+// Fallback window: if a session's date_end has passed and no recap was
+// posted, post one anyway. OpenF1 doesn't always emit a CHEQUERED FLAG /
+// SESSION ENDED race_control row (FP1 just had this happen), so the
+// chequered-flag-driven recap path can silently miss. The fallback caps
+// at 4h so we don't post yesterday's race results when the function
+// happens to run hours later.
+const RECAP_FALLBACK_WINDOW_MS = 4 * 3600 * 1000;
+
 export default async (req) => {
   const start = Date.now();
   try {
     const session = await getLatestSession();
-    if (!session?.isLive) {
-      return json({ ok: true, skipped: 'no_live_session' });
-    }
+    if (!session) return json({ ok: true, skipped: 'no_session' });
+
     const sessionKey = String(session.session_key);
     const raceName = session.meeting_name || session.circuit_short_name || 'the race';
     const sessionName = session.session_name || 'Session';
+
+    // ── Time-based fallback recap ──
+    // Fires whenever a session has ended on the clock and we haven't
+    // already posted a recap for it. Catches the FP1 case where OpenF1
+    // never emitted a chequered/SESSION ENDED message.
+    if (!session.isLive) {
+      const endMs = session.date_end ? new Date(session.date_end).getTime() : null;
+      const now = Date.now();
+      if (endMs && now > endMs && (now - endMs) <= RECAP_FALLBACK_WINDOW_MS) {
+        const recapTag = `${sessionKey}-recap-once`;
+        const existing = await sb(`tweets?event_tag=eq.${encodeURIComponent(recapTag)}&limit=1`);
+        if (existing.length) {
+          return json({ ok: true, skipped: 'recap_already_posted', session_key: sessionKey });
+        }
+        const recap = await buildSessionRecap(sessionKey, sessionName, raceName);
+        if (!recap.ok) {
+          // OpenF1 lag — don't write the dedup row, retry next tick
+          await logSync('live-race-tweets', 'success', 0, `Fallback recap deferred (${session.session_name}): ${recap.reason || 'data_not_ready'}`, Date.now() - start);
+          return json({ ok: true, skipped: 'recap_data_not_ready', reason: recap.reason });
+        }
+        const trimmed = recap.text.length <= 280 ? recap.text : recap.text.slice(0, 277) + '...';
+        try {
+          await sb('tweets', 'POST', {
+            tweet_text: trimmed,
+            status: 'approved',
+            tweet_type: 'live_race',
+            event_tag: recapTag,
+          });
+        } catch (e) {
+          await logSync('live-race-tweets', 'error', 0, `Fallback recap insert failed: ${e.message}`, Date.now() - start);
+          return json({ ok: false, error: e.message });
+        }
+        // Fire post-tweet directly so the recap goes to Twitter within seconds
+        const siteUrl = process.env.URL || 'https://gridfeed.co';
+        fetchWT(siteUrl + '/.netlify/functions/post-tweet', { method: 'POST' }, 20000).catch(() => {});
+        await logSync('live-race-tweets', 'success', 1, `Fallback recap posted for ${session.session_name} (no chequered flag in RC)`, Date.now() - start);
+        console.log('[live-race-tweets] fallback recap fired for', sessionName, 'session_key', sessionKey);
+        return json({ ok: true, queued_recap: 1, fallback: true, session_key: sessionKey });
+      }
+      return json({ ok: true, skipped: 'no_live_session' });
+    }
 
     // Fetch recent race_control rows from our DB (last 90s window)
     const since = new Date(Date.now() - 90 * 1000).toISOString();
