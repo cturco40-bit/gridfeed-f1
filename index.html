@@ -1271,10 +1271,16 @@ function normCoord(x,y){
 
 function calcBounds(locs){const xs=locs.map(l=>l.x),ys=locs.map(l=>l.y);return{nx:Math.min(...xs),mx:Math.max(...xs),ny:Math.min(...ys),my:Math.max(...ys)}}
 
+// Build the SVG track outline once per page load, then never again. Earlier
+// versions re-set the path's `d` attribute on every fetchLive tick (every
+// 8s) using whatever P1 points had accumulated in locHistory — so the track
+// shape morphed on each refresh. Now: build once with enough points for a
+// smooth lap, lock with S.trackBuilt, only car dots update afterward.
 function buildTrack(hist){
+  if(S.trackBuilt)return;
   if(!hist?.length||!S.circBounds)return;
   const p1=hist.filter(l=>l.driver_number===S.p1Num).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  if(p1.length<10)return;
+  if(p1.length<30)return;
   const pts=p1.map(p=>normCoord(p.x,p.y));
   const d='M '+pts.map(p=>p.sx+','+p.sy).join(' L ')+' Z';
   document.getElementById('trackPath')?.setAttribute('d',d);
@@ -1282,6 +1288,7 @@ function buildTrack(hist){
   document.getElementById('lmTrack')?.setAttribute('d',d);
   document.getElementById('lmCentre')?.setAttribute('d',d);
   drawStartMark(pts);
+  S.trackBuilt=true;
 }
 function drawStartMark(pts){
   const line=document.getElementById('lmStart'),arr=document.getElementById('lmArrow');
@@ -1295,6 +1302,23 @@ function drawStartMark(pts){
   const tx=dx/len,ty=dy/len,ax=a.sx+tx*22,ay=a.sy+ty*22,w=6;
   arr.setAttribute('points',`${ax+tx*8},${ay+ty*8} ${ax-tx*4+nx*w},${ay-ty*4+ny*w} ${ax-tx*4-nx*w},${ay-ty*4-ny*w}`);
   arr.setAttribute('visibility','visible');
+}
+
+// One-shot fetch when going live: pulls a dense slice of the current
+// session's car_locations so buildTrack has enough P1 points to render a
+// smooth lap immediately. Without this, the per-driver view query yields
+// just one P1 point per 8s tick — track wouldn't form for ~4 minutes.
+async function bootstrapTrackHistory(){
+  if(S.trackBuilt)return;
+  const sessKey=S.liveSession?.session_key;if(sessKey==null)return;
+  try{
+    const{data}=await sbq(s=>s.from('car_locations').select('driver_number,x,y,date').eq('session_key',sessKey).order('date',{ascending:false}).limit(2000));
+    if(!data?.length)return;
+    if(!S.circBounds&&data.length>20)S.circBounds=calcBounds(data);
+    data.forEach(l=>S.locHistory.push(l));
+    if(S.locHistory.length>10000)S.locHistory=S.locHistory.slice(-5000);
+    if(S.p1Num)buildTrack(S.locHistory);
+  }catch(e){console.warn('[GF] bootstrap track:',e.message)}
 }
 
 function processLocs(locs){
@@ -1895,7 +1919,7 @@ async function checkLive(){
       const meeting=live.meeting_name||'';const sn=live.session_name||'Live';
       document.getElementById('liveSessName').textContent=(meeting?meeting+' \u2014 ':'')+sn;
       document.querySelector('meta[name=theme-color]')?.setAttribute('content','#E8002D');
-      if(!S.livePoller){S.livePoller=setInterval(fetchLive,8000);fetchLive()}
+      if(!S.livePoller){S.livePoller=setInterval(fetchLive,8000);fetchLive();bootstrapTrackHistory()}
     }else{
       document.getElementById('liveBadge')?.classList.remove('vis');
       document.getElementById('liveState').style.display='none';
