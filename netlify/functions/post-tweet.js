@@ -15,6 +15,12 @@ const DEFAULT_LIMIT = TYPE_LIMITS.social;
 const MIN_SPACING_MS = 30 * 1000;
 const LIVE_MIN_SPACING_MS = 20 * 1000;
 
+// Pull the HTTP status out of "Twitter API 401: ..." / "Twitter API 403: ..." etc.
+function parseTwitterStatus(msg) {
+  const m = (msg || '').match(/Twitter API (\d{3})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function tooSimilar(a, b) {
   // Compare normalized text — Twitter rejects near-duplicates
   const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -39,6 +45,7 @@ export default async (req, context) => {
 
     // ── 1. Pick next approved tweet (with live race priority) ──
     const queue = await sb(`tweets?status=eq.approved&or=(scheduled_post_at.is.null,scheduled_post_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=5`);
+    console.log('[post-tweet] Found approved tweets:', queue.length, 'ids:', queue.map(t => t.id).join(','));
     if (!queue.length) {
       await logSync('post-tweet', 'success', 0, 'No approved tweets ready', Date.now() - start);
       return json({ ok: true, posted: 0 });
@@ -51,6 +58,7 @@ export default async (req, context) => {
 
     let tweet = queue[0];
     const isLive = tweet.tweet_type === 'live_race';
+    console.log('[post-tweet] Attempting tweet id:', tweet.id, 'type:', tweet.tweet_type, 'created:', tweet.created_at, 'text head:', (tweet.tweet_text || '').slice(0, 80));
 
     // ── 2. Per-type hourly + daily caps ──
     const type = tweet.tweet_type || 'social';
@@ -100,21 +108,29 @@ export default async (req, context) => {
     try {
       ({ tweetId } = await postTweetNow(tweet.tweet_text));
     } catch (postErr) {
-      const msg = (postErr.message || '').toLowerCase();
+      const fullErr = postErr.message || String(postErr);
+      console.error('[post-tweet] Twitter post failed:', fullErr, '| tweet id:', tweet.id);
+      const msg = fullErr.toLowerCase();
       // Twitter rejects near-duplicates and content rule violations indefinitely
       // — mark the row failed so we stop retrying it every cron tick
-      const isPermanent = msg.includes('duplicate') || msg.includes('not allowed') || msg.includes('forbidden') || msg.includes('403');
+      const isPermanent = msg.includes('duplicate') || msg.includes('not allowed') || msg.includes('forbidden') || msg.includes('403') || msg.includes('401') || msg.includes('unauthorized');
       if (isPermanent) {
-        await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
-        await logSync('post-tweet', 'success', 0, `Twitter rejected (marked failed): ${postErr.message.slice(0, 200)} — "${tweet.tweet_text.slice(0,40)}"`, Date.now() - start);
-        return json({ ok: true, posted: 0, reason: 'twitter_rejected', error: postErr.message });
+        // Persist the raw Twitter error onto the tweet row so it's queryable
+        // via SELECT id, status, error_detail FROM tweets WHERE status='failed'
+        await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed', error_detail: fullErr.slice(0, 2000) });
+        await logSync('post-tweet', 'success', 0, `Twitter rejected (failed): ${fullErr.slice(0, 400)} — "${tweet.tweet_text.slice(0, 40)}"`, Date.now() - start, fullErr.slice(0, 4000));
+        return json({ ok: true, posted: 0, reason: 'twitter_rejected', status: parseTwitterStatus(fullErr), error: fullErr });
       }
-      throw postErr;
+      // Transient failure — leave the row approved for the next cron tick
+      // but log the detail so it's visible in sync_log + tweets.error_detail
+      await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { error_detail: fullErr.slice(0, 2000) });
+      await logSync('post-tweet', 'error', 0, `Twitter transient: ${fullErr.slice(0, 400)}`, Date.now() - start, fullErr.slice(0, 4000));
+      return json({ ok: false, posted: 0, reason: 'twitter_transient', error: fullErr }, 502);
     }
     await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'posted', posted_at: new Date().toISOString() });
 
-    await logSync('post-tweet', 'success', 1, `Posted ${tweetId} (${dayPosted.length+1}/${DAILY_CAP} today): "${tweet.tweet_text.slice(0, 60)}..."`, Date.now() - start);
-    return json({ ok: true, posted: 1, tweetId, daily: dayPosted.length + 1, hourly: hourPosted.length + 1 });
+    await logSync('post-tweet', 'success', 1, `Posted ${tweetId} (${typeDaily+1}/${typeLimit.daily} ${type} today): "${tweet.tweet_text.slice(0, 60)}..."`, Date.now() - start);
+    return json({ ok: true, posted: 1, tweetId, daily: typeDaily + 1, hourly: typeHourly + 1 });
   } catch (err) {
     await logSync('post-tweet', 'error', 0, err.message, Date.now() - start, err.stack);
     return json({ error: err.message }, 500);

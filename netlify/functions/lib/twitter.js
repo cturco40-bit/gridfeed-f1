@@ -21,6 +21,11 @@ function oauthSign(method, url, params, consumerKey, consumerSecret, tokenKey, t
 /**
  * Post a tweet immediately via Twitter API.
  * Returns { ok, tweetId } or throws on failure.
+ *
+ * Logs the full Twitter response (status + body, truncated to 1500 chars)
+ * to the Netlify function log on every call. Errors include the HTTP
+ * status code so post-tweet.js can write meaningful diagnostics into
+ * tweets.error_detail.
  */
 export async function postTweetNow(text) {
   const ck = process.env.TWITTER_API_KEY, cs = process.env.TWITTER_API_SECRET;
@@ -29,15 +34,28 @@ export async function postTweetNow(text) {
 
   const tweetUrl = 'https://api.twitter.com/2/tweets';
   const auth = oauthSign('POST', tweetUrl, {}, ck, cs, tk, ts);
-  const res = await fetchWT(tweetUrl, {
-    method: 'POST',
-    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  }, 15000);
+  let res, bodyText;
+  try {
+    res = await fetchWT(tweetUrl, {
+      method: 'POST',
+      headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }, 15000);
+    bodyText = await res.text();
+  } catch (e) {
+    console.error('[twitter] POST /2/tweets network error:', e.message, '| input head:', (text || '').slice(0, 80));
+    throw new Error(`Twitter API network: ${e.message}`);
+  }
 
-  const data = await res.json();
+  console.log('[twitter] POST /2/tweets →', res.status, '| body:', bodyText.slice(0, 1500), '| input head:', (text || '').slice(0, 80));
+
+  let data;
+  try { data = JSON.parse(bodyText); } catch { data = null; }
+
   if (!res.ok || !data?.data?.id) {
-    throw new Error('Twitter API: ' + JSON.stringify(data?.errors || data?.detail || data));
+    const detail = data?.errors || data?.detail || data?.title || bodyText || `HTTP ${res.status}`;
+    const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    throw new Error(`Twitter API ${res.status}: ${detailStr}`);
   }
   return { ok: true, tweetId: data.data.id };
 }
