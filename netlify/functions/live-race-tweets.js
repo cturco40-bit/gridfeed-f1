@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
+import { fetchWT, sb, logSync, json, getLatestSession, fetchOpenF1 } from './lib/shared.js';
 
 /* Live race tweet automation
  *
@@ -8,39 +8,103 @@ import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
  * then fires an admin push so you can approve in 2 taps.
  */
 
-// Tweets only fire for high-impact race events (avoid spam during practice).
-// Blog covers everything classified — including session starts, yellow flags,
-// and track-limits deletions that are useful commentary during FP1/Quali.
+// Tweetable events fire one tweet per type per session. Recap-style tweets
+// (session_end, chequered) build their text dynamically from OpenF1 results
+// rather than a static template, so they're not in TEMPLATES.
 const TEMPLATES = {
-  safety_car: '🟡 SAFETY CAR — Lap {lap} at the {race}\n\nLive timing: gridfeed.co',
-  sc_ending:  '🟢 Safety Car ending — Lap {lap} at the {race}. Racing resumes\n\nLive: gridfeed.co',
-  vsc:        '🟡 VIRTUAL SAFETY CAR — Lap {lap} at the {race}\n\nLive: gridfeed.co',
-  red_flag:   '🔴 RED FLAG — {race} suspended on lap {lap}\n\nLive: gridfeed.co',
-  penalty:    '⚠️ {reason} — lap {lap} at the {race}\n\ngridfeed.co',
-  retirement: '❌ Retirement on lap {lap} at the {race}\n\ngridfeed.co',
+  safety_car:    '🟡 SAFETY CAR — Lap {lap} at the {race}\n\nLive timing: gridfeed.co',
+  sc_ending:     '🟢 Safety Car ending — Lap {lap} at the {race}. Racing resumes\n\nLive: gridfeed.co',
+  vsc:           '🟡 VIRTUAL SAFETY CAR — Lap {lap} at the {race}\n\nLive: gridfeed.co',
+  red_flag:      '🔴 RED FLAG — {race} suspended on lap {lap}\n\nLive: gridfeed.co',
+  penalty:       '⚠️ {reason} — lap {lap} at the {race}\n\ngridfeed.co',
+  retirement:    '❌ Retirement on lap {lap} at the {race}\n\ngridfeed.co',
+  session_start: '🟢 {sessionName} is underway at the {race}\n\nLive timing: gridfeed.co',
 };
 
 const BLOG_HEADLINES = {
-  safety_car:    'Safety Car Deployed',
-  sc_ending:     'Safety Car Ending',
-  vsc:           'Virtual Safety Car Deployed',
-  red_flag:      'Red Flag — Session Suspended',
-  penalty:       'Penalty Issued',
-  retirement:    'Driver Retires',
-  session_start: 'Session Started',
-  session_end:   'Session Ended',
-  chequered:     'Chequered Flag',
-  yellow_flag:   'Yellow Flag',
-  green_flag:    'Track Clear',
-  track_limits:  'Lap Time Deleted',
+  safety_car:        'Safety Car Deployed',
+  sc_ending:         'Safety Car Ending',
+  vsc:               'Virtual Safety Car Deployed',
+  red_flag:          'Red Flag — Session Suspended',
+  penalty:           'Penalty Issued',
+  retirement:        'Driver Retires',
+  session_start:     'Session Started',
+  session_end:       'Session Ended',
+  session_suspended: 'Session Suspended',
+  chequered:         'Chequered Flag',
+  yellow_flag:       'Yellow Flag',
+  green_flag:        'Track Clear',
+  track_limits:      'Lap Time Deleted',
 };
 
 // Auto-approve these blog kinds — factual + low-risk so they surface
 // immediately in the live blog without an admin review step.
 const AUTO_APPROVE_BLOG = new Set([
-  'session_start', 'session_end', 'chequered',
+  'session_start', 'session_end', 'session_suspended', 'chequered',
   'yellow_flag', 'green_flag', 'track_limits',
 ]);
+
+// Format lap_duration (float seconds) → "M:SS.mmm"
+function formatLapTime(seconds) {
+  if (!seconds || seconds <= 0) return '';
+  const m = Math.floor(seconds / 60);
+  const s = (seconds - m * 60).toFixed(3);
+  return `${m}:${s.padStart(6, '0')}`;
+}
+
+// Build a session-end recap from OpenF1: top 3 by latest position + each
+// driver's best lap. Used for chequered flag / SESSION ENDED tweets so
+// GridFeed can be first to post results with lap times.
+async function buildSessionRecap(sessionKey, sessionName, raceName) {
+  try {
+    const [posRes, lapsRes, drvRes] = await Promise.all([
+      fetchOpenF1(`/v1/position?session_key=${sessionKey}`),
+      fetchOpenF1(`/v1/laps?session_key=${sessionKey}`).catch(() => ({ ok: false })),
+      fetchOpenF1(`/v1/drivers?session_key=${sessionKey}`).catch(() => ({ ok: false })),
+    ]);
+    if (!posRes.ok) return { ok: false, reason: 'positions_http' };
+    const positions = await posRes.json();
+    const drivers = drvRes.ok ? await drvRes.json() : [];
+    const laps = lapsRes.ok ? await lapsRes.json() : [];
+    if (!Array.isArray(positions) || !positions.length) return { ok: false, reason: 'no_positions' };
+
+    const driverMap = {};
+    drivers.forEach(d => { driverMap[d.driver_number] = d; });
+
+    // Final standings = latest position row per driver
+    const latest = {};
+    for (const p of positions) {
+      if (!latest[p.driver_number] || p.date > latest[p.driver_number].date) latest[p.driver_number] = p;
+    }
+    const ranked = Object.values(latest)
+      .filter(p => p.position)
+      .sort((a, b) => a.position - b.position)
+      .slice(0, 3);
+    if (!ranked.length) return { ok: false, reason: 'no_ranked' };
+
+    // Best lap per driver (excluding pit-out laps where flagged)
+    const bestLap = {};
+    for (const lap of laps) {
+      if (!lap.lap_duration || lap.lap_duration <= 0) continue;
+      if (lap.is_pit_out_lap) continue;
+      if (!bestLap[lap.driver_number] || lap.lap_duration < bestLap[lap.driver_number]) {
+        bestLap[lap.driver_number] = lap.lap_duration;
+      }
+    }
+
+    const lines = ranked.map((r, i) => {
+      const d = driverMap[r.driver_number] || {};
+      const name = d.name_acronym || d.last_name || d.broadcast_name || (`#${r.driver_number}`);
+      const t = bestLap[r.driver_number];
+      const tStr = t ? ` ${formatLapTime(t)}` : '';
+      return `P${i + 1} ${name}${tStr}`;
+    });
+    const text = `🏁 ${sessionName} ENDED — ${raceName}\n\n${lines.join('\n')}\n\nFull results: gridfeed.co`;
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, reason: 'exception:' + (e.message || '').slice(0, 80) };
+  }
+}
 
 function classifyEvent(m) {
   const cat = (m.category || '').toLowerCase();
@@ -60,15 +124,20 @@ function classifyEvent(m) {
     return { kind: 'retirement', tag: 'ret', tweetable: true };
   }
 
-  // === Blog-only: session lifecycle, flags, track limits ===
-  if (cat === 'sessionstatus' || msgU.includes('SESSION STARTED')) {
-    return { kind: 'session_start', tag: 'sess-start', tweetable: false };
+  // === Session lifecycle: tweetable, fires once per session per kind ===
+  if (msgU.includes('SESSION STARTED') || cat === 'sessionstatus' && msgU.includes('STARTED')) {
+    return { kind: 'session_start', tag: 'sess-start', tweetable: true };
   }
-  if (msgU.includes('SESSION ENDED') || msgU.includes('SESSION FINISHED') || msgU.includes('SESSION SUSPENDED')) {
-    return { kind: 'session_end', tag: 'sess-end', tweetable: false };
+  // SESSION SUSPENDED is functionally the same as a red flag — let red_flag
+  // handler take it. Stand-alone SUSPENDED message stays blog-only.
+  if (msgU.includes('SESSION SUSPENDED')) {
+    return { kind: 'session_suspended', tag: 'sess-susp', tweetable: false };
+  }
+  if (msgU.includes('SESSION ENDED') || msgU.includes('SESSION FINISHED')) {
+    return { kind: 'session_end', tag: 'sess-end', tweetable: true };
   }
   if (flag.includes('CHEQUERED') || msgU.includes('CHEQUERED FLAG')) {
-    return { kind: 'chequered', tag: 'cheq', tweetable: false };
+    return { kind: 'chequered', tag: 'cheq', tweetable: true };
   }
   if (flag.includes('YELLOW')) {
     const sector = (msgU.match(/SECTOR\s+(\d+)/) || [])[1];
@@ -98,6 +167,7 @@ export default async (req) => {
     }
     const sessionKey = String(session.session_key);
     const raceName = session.meeting_name || session.circuit_short_name || 'the race';
+    const sessionName = session.session_name || 'Session';
 
     // Fetch recent race_control rows from our DB (last 90s window)
     const since = new Date(Date.now() - 90 * 1000).toISOString();
@@ -148,18 +218,38 @@ export default async (req) => {
         errors.push('blog:' + e.message);
       }
 
-      // ── Tweet (only high-impact race events) ──
-      if (!ev.tweetable || !TEMPLATES[ev.kind]) continue;
+      // ── Tweet (one per kind per session) ──
+      if (!ev.tweetable) continue;
 
-      const existing = await sb(`tweets?event_tag=eq.${encodeURIComponent(eventTag)}&limit=1`);
+      // chequered + session_end share a single dedup tag — they're effectively
+      // the same event (session results) and OpenF1 may emit both.
+      const isRecap = ev.kind === 'chequered' || ev.kind === 'session_end';
+      const tweetTag = isRecap ? `${sessionKey}-recap-once` : `${sessionKey}-${ev.kind}-once`;
+
+      const existing = await sb(`tweets?event_tag=eq.${encodeURIComponent(tweetTag)}&limit=1`);
       if (existing.length) continue;
 
-      const tweetText = buildTweet(TEMPLATES[ev.kind], {
-        race: raceName,
-        lap: lapStr,
-        reason: (m.message || '').replace(/\s+/g, ' ').trim(),
-        state: ev.state || '',
-      });
+      let tweetText = null;
+      if (isRecap) {
+        const recap = await buildSessionRecap(sessionKey, sessionName, raceName);
+        if (!recap.ok) {
+          // OpenF1 sometimes lags behind the chequered flag — leave the dedup
+          // row unwritten so the next cron tick retries the recap.
+          errors.push('recap_skipped:' + (recap.reason || 'unknown'));
+          continue;
+        }
+        tweetText = recap.text;
+      } else if (ev.kind === 'session_start') {
+        tweetText = buildTweet(TEMPLATES.session_start, { sessionName, race: raceName });
+      } else if (TEMPLATES[ev.kind]) {
+        tweetText = buildTweet(TEMPLATES[ev.kind], {
+          race: raceName,
+          lap: lapStr,
+          reason: (m.message || '').replace(/\s+/g, ' ').trim(),
+          state: ev.state || '',
+        });
+      }
+      if (!tweetText) continue;
       const trimmed = tweetText.length <= 280 ? tweetText : tweetText.slice(0, 277) + '...';
 
       try {
@@ -167,7 +257,7 @@ export default async (req) => {
           tweet_text: trimmed,
           status: 'approved',
           tweet_type: 'live_race',
-          event_tag: eventTag,
+          event_tag: tweetTag,
         });
         queued++;
       } catch (e) {
