@@ -39,7 +39,10 @@
   timeout = 30
 
 [functions.fetch-race-control]
-  schedule = "*/2 * * * *"
+  # Every minute during sessions so chequered/SC/red-flag tweets land on
+  # Twitter within ~2 min of the actual race-control event (live-race-tweets
+  # also runs */1 and only sees rows in the last 90s window).
+  schedule = "* * * * *"
   timeout = 30
 
 [functions.live-race-tweets]
