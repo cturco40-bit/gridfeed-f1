@@ -550,9 +550,9 @@ body{transition:background-color .2s,color .2s}
       </div>
       <!-- MAP (right on desktop) -->
       <div class="map-pane" id="mapPane">
-        <svg id="lmSvg" viewBox="0 0 600 460" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
-          <rect width="600" height="460" fill="#0A0D12"/>
-          <path id="lmTrack" fill="none" stroke="#1C2333" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d=""/>
+        <svg id="lmSvg" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+          <rect width="600" height="400" fill="#0A0D12"/>
+          <path id="lmTrack" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" d=""/>
           <path id="lmCentre" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="6,5" d=""/>
           <line id="lmStart" x1="0" y1="0" x2="0" y2="0" stroke="#E8002D" stroke-width="4" stroke-linecap="round" visibility="hidden"/>
           <polygon id="lmArrow" points="0,0 0,0 0,0" fill="#E8002D" visibility="hidden"/>
@@ -1262,77 +1262,113 @@ function setLiveView(v){
   else{S.activeMap=false;if(S.animFrame){cancelAnimationFrame(S.animFrame);S.animFrame=null}}
 }
 
+// Map OpenF1 (x,y) GPS-derived coords into the static circuit SVG path's
+// coordinate space, preserving aspect ratio with a small inner padding.
+// S.circBounds = OpenF1 bbox (computed dynamically from observed positions).
+// S._svgBounds = bbox of the current circuit's CS path (set by setupTrackOutline).
+// Y is flipped because OpenF1 has y-up while SVG has y-down.
 function normCoord(x,y){
-  if(!S.circBounds)return{sx:400,sy:300};
-  const pad=60,sw=800,sh=600,rx=S.circBounds.mx-S.circBounds.nx,ry=S.circBounds.my-S.circBounds.ny;
-  const sc=Math.min((sw-pad*2)/rx,(sh-pad*2)/ry),ox=(sw-rx*sc)/2,oy=(sh-ry*sc)/2;
-  return{sx:ox+(x-S.circBounds.nx)*sc,sy:sh-oy-(y-S.circBounds.ny)*sc};
+  if(!S.circBounds||!S._svgBounds)return{sx:300,sy:200};
+  const ob=S.circBounds,sb=S._svgBounds;
+  const orx=ob.mx-ob.nx,ory=ob.my-ob.ny;
+  const srx=sb.mx-sb.nx,sry=sb.my-sb.ny;
+  if(orx<=0||ory<=0)return{sx:300,sy:200};
+  const pad=4;
+  const sc=Math.min((srx-pad*2)/orx,(sry-pad*2)/ory);
+  const offX=sb.nx+(srx-orx*sc)/2;
+  const offY=sb.ny+(sry-ory*sc)/2;
+  return{sx:offX+(x-ob.nx)*sc,sy:offY+(ob.my-y)*sc};
 }
 
 function calcBounds(locs){const xs=locs.map(l=>l.x),ys=locs.map(l=>l.y);return{nx:Math.min(...xs),mx:Math.max(...xs),ny:Math.min(...ys),my:Math.max(...ys)}}
 
-// Build the SVG track outline once per page load, then never again. Earlier
-// versions re-set the path's `d` attribute on every fetchLive tick (every
-// 8s) using whatever P1 points had accumulated in locHistory — so the track
-// shape morphed on each refresh. Now: build once with enough points for a
-// smooth lap, lock with S.trackBuilt, only car dots update afterward.
-function buildTrack(hist){
-  if(S.trackBuilt)return;
-  if(!hist?.length||!S.circBounds)return;
-  const p1=hist.filter(l=>l.driver_number===S.p1Num).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  if(p1.length<30)return;
-  const pts=p1.map(p=>normCoord(p.x,p.y));
-  const d='M '+pts.map(p=>p.sx+','+p.sy).join(' L ')+' Z';
-  document.getElementById('trackPath')?.setAttribute('d',d);
-  document.getElementById('trackCentre')?.setAttribute('d',d);
-  document.getElementById('lmTrack')?.setAttribute('d',d);
-  document.getElementById('lmCentre')?.setAttribute('d',d);
-  drawStartMark(pts);
-  S.trackBuilt=true;
+// Parse "M x,y L x,y …" SVG path into raw coordinate pairs
+function parsePathPoints(d){
+  if(!d)return[];
+  const nums=d.match(/-?\d+(?:\.\d+)?/g);
+  if(!nums)return[];
+  const pts=[];
+  for(let i=0;i+1<nums.length;i+=2)pts.push({x:parseFloat(nums[i]),y:parseFloat(nums[i+1])});
+  return pts;
 }
+function parsePathBounds(d){
+  const pts=parsePathPoints(d);
+  if(!pts.length)return null;
+  let nx=Infinity,mx=-Infinity,ny=Infinity,my=-Infinity;
+  for(const p of pts){if(p.x<nx)nx=p.x;if(p.x>mx)mx=p.x;if(p.y<ny)ny=p.y;if(p.y>my)my=p.y}
+  return{nx,mx,ny,my};
+}
+
+// Resolve current circuit → CS slug → static SVG path. CIRC_MAP maps
+// round number → slug; falls back to circuit_short_name match.
+function getCircuitPath(){
+  if(typeof CS==='undefined'||!CS)return null;
+  const r=S.nr?.r;
+  if(r&&CIRC_MAP[r]&&CS[CIRC_MAP[r]])return CS[CIRC_MAP[r]];
+  const csn=(S.liveSession?.circuit_short_name||S.liveSession?.meeting_name||'').toLowerCase();
+  for(const slug of new Set(Object.values(CIRC_MAP))){
+    if(slug&&csn.includes(slug)&&CS[slug])return CS[slug];
+  }
+  return null;
+}
+
+// Render the static circuit outline once per page load. The SVG path is
+// hand-drawn and does not change with race data — only the car dots move.
+function setupTrackOutline(){
+  if(S._trackOutlineSet)return;
+  const path=getCircuitPath();
+  if(!path)return;
+  const lmTrack=document.getElementById('lmTrack');
+  const lmCentre=document.getElementById('lmCentre');
+  if(lmTrack)lmTrack.setAttribute('d',path);
+  if(lmCentre)lmCentre.setAttribute('d',path);
+  // Race-browser preview shares the same path elements
+  document.getElementById('trackPath')?.setAttribute('d',path);
+  document.getElementById('trackCentre')?.setAttribute('d',path);
+  S._svgBounds=parsePathBounds(path);
+  const pts=parsePathPoints(path);
+  if(pts.length>=2)drawStartMark(pts);
+  S._trackOutlineSet=true;
+}
+
 function drawStartMark(pts){
   const line=document.getElementById('lmStart'),arr=document.getElementById('lmArrow');
-  if(!line||!arr||pts.length<5)return;
+  if(!line||!arr||pts.length<2)return;
   const a=pts[0],b=pts[Math.min(4,pts.length-1)];
-  const dx=b.sx-a.sx,dy=b.sy-a.sy,len=Math.hypot(dx,dy)||1;
-  const nx=-dy/len,ny=dx/len,half=14;
-  line.setAttribute('x1',a.sx+nx*half);line.setAttribute('y1',a.sy+ny*half);
-  line.setAttribute('x2',a.sx-nx*half);line.setAttribute('y2',a.sy-ny*half);
+  const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len,ny=dx/len,half=10;
+  line.setAttribute('x1',(a.x+nx*half).toFixed(1));line.setAttribute('y1',(a.y+ny*half).toFixed(1));
+  line.setAttribute('x2',(a.x-nx*half).toFixed(1));line.setAttribute('y2',(a.y-ny*half).toFixed(1));
   line.setAttribute('visibility','visible');
-  const tx=dx/len,ty=dy/len,ax=a.sx+tx*22,ay=a.sy+ty*22,w=6;
-  arr.setAttribute('points',`${ax+tx*8},${ay+ty*8} ${ax-tx*4+nx*w},${ay-ty*4+ny*w} ${ax-tx*4-nx*w},${ay-ty*4-ny*w}`);
+  const tx=dx/len,ty=dy/len,ax=a.x+tx*16,ay=a.y+ty*16,w=4;
+  arr.setAttribute('points',`${(ax+tx*6).toFixed(1)},${(ay+ty*6).toFixed(1)} ${(ax-tx*3+nx*w).toFixed(1)},${(ay-ty*3+ny*w).toFixed(1)} ${(ax-tx*3-nx*w).toFixed(1)},${(ay-ty*3-ny*w).toFixed(1)}`);
   arr.setAttribute('visibility','visible');
 }
 
-// One-shot fetch when going live: pulls a dense slice of the current
-// session's car_locations so buildTrack has enough P1 points to render a
-// smooth lap immediately. Without this, the per-driver view query yields
-// just one P1 point per 8s tick — track wouldn't form for ~4 minutes.
+// Seed S.circBounds from a wide cross-section of the session's positions
+// so the OpenF1→SVG mapping stays stable. Without this, calcBounds runs
+// on the latest-per-driver snapshot (~22 rows clustered wherever cars
+// are right now), which gives a tiny/biased bbox and dots cluster.
 async function bootstrapTrackHistory(){
-  if(S.trackBuilt)return;
   const sessKey=S.liveSession?.session_key;if(sessKey==null)return;
+  if(S.circBounds)return;
   try{
     const{data}=await sbq(s=>s.from('car_locations').select('driver_number,x,y,date').eq('session_key',sessKey).order('date',{ascending:false}).limit(2000));
     if(!data?.length)return;
-    if(!S.circBounds&&data.length>20)S.circBounds=calcBounds(data);
-    data.forEach(l=>S.locHistory.push(l));
-    if(S.locHistory.length>10000)S.locHistory=S.locHistory.slice(-5000);
-    if(S.p1Num)buildTrack(S.locHistory);
-  }catch(e){console.warn('[GF] bootstrap track:',e.message)}
+    if(data.length>20)S.circBounds=calcBounds(data);
+  }catch(e){console.warn('[GF] bootstrap bounds:',e.message)}
 }
 
 function processLocs(locs){
   if(!locs?.length)return;
-  if(!S.circBounds&&locs.length>20)S.circBounds=calcBounds(locs);
+  if(!S.circBounds&&locs.length>5)S.circBounds=calcBounds(locs);
   S.prevLocs={...S.carLocs};
   const latest={};locs.forEach(l=>{if(!latest[l.driver_number]||l.date>latest[l.driver_number].date)latest[l.driver_number]=l});
   S.carLocs=latest;
-  const p1=S.td[S.sess]?.[0];if(p1?.driverNum)S.p1Num=p1.driverNum;
-  locs.forEach(l=>{S.locHistory.push(l);if(S.locHistory.length>10000)S.locHistory=S.locHistory.slice(-5000)});
-  if(S.locHistory.length>100)buildTrack(S.locHistory);
 }
 
 function renderMap(){
+  if(!S._trackOutlineSet)setupTrackOutline();
   if(!S.isLive){document.getElementById('mapOffline').style.display='block';document.getElementById('carDots')?.replaceChildren();
     const ns=document.getElementById('mapNextSess');if(ns&&S.nr)ns.textContent='Next: '+S.nr.n+' \u00b7 '+S.nr.dl;return}
   document.getElementById('mapOffline').style.display='none';
@@ -2583,7 +2619,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='REFRESH_ARTICLES')refreshArticleFeeds(true)});
 }
-detectNR();initHome();initSessChip();initRoute();checkPush();checkLive();initMapToggle();initDark();
+detectNR();setupTrackOutline();initHome();initSessChip();initRoute();checkPush();checkLive();initMapToggle();initDark();
 setInterval(()=>{if(S.tab==='standings')initSt()},18e5);
 setInterval(checkLive,30000);
 </script>
