@@ -761,7 +761,13 @@ const SCH=[
   {r:3,n:'Japanese Grand Prix',c:'Suzuka',d:'2026-03-29',dl:'Mar 27\u201329',fl:'\u{1F1EF}\u{1F1F5}',sp:0,w:'Kimi Antonelli',st:'done'},
   {r:0,n:'Bahrain Grand Prix',c:'Bahrain',d:'2026-04-12',dl:'Apr 12',fl:'\u{1F1E7}\u{1F1ED}',sp:0,w:null,st:'can'},
   {r:0,n:'Saudi Arabian Grand Prix',c:'Jeddah',d:'2026-04-19',dl:'Apr 19',fl:'\u{1F1F8}\u{1F1E6}',sp:0,w:null,st:'can'},
-  {r:4,n:'Miami Grand Prix',c:'Miami Autodrome',d:'2026-05-03',dl:'May 1\u20133',fl:'\u{1F1FA}\u{1F1F8}',sp:1,w:null,st:'active'},
+  {r:4,n:'Miami Grand Prix',c:'Miami Autodrome',d:'2026-05-03',dl:'May 1\u20133',fl:'\u{1F1FA}\u{1F1F8}',sp:1,w:null,st:'active',ses:[
+    {n:'FP1',t:'2026-05-01T16:00:00Z',dur:60},
+    {n:'SQ', t:'2026-05-01T20:00:00Z',dur:45},
+    {n:'SS', t:'2026-05-02T16:00:00Z',dur:60},
+    {n:'Q',  t:'2026-05-02T20:00:00Z',dur:60},
+    {n:'R',  t:'2026-05-03T19:00:00Z',dur:120},
+  ]},
   {r:5,n:'Canadian Grand Prix',c:'Gilles Villeneuve',d:'2026-05-24',dl:'May 22\u201324',fl:'\u{1F1E8}\u{1F1E6}',sp:1,w:null,st:'up'},
   {r:6,n:'Monaco Grand Prix',c:'Monaco',d:'2026-06-07',dl:'Jun 5\u20137',fl:'\u{1F1F2}\u{1F1E8}',sp:0,w:null,st:'up'},
   {r:7,n:'Barcelona-Catalunya GP',c:'Catalunya',d:'2026-06-14',dl:'Jun 12\u201314',fl:'\u{1F1EA}\u{1F1F8}',sp:0,w:null,st:'up'},
@@ -829,14 +835,32 @@ function detectNR(){
   S.nr=SCH.find(r=>r.st==='up'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop();
 }
 
-// Approximate session times derived from race weekend layout (Option B in plan).
-// Race day `r.d` is treated as Sunday race at 14:00 UTC; other sessions offset
-// from that. Good enough for a chip — not authoritative timing.
+// Friendly session labels — keys match buildSessions return values
+const SES_LBL={FP1:'Practice 1',FP2:'Practice 2',FP3:'Practice 3',SQ:'Sprint Qualifying',SS:'Sprint',Q:'Qualifying',R:'Race'};
+
+// If r.ses is set, those are authoritative (real session times in UTC).
+// Otherwise approximate from r.d, treated as Sunday race at 14:00 UTC.
+// Each entry has dur (minutes) for the live-window check.
 function buildSessions(r){
+  if(r.ses?.length)return r.ses.map(s=>({n:s.n,t:new Date(s.t).getTime(),dur:s.dur||60}));
   const day=864e5,hr=36e5;
   const R=new Date(r.d+'T14:00:00Z').getTime();
-  if(r.sp)return[{n:'FP1',t:R-2*day-0.5*hr},{n:'SQ',t:R-2*day+3*hr},{n:'SS',t:R-1*day-3*hr},{n:'Q',t:R-1*day+2*hr},{n:'R',t:R}];
-  return[{n:'FP1',t:R-2*day-0.5*hr},{n:'FP2',t:R-2*day+3*hr},{n:'FP3',t:R-1*day-1.5*hr},{n:'Q',t:R-1*day+2*hr},{n:'R',t:R}];
+  if(r.sp)return[{n:'FP1',t:R-2*day-0.5*hr,dur:60},{n:'SQ',t:R-2*day+3*hr,dur:45},{n:'SS',t:R-1*day-3*hr,dur:60},{n:'Q',t:R-1*day+2*hr,dur:60},{n:'R',t:R,dur:120}];
+  return[{n:'FP1',t:R-2*day-0.5*hr,dur:60},{n:'FP2',t:R-2*day+3*hr,dur:60},{n:'FP3',t:R-1*day-1.5*hr,dur:60},{n:'Q',t:R-1*day+2*hr,dur:60},{n:'R',t:R,dur:120}];
+}
+// Currently-running session for race r (within [t, t+dur*60s])
+function getActiveSession(r){
+  if(!r)return null;
+  const now=Date.now();
+  for(const s of buildSessions(r))if(now>=s.t&&now<=s.t+s.dur*60000)return s;
+  return null;
+}
+// Next future session for race r (already past = skip)
+function getUpcomingForRace(r){
+  if(!r)return null;
+  const now=Date.now();
+  for(const s of buildSessions(r))if(s.t>now)return s;
+  return null;
 }
 function getNextSession(){
   const now=Date.now(),horizon=now+7*864e5;
@@ -847,12 +871,27 @@ function fmtSessDelta(ms){const d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e
 function initSessChip(){
   const chip=document.getElementById('sessChip');if(!chip)return;
   if(S.sessCt)clearInterval(S.sessCt);
+  const lblEl=chip.querySelector('.chip-label');
+  const nameEl=document.getElementById('sessChipName');
+  const timeEl=document.getElementById('sessChipTime');
   function tick(){
+    // If the active race has a session running right now, show LIVE state
+    const active=SCH.find(r=>r.st==='active');
+    const cur=active?getActiveSession(active):null;
+    if(cur){
+      chip.style.display='';chip.style.cursor='pointer';
+      chip.onclick=()=>go('results');
+      if(lblEl)lblEl.textContent='LIVE';
+      if(nameEl)nameEl.textContent=SES_LBL[cur.n]||cur.n;
+      if(timeEl)timeEl.textContent='now';
+      return;
+    }
     const s=getNextSession();
     if(!s){chip.style.display='none';return}
-    chip.style.display='';
-    document.getElementById('sessChipName').textContent=s.n;
-    document.getElementById('sessChipTime').textContent=fmtSessDelta(s.t-Date.now());
+    chip.style.display='';chip.style.cursor='';chip.onclick=null;
+    if(lblEl)lblEl.textContent='NEXT';
+    if(nameEl)nameEl.textContent=SES_LBL[s.n]||s.n;
+    if(timeEl)timeEl.textContent=fmtSessDelta(s.t-Date.now());
   }
   tick();S.sessCt=setInterval(tick,30000);
 }
@@ -868,6 +907,75 @@ function startCD(target){
     if(e('cdM'))e('cdM').textContent=String(m).padStart(2,'0');
     if(e('cdS'))e('cdS').textContent=String(s).padStart(2,'0');
   }tick();S.ct=setInterval(tick,1000);
+}
+
+// Session-aware home hero: when the active race has a session running, swap
+// the digits for a LIVE pill linking to /results. Between sessions, count
+// down to whichever session is next. Falls back to a race-day countdown for
+// non-active races so future weekends show "Next: Canadian Grand Prix" etc.
+function startHomeCountdown(){
+  if(S.ct)clearInterval(S.ct);
+  S._heroState=null;S._heroSess=null;
+  const pad=n=>String(n).padStart(2,'0');
+  function digitsHtml(d,h,m,s){
+    return `<div class="hero-cd">
+      <div class="cd-u"><div class="cd-n" id="cdD">${pad(d)}</div><div class="cd-l">Days</div></div><div class="cd-sep">:</div>
+      <div class="cd-u"><div class="cd-n" id="cdH">${pad(h)}</div><div class="cd-l">Hrs</div></div><div class="cd-sep">:</div>
+      <div class="cd-u"><div class="cd-n" id="cdM">${pad(m)}</div><div class="cd-l">Mins</div></div><div class="cd-sep">:</div>
+      <div class="cd-u"><div class="cd-n" id="cdS">${pad(s)}</div><div class="cd-l">Secs</div></div>
+    </div>`;
+  }
+  function tick(){
+    const r=S.nr;if(!r)return;
+    const block=document.getElementById('heroCdBlock');if(!block)return;
+    const isActive=r.st==='active';
+    const cur=isActive?getActiveSession(r):null;
+    const nxt=isActive?getUpcomingForRace(r):null;
+    const target=(isActive?(cur?null:nxt?.t):(r.d?new Date(r.d).getTime():null));
+    // 1. Live session — swap to LIVE pill
+    if(cur){
+      const sig='live:'+cur.n;
+      if(S._heroState!==sig){
+        S._heroState=sig;
+        block.innerHTML=`<div onclick="go('results')" style="cursor:pointer">
+          <div style="display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;font-weight:800;margin-bottom:8px">
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite"></span>
+            LIVE: ${SES_LBL[cur.n]||cur.n}
+          </div>
+          <div style="font-size:13px;color:#fff;font-weight:700">Watch live timing →</div>
+        </div>`;
+      }
+      return;
+    }
+    // 2. No more sessions for active race — race weekend complete
+    if(isActive&&!nxt){
+      if(S._heroState!=='done'){
+        S._heroState='done';
+        block.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0">Race weekend complete — results available in Live tab</div>';
+      }
+      return;
+    }
+    // 3. Countdown — to next session (active race) or to race day (others)
+    if(target==null)return;
+    const df=Math.max(0,target-Date.now());
+    const d=Math.floor(df/864e5),h=Math.floor(df%864e5/36e5),m=Math.floor(df%36e5/6e4),s=Math.floor(df%6e4/1e3);
+    const sessName=isActive&&nxt?(SES_LBL[nxt.n]||nxt.n):null;
+    const sig='cd:'+(sessName||'race');
+    if(S._heroState!==sig){
+      S._heroState=sig;
+      const label=isActive&&sessName
+        ? `▶ ${r.r?'Round '+r.r+' — ':''}Next session: ${sessName}`
+        : `▶ ${r.r?'Round '+r.r+' — ':''}Next: ${r.n}`;
+      block.innerHTML=`<div style="font-size:10px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;font-weight:700;margin-bottom:8px">${label}</div>${digitsHtml(d,h,m,s)}`;
+      return;
+    }
+    const e=id=>document.getElementById(id);
+    if(e('cdD'))e('cdD').textContent=pad(d);
+    if(e('cdH'))e('cdH').textContent=pad(h);
+    if(e('cdM'))e('cdM').textContent=pad(m);
+    if(e('cdS'))e('cdS').textContent=pad(s);
+  }
+  tick();S.ct=setInterval(tick,1000);
 }
 
 /* ═══ HOME ═══ */
@@ -889,16 +997,8 @@ async function initHome(){
       ${rest.map((entry,i)=>{const[name,d]=entry;const last=name.split(' ').pop();return`<div data-drv="${d.abbr||''}" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ${d.tc};border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0"><div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-weight:700;letter-spacing:1px"><span>P${i+2}</span><span style="opacity:0.5">\u00b7</span><span style="font-size:9px;text-transform:uppercase">${d.team}</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-top:2px"><span class="podium-name-full" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${last}</span><span class="podium-name-abbr" style="font-family:var(--head);font-size:17px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:-.2px">${d.abbr||last.slice(0,3).toUpperCase()}</span><span style="font-family:var(--head);font-size:20px;font-weight:900;color:var(--gold);line-height:1;flex-shrink:0">${d.pts}</span></div></div>`}).join('')}
     </div>
     <div onclick="go('standings')" style="margin-top:10px;padding:6px 2px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;text-align:right;letter-spacing:.5px">View all standings \u2192</div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
-      <div style="font-size:10px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;font-weight:700;margin-bottom:8px">\u25b6 ${r.r?'Round '+r.r+' \u2014 ':''}Next: ${r.n}</div>
-      <div class="hero-cd">
-        <div class="cd-u"><div class="cd-n" id="cdD">--</div><div class="cd-l">Days</div></div><div class="cd-sep">:</div>
-        <div class="cd-u"><div class="cd-n" id="cdH">--</div><div class="cd-l">Hrs</div></div><div class="cd-sep">:</div>
-        <div class="cd-u"><div class="cd-n" id="cdM">--</div><div class="cd-l">Mins</div></div><div class="cd-sep">:</div>
-        <div class="cd-u"><div class="cd-n" id="cdS">--</div><div class="cd-l">Secs</div></div>
-      </div>
-    </div></div>`;
-  if(r.d)startCD(new Date(r.d).getTime());
+    <div id="heroCdBlock" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)"></div></div>`;
+  startHomeCountdown();
   await Promise.all([loadArts(),loadPicks(),renderSched(),loadMini()]);
 }
 
@@ -1733,12 +1833,7 @@ function renderRaceContent(){
         <div style="font-family:var(--head);font-size:28px;font-weight:900;color:#fff;text-transform:uppercase">${S.nr.n}</div>
         <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px">${sch.c} \u00b7 ${sch.dl}</div>
       </div>
-      <div class="card mb-16"><div class="card-body" style="padding:0">
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px"><span style="font-weight:600">Sprint Qualifying</span><span style="color:var(--muted)">May 1 \u00b7 10:30 AM ET</span></div>
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px"><span style="font-weight:600">Sprint Race</span><span style="color:var(--muted)">May 2 \u00b7 9:00 AM ET</span></div>
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px"><span style="font-weight:600">Qualifying</span><span style="color:var(--muted)">May 2 \u00b7 1:00 PM ET</span></div>
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:12px;background:rgba(232,0,45,.04)"><span style="font-weight:700;color:var(--accent)">Race</span><span style="color:var(--accent);font-weight:600">May 3 \u00b7 3:30 PM ET</span></div>
-      </div></div>
+      <div class="card mb-16"><div class="card-body" style="padding:0">${(buildSessions(sch)||[]).map((s,i,a)=>{const last=i===a.length-1;const dt=new Date(s.t);const dp=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/New_York'});const tp=dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'}).replace(/^0/,'');return `<div style="display:flex;justify-content:space-between;padding:10px 16px;${last?'background:rgba(232,0,45,.04)':'border-bottom:1px solid var(--border)'};font-size:12px"><span style="font-weight:${last?700:600};${last?'color:var(--accent)':''}">${SES_LBL[s.n]||s.n}</span><span style="${last?'color:var(--accent);font-weight:600':'color:var(--muted)'}">${dp} \u00b7 ${tp} ET</span></div>`}).join('')}</div></div>
       ${CS.miami?`<div class="map-pane${S._mapVis===false?' collapsed':''}" style="background:#0A0D12;border-radius:8px;padding:12px;margin:0 16px 16px;border:1px solid var(--border)"><svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"><path d="${CS.miami}" fill="none" stroke="#1C2333" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="${CS.miami}" fill="none" stroke="#2A3145" stroke-width="1" stroke-dasharray="5,4"/></svg><div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px">Miami International Autodrome</div></div><button class="map-toggle-btn${S._mapVis===false?' collapsed':''}" onclick="toggleMap()"><span class="toggle-arrow">\u2303</span><span class="toggle-label">${S._mapVis===false?'Show Map':'Hide Map'}</span></button>`:''}
       <div class="slabel">Circuit Info</div>
       <div class="card mb-16"><div class="card-body" style="font-size:12px">
