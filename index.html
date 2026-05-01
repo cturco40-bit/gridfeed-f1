@@ -1927,7 +1927,14 @@ function renderRC(){
 
 async function loadRaceBlog(){
   const el=document.getElementById('rbEntries');if(!el)return;
-  const{data}=await sbq(s=>s.from('race_blog_entries').select('lap_number,headline,body,event_type,created_at').eq('status','approved').order('lap_number',{ascending:false}).order('created_at',{ascending:false}).limit(20));
+  // Scope to the current OpenF1 session_key so FP1 entries don't bleed into
+  // Sprint Quali / Sprint / Quali / Race once admin approves them.
+  const sessKey=S.liveSession?.session_key?String(S.liveSession.session_key):null;
+  const{data}=await sbq(s=>{
+    let q=s.from('race_blog_entries').select('lap_number,headline,body,event_type,created_at').eq('status','approved');
+    if(sessKey)q=q.eq('session_key',sessKey);
+    return q.order('lap_number',{ascending:false}).order('created_at',{ascending:false}).limit(20);
+  });
   if(!data||!data.length){el.innerHTML='<div class="empty" style="padding:14px;font-size:11px">No entries yet.</div>';return}
   el.innerHTML=data.map(e=>`<div class="rb-entry"><div class="rb-lap">L${e.lap_number||'\u2014'}</div><div class="rb-content"><div class="rb-headline">${e.headline||''}</div><div class="rb-body">${e.body||''}</div></div></div>`).join('');
 }
