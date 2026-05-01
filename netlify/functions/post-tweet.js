@@ -45,17 +45,46 @@ export default async (req, context) => {
 
     // ── 1. Pick next approved tweet (with live race priority) ──
     // PostgREST `or=(…)` doesn't safely accept ISO timestamps because it
-    // splits clauses on `.` — earlier the OR with scheduled_post_at.lte was
-    // dropping every row. Pull all approved rows, then filter scheduling in
-    // JS where parsing is unambiguous.
-    const rawQueue = await sb('tweets?status=eq.approved&order=created_at.asc&limit=20');
-    console.log('[post-tweet] Raw approved rows:', rawQueue.length, 'ids:', rawQueue.map(t => `${t.id}(sched=${t.scheduled_post_at || 'null'})`).join(','));
+    // splits clauses on `.` — earlier that broke pickup entirely. Pull all
+    // approved rows then filter scheduling + staleness in JS.
+    const rawQueue = await sb('tweets?status=eq.approved&order=created_at.asc&limit=50');
+    console.log('[post-tweet] Raw approved rows:', rawQueue.length, 'ids:', rawQueue.map(t => `${t.id}(sched=${t.scheduled_post_at || 'null'},type=${t.tweet_type || 'social'},age=${Math.round((Date.now() - new Date(t.created_at).getTime())/3600000)}h)`).join(','));
     const now = new Date();
-    const queue = rawQueue.filter(t => !t.scheduled_post_at || new Date(t.scheduled_post_at) <= now);
-    console.log('[post-tweet] Ready after scheduling filter:', queue.length);
+
+    // Promo / scheduled / countdown tweets expire after 6h — they're tied to
+    // a moment in time and reading them later is worse than not posting.
+    // live_race and article tweets never expire (results / evergreen).
+    const STALE_WINDOW_MS = 6 * 3600 * 1000;
+    const STALE_EXEMPT = new Set(['live_race', 'article']);
+    const stale = [], queue = [], future = [];
+    for (const t of rawQueue) {
+      if (t.scheduled_post_at && new Date(t.scheduled_post_at) > now) { future.push(t); continue; }
+      const type = t.tweet_type || 'social';
+      const ageMs = Date.now() - new Date(t.created_at).getTime();
+      if (!STALE_EXEMPT.has(type) && ageMs > STALE_WINDOW_MS) {
+        stale.push({ id: t.id, type, ageHours: Math.round(ageMs / 3600000) });
+        continue;
+      }
+      queue.push(t);
+    }
+    console.log('[post-tweet] After filter — ready:', queue.length, 'stale:', stale.length, 'future-scheduled:', future.length);
+
+    // Mark stale rows failed so they stop showing up next tick. Best-effort —
+    // any individual PATCH failure doesn't stop the rest of the function.
+    for (const s of stale) {
+      try {
+        await sb(`tweets?id=eq.${s.id}`, 'PATCH', {
+          status: 'failed',
+          error_detail: `Auto-expired ${s.type} tweet at age ${s.ageHours}h (>6h staleness window for non-live_race/article types)`,
+        });
+      } catch (e) {
+        console.warn('[post-tweet] stale-fail PATCH error for', s.id, e.message);
+      }
+    }
+
     if (!queue.length) {
-      await logSync('post-tweet', 'success', 0, `No approved tweets ready (raw=${rawQueue.length})`, Date.now() - start);
-      return json({ ok: true, posted: 0 });
+      await logSync('post-tweet', 'success', 0, `No approved tweets ready (raw=${rawQueue.length}, stale=${stale.length}, future=${future.length})`, Date.now() - start);
+      return json({ ok: true, posted: 0, stale_expired: stale.length });
     }
     queue.sort((a, b) => {
       const aLive = a.tweet_type === 'live_race' ? 0 : 1;
