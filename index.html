@@ -1976,7 +1976,7 @@ async function fetchLive(){
       sbq(s=>{let q=s.from('race_control').select('*');if(sessKey)q=q.eq('session_key',sessKey);return q.order('date',{ascending:false}).limit(12)}),
       sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
       sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
-      sbq(s=>{const k=S.liveSession?.session_key;let q=s.from('car_locations_latest').select('driver_number,x,y,date');if(k!=null)q=q.eq('session_key',k);return q.limit(50)}),
+      sbq(s=>{const k=S.liveSession?.session_key;if(k==null)return{data:null,error:null};return s.rpc('car_locations_latest',{p_session_key:Number(k)})}),
       sbq(s=>s.from('lap_times').select('driver_number,st_speed,lap_number').not('st_speed','is',null).order('st_speed',{ascending:false}).limit(100)),
       sbq(s=>s.from('pit_stops').select('driver_number,lap_number,date,stop_duration').order('date',{ascending:false}).limit(200)),
     ]);
