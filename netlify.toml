@@ -34,6 +34,10 @@
   schedule = "*/2 * * * *"
   timeout = 30
 
+[functions.fetch-locations]
+  schedule = "* * * * *"
+  timeout = 30
+
 [functions.fetch-race-control]
   schedule = "*/2 * * * *"
   timeout = 30
