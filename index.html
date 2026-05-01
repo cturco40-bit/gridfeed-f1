@@ -761,7 +761,7 @@ const SCH=[
   {r:3,n:'Japanese Grand Prix',c:'Suzuka',d:'2026-03-29',dl:'Mar 27\u201329',fl:'\u{1F1EF}\u{1F1F5}',sp:0,w:'Kimi Antonelli',st:'done'},
   {r:0,n:'Bahrain Grand Prix',c:'Bahrain',d:'2026-04-12',dl:'Apr 12',fl:'\u{1F1E7}\u{1F1ED}',sp:0,w:null,st:'can'},
   {r:0,n:'Saudi Arabian Grand Prix',c:'Jeddah',d:'2026-04-19',dl:'Apr 19',fl:'\u{1F1F8}\u{1F1E6}',sp:0,w:null,st:'can'},
-  {r:4,n:'Miami Grand Prix',c:'Miami Autodrome',d:'2026-05-01',dl:'May 1\u20133',fl:'\u{1F1FA}\u{1F1F8}',sp:1,w:null,st:'up'},
+  {r:4,n:'Miami Grand Prix',c:'Miami Autodrome',d:'2026-05-03',dl:'May 1\u20133',fl:'\u{1F1FA}\u{1F1F8}',sp:1,w:null,st:'active'},
   {r:5,n:'Canadian Grand Prix',c:'Gilles Villeneuve',d:'2026-05-24',dl:'May 22\u201324',fl:'\u{1F1E8}\u{1F1E6}',sp:1,w:null,st:'up'},
   {r:6,n:'Monaco Grand Prix',c:'Monaco',d:'2026-06-07',dl:'Jun 5\u20137',fl:'\u{1F1F2}\u{1F1E8}',sp:0,w:null,st:'up'},
   {r:7,n:'Barcelona-Catalunya GP',c:'Catalunya',d:'2026-06-14',dl:'Jun 12\u201314',fl:'\u{1F1EA}\u{1F1F8}',sp:0,w:null,st:'up'},
@@ -813,7 +813,21 @@ document.addEventListener('click',e=>{
 },true);
 
 /* ═══ DETECT NEXT RACE ═══ */
-function detectNR(){const now=new Date();S.nr=SCH.find(r=>r.st!=='can'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop()}
+// Priority: explicit 'active' tag → race whose weekend window covers today
+// → earliest upcoming by date. The window fallback means we still surface
+// the right race when SCH hasn't been hand-tagged for the current weekend.
+function detectNR(){
+  const now=new Date(),day=864e5;
+  const tagged=SCH.find(r=>r.st==='active');
+  if(tagged){S.nr=tagged;return}
+  const inWindow=SCH.find(r=>{
+    if(r.st==='can'||r.st==='done')return false;
+    const rd=new Date(r.d).getTime();
+    return now.getTime()>=rd-3*day&&now.getTime()<=rd+1*day;
+  });
+  if(inWindow){S.nr=inWindow;return}
+  S.nr=SCH.find(r=>r.st==='up'&&new Date(r.d)>now)||SCH.filter(r=>r.st!=='can').pop();
+}
 
 // Approximate session times derived from race weekend layout (Option B in plan).
 // Race day `r.d` is treated as Sunday race at 14:00 UTC; other sessions offset
@@ -934,7 +948,7 @@ async function loadPicks(){
 function renderSched(){
   const card=document.getElementById('homeSched');
   const done=SCH.filter(r=>r.st==='done');
-  const up=SCH.filter(r=>r.st==='up').slice(0,2);
+  const up=SCH.filter(r=>r.st==='active'||r.st==='up').slice(0,2);
   const rows=[...done,...up];
   const rowsHtml=rows.map(r=>{
     const isDone=r.st==='done',isNext=S.nr?.r===r.r;
@@ -1029,7 +1043,7 @@ function renderST(id,entries){
 function initSched(){
   const el=document.getElementById('schedList');let nm=false;
   el.innerHTML=SCH.map(r=>{
-    const isCan=r.st==='can',isDone=r.st==='done',isNext=!nm&&r.st==='up'?(nm=true):false;
+    const isCan=r.st==='can',isDone=r.st==='done',isNext=!nm&&(r.st==='active'||r.st==='up')?(nm=true):false;
     const circSlug=CIRC_MAP[r.r];
     const cirHtml=circSlug&&!isCan?`<div class="sch-cir" style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();showCircuit('${circSlug}')">${r.c} \u2192</div>`:`<div class="sch-cir">${r.c}</div>`;
     const histLink=!isCan?`<div style="font-size:10px;color:var(--accent);margin-top:4px;cursor:pointer" onclick="event.stopPropagation();findHistRace('${(r.n||'').replace(/'/g,'\\\'')}',2025)">View 2025 result \u2192</div>`:'';
