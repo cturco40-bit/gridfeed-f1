@@ -99,25 +99,57 @@ export async function fetchOpenF1(path, ms) {
   return fetchWT(url, { headers: { Authorization: `Bearer ${token}` } }, ms || 12000);
 }
 
+// Diagnostic note: errors here used to be swallowed (catch {return null})
+// which made auth failures look like "no sessions". We now log everything
+// so issues show up in the Netlify function logs.
 export async function getLatestSession() {
+  // Primary: ?session_key=latest returns OpenF1's currently-flagged latest
+  // session regardless of year — robust against year=2026 filter quirks.
+  try {
+    const res = await fetchOpenF1('/v1/sessions?session_key=latest');
+    if (res.ok) {
+      const arr = await res.json();
+      console.log('[OpenF1] /v1/sessions?session_key=latest →', JSON.stringify(arr));
+      if (Array.isArray(arr) && arr.length) {
+        const s = arr[0];
+        if (!isCancelledCircuit(s)) {
+          const now = Date.now();
+          const st = s.date_start ? new Date(s.date_start).getTime() : 0;
+          const en = s.date_end ? new Date(s.date_end).getTime() : Infinity;
+          const isLive = st <= now && now <= en;
+          return { ...s, isLive };
+        }
+      }
+    } else {
+      console.warn('[OpenF1] /v1/sessions?session_key=latest HTTP', res.status);
+    }
+  } catch (e) {
+    console.error('[getLatestSession] latest probe failed:', e.message);
+  }
+  // Fallback: scan year=2026 for a currently-running or most-recently-ended session
   try {
     const res = await fetchOpenF1('/v1/sessions?year=2026');
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn('[OpenF1] /v1/sessions?year=2026 HTTP', res.status);
+      return null;
+    }
     const sessions = await res.json();
+    console.log('[OpenF1] /v1/sessions?year=2026 count:', sessions?.length, 'sample:', sessions?.[0] ? JSON.stringify(sessions[0]) : 'none');
     if (!sessions?.length) return null;
     const now = Date.now();
-    // Filter out cancelled circuits
     const valid = sessions.filter(s => !isCancelledCircuit(s));
-    // Prefer live session
     const live = valid.find(s => {
       const st = new Date(s.date_start).getTime(), en = s.date_end ? new Date(s.date_end).getTime() : Infinity;
       return st <= now && now <= en;
     });
     if (live) return { ...live, isLive: true };
-    // Most recent ended
-    const ended = valid.filter(s => s.date_end && new Date(s.date_end).getTime() < now).sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
+    const ended = valid.filter(s => s.date_end && new Date(s.date_end).getTime() < now)
+      .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
     return ended[0] ? { ...ended[0], isLive: false } : null;
-  } catch { return null; }
+  } catch (e) {
+    console.error('[getLatestSession] year=2026 fallback failed:', e.message);
+    return null;
+  }
 }
 
 export const SESSION_TYPE_MAP = {

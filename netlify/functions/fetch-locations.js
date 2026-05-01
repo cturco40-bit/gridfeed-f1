@@ -15,7 +15,10 @@ export default async (req, context) => {
   try {
     const session = await getLatestSession();
     if (!session?.isLive) {
-      await logSync('fetch-locations', 'success', 0, session ? `Session ${session.session_name} not live` : 'No 2026 sessions', Date.now() - start);
+      const reason = !session
+        ? 'getLatestSession returned null — check function logs for the OpenF1 response (likely auth or empty sessions feed)'
+        : `Session ${session.session_name} (key=${session.session_key}) not live yet — starts ${session.date_start}`;
+      await logSync('fetch-locations', 'success', 0, reason, Date.now() - start);
       return json({ ok: true, totalRecords: 0, reason: 'not_live' });
     }
 
