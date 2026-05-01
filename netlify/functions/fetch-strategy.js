@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
+import { sb, logSync, json, getLatestSession, fetchOpenF1 } from './lib/shared.js';
 
 export default async (req, context) => {
   const start = Date.now();
@@ -10,9 +10,9 @@ export default async (req, context) => {
     }
 
     const [stintRes, pitRes, drvRes] = await Promise.all([
-      fetchWT(`https://api.openf1.org/v1/stints?session_key=${session.session_key}`),
-      fetchWT(`https://api.openf1.org/v1/pit?session_key=${session.session_key}`).catch(() => ({ ok: false })),
-      fetchWT(`https://api.openf1.org/v1/drivers?session_key=${session.session_key}`).catch(() => ({ ok: false })),
+      fetchOpenF1(`/v1/stints?session_key=${session.session_key}`),
+      fetchOpenF1(`/v1/pit?session_key=${session.session_key}`).catch(() => ({ ok: false })),
+      fetchOpenF1(`/v1/drivers?session_key=${session.session_key}`).catch(() => ({ ok: false })),
     ]);
 
     if (!stintRes.ok) {

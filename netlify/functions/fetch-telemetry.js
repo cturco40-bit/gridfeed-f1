@@ -1,4 +1,4 @@
-import { fetchWT, logSync, json } from './lib/shared.js';
+import { logSync, json, fetchOpenF1 } from './lib/shared.js';
 
 /* Fetch telemetry for a driver's fastest personal-best lap in a given session.
  * Called on-demand from the frontend. NOT scheduled.
@@ -20,9 +20,9 @@ export default async (req) => {
     }
 
     // 1. Get all personal-best laps for this driver in this session
-    const lapsRes = await fetchWT(
-      `https://api.openf1.org/v1/laps?session_key=${sessionKey}&driver_number=${driverNumber}&is_pit_out_lap=false`,
-      {}, 10000
+    const lapsRes = await fetchOpenF1(
+      `/v1/laps?session_key=${sessionKey}&driver_number=${driverNumber}&is_pit_out_lap=false`,
+      10000
     );
     if (!lapsRes.ok) throw new Error(`Laps API ${lapsRes.status}`);
     const laps = await lapsRes.json();
@@ -42,8 +42,8 @@ export default async (req) => {
     const lapEnd = new Date(new Date(fastestLap.date_start).getTime() + (fastestLap.lap_duration * 1000)).toISOString();
 
     // 4. Fetch car_data (telemetry) for that window
-    const telUrl = `https://api.openf1.org/v1/car_data?session_key=${sessionKey}&driver_number=${driverNumber}&date>=${encodeURIComponent(lapStart)}&date<=${encodeURIComponent(lapEnd)}`;
-    const telRes = await fetchWT(telUrl, {}, 20000);
+    const telPath = `/v1/car_data?session_key=${sessionKey}&driver_number=${driverNumber}&date>=${encodeURIComponent(lapStart)}&date<=${encodeURIComponent(lapEnd)}`;
+    const telRes = await fetchOpenF1(telPath, 20000);
     if (!telRes.ok) throw new Error(`Telemetry API ${telRes.status}`);
     const telemetry = await telRes.json();
 

@@ -62,9 +62,46 @@ function isCancelledCircuit(session) {
 
 export { isCancelledCircuit };
 
+// OpenF1 introduced bearer auth on /v1/* in 2026. Token is cached in module
+// scope so each function instance only authenticates once per ~hour.
+let _of1Token = null;
+let _of1Expiry = 0;
+
+export async function getOpenF1Token() {
+  const now = Date.now();
+  if (_of1Token && _of1Expiry > now + 30000) return _of1Token;
+  const username = process.env.OPENF1_USERNAME;
+  const password = process.env.OPENF1_PASSWORD;
+  if (!username || !password) throw new Error('OPENF1_USERNAME / OPENF1_PASSWORD env vars required');
+  const body = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const res = await fetchWT('https://api.openf1.org/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  }, 10000);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`OpenF1 auth HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  if (!j.access_token) throw new Error('OpenF1 token response missing access_token');
+  _of1Token = j.access_token;
+  _of1Expiry = now + ((j.expires_in || 3600) * 1000);
+  return _of1Token;
+}
+
+// Authenticated GET against OpenF1. Pass a path like '/v1/sessions?year=2026'
+// or a full https URL. Returns the raw Response so callers keep using
+// res.ok / res.json() exactly like fetchWT.
+export async function fetchOpenF1(path, ms) {
+  const token = await getOpenF1Token();
+  const url = path.startsWith('http') ? path : `https://api.openf1.org${path}`;
+  return fetchWT(url, { headers: { Authorization: `Bearer ${token}` } }, ms || 12000);
+}
+
 export async function getLatestSession() {
   try {
-    const res = await fetchWT('https://api.openf1.org/v1/sessions?year=2026');
+    const res = await fetchOpenF1('/v1/sessions?year=2026');
     if (!res.ok) return null;
     const sessions = await res.json();
     if (!sessions?.length) return null;

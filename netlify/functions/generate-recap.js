@@ -1,4 +1,4 @@
-import { sb, fetchWT, logSync, json } from './lib/shared.js';
+import { sb, fetchWT, logSync, json, fetchOpenF1 } from './lib/shared.js';
 
 // Session type → tag + auto-publish flag
 const SESSION_CONFIG = {
@@ -27,9 +27,9 @@ async function getCompletedSession() {
   try {
     const windowStart = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const windowEnd = new Date().toISOString();
-    const res = await fetchWT(
-      `https://api.openf1.org/v1/sessions?date_end>=${windowStart}&date_end<=${windowEnd}`,
-      {}, 10000
+    const res = await fetchOpenF1(
+      `/v1/sessions?date_end>=${windowStart}&date_end<=${windowEnd}`,
+      10000
     );
     if (!res.ok) return null;
     const sessions = await res.json();
@@ -41,8 +41,8 @@ async function getCompletedSession() {
 async function getResults(sessionKey, sessionType) {
   try {
     const [posRes, drvRes] = await Promise.all([
-      fetchWT(`https://api.openf1.org/v1/position?session_key=${sessionKey}`, {}, 10000),
-      fetchWT(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`, {}, 10000),
+      fetchOpenF1(`/v1/position?session_key=${sessionKey}`, 10000),
+      fetchOpenF1(`/v1/drivers?session_key=${sessionKey}`, 10000),
     ]);
     if (!posRes.ok || !drvRes.ok) return null;
     const positions = await posRes.json();
@@ -80,9 +80,9 @@ async function getResults(sessionKey, sessionType) {
     let fastestLap = null;
     if (sessionType === 'Race' || sessionType === 'Sprint') {
       try {
-        const lapRes = await fetchWT(
-          `https://api.openf1.org/v1/laps?session_key=${sessionKey}&is_pit_out_lap=false`,
-          {}, 10000
+        const lapRes = await fetchOpenF1(
+          `/v1/laps?session_key=${sessionKey}&is_pit_out_lap=false`,
+          10000
         );
         const laps = await lapRes.json();
         const fastest = (laps || []).reduce(
@@ -101,9 +101,9 @@ async function getResults(sessionKey, sessionType) {
     // Race-control incidents
     let incidents = [];
     try {
-      const rcRes = await fetchWT(
-        `https://api.openf1.org/v1/race_control?session_key=${sessionKey}`,
-        {}, 10000
+      const rcRes = await fetchOpenF1(
+        `/v1/race_control?session_key=${sessionKey}`,
+        10000
       );
       const rc = await rcRes.json();
       incidents = (rc || [])

@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
+import { fetchWT, sb, logSync, json, getLatestSession, fetchOpenF1 } from './lib/shared.js';
 
 // Live tweet generation moved to live-race-tweets.js (approval flow).
 // This function now only mirrors race_control data into our DB.
@@ -12,7 +12,7 @@ export default async (req, context) => {
       return json({ ok: true, records: 0 });
     }
 
-    const res = await fetchWT(`https://api.openf1.org/v1/race_control?session_key=${session.session_key}`);
+    const res = await fetchOpenF1(`/v1/race_control?session_key=${session.session_key}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const messages = await res.json();
     if (!messages?.length) {

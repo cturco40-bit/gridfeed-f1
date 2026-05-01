@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession } from './lib/shared.js';
+import { sb, logSync, json, getLatestSession, fetchOpenF1 } from './lib/shared.js';
 
 export default async (req, context) => {
   const start = Date.now();
@@ -9,7 +9,7 @@ export default async (req, context) => {
       return json({ ok: true, records: 0 });
     }
 
-    const res = await fetchWT(`https://api.openf1.org/v1/weather?session_key=${session.session_key}`);
+    const res = await fetchOpenF1(`/v1/weather?session_key=${session.session_key}`);
     if (!res.ok) {
       await logSync('fetch-weather', 'success', 0, `No weather available (HTTP ${res.status}) for session ${session.session_key}`, Date.now() - start);
       return json({ ok: true, records: 0, reason: `HTTP ${res.status}` });

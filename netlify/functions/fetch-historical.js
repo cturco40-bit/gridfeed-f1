@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json } from './lib/shared.js';
+import { fetchWT, sb, logSync, json, fetchOpenF1 } from './lib/shared.js';
 
 const COMPLETED_RACES = [
   { name: 'Australian Grand Prix', circuit: 'albert_park', round: 1 },
@@ -11,7 +11,7 @@ export default async (req, context) => {
   let totalRecords = 0;
   try {
     // Fetch 2026 completed race data from OpenF1
-    const sessRes = await fetchWT('https://api.openf1.org/v1/sessions?year=2026&session_name=Race');
+    const sessRes = await fetchOpenF1('/v1/sessions?year=2026&session_name=Race');
     const sessions = sessRes.ok ? await sessRes.json() : [];
 
     for (const sess of sessions) {
@@ -22,10 +22,10 @@ export default async (req, context) => {
       if (existing.length) continue;
 
       const [posRes, drvRes, stintRes, pitRes] = await Promise.all([
-        fetchWT(`https://api.openf1.org/v1/position?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
-        fetchWT(`https://api.openf1.org/v1/drivers?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
-        fetchWT(`https://api.openf1.org/v1/stints?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
-        fetchWT(`https://api.openf1.org/v1/pit?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
+        fetchOpenF1(`/v1/position?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
+        fetchOpenF1(`/v1/drivers?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
+        fetchOpenF1(`/v1/stints?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
+        fetchOpenF1(`/v1/pit?session_key=${sess.session_key}`).catch(() => ({ ok: false })),
       ]);
 
       const positions = posRes.ok ? await posRes.json() : [];

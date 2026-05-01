@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession, matchRaceId } from './lib/shared.js';
+import { sb, logSync, json, getLatestSession, matchRaceId, fetchOpenF1 } from './lib/shared.js';
 
 // Pulls car X/Y positions from OpenF1 /v1/location during a live session and
 // inserts new points into car_locations. Schedule on a 1-min cron during race
@@ -24,8 +24,8 @@ export default async (req, context) => {
 
     // 75s window covers a 60s cron cadence with 15s slack for cron jitter.
     const since = new Date(Date.now() - 75 * 1000).toISOString();
-    const url = `https://api.openf1.org/v1/location?session_key=${session.session_key}&date>=${encodeURIComponent(since)}`;
-    const res = await fetchWT(url, {}, 20000);
+    const path = `/v1/location?session_key=${session.session_key}&date>=${encodeURIComponent(since)}`;
+    const res = await fetchOpenF1(path, 20000);
     if (!res.ok) throw new Error(`OpenF1 location HTTP ${res.status}`);
     const locs = await res.json();
     if (!Array.isArray(locs) || !locs.length) {

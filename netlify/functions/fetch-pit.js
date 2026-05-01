@@ -1,4 +1,4 @@
-import { fetchWT, sb, logSync, json, getLatestSession, matchRaceId, isCancelledCircuit } from './lib/shared.js';
+import { sb, logSync, json, getLatestSession, matchRaceId, isCancelledCircuit, fetchOpenF1 } from './lib/shared.js';
 
 export default async (req, context) => {
   const start = Date.now();
@@ -7,7 +7,7 @@ export default async (req, context) => {
     if (!session?.isLive) { await logSync('fetch-pit', 'success', 0, 'No live session', Date.now() - start); return json({ ok: true, records: 0 }); }
     if (isCancelledCircuit(session)) { return json({ ok: true, skipped: 'Cancelled circuit' }); }
 
-    const res = await fetchWT(`https://api.openf1.org/v1/pit?session_key=${session.session_key}`);
+    const res = await fetchOpenF1(`/v1/pit?session_key=${session.session_key}`);
     if (!res.ok) { await logSync('fetch-pit', 'success', 0, `HTTP ${res.status}`, Date.now() - start); return json({ ok: true, records: 0 }); }
     const data = await res.json();
     if (!data?.length) { await logSync('fetch-pit', 'success', 0, 'No data', Date.now() - start); return json({ ok: true, records: 0 }); }

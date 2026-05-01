@@ -1,4 +1,4 @@
-import { fetchWT, logSync, json } from './lib/shared.js';
+import { logSync, json, fetchOpenF1 } from './lib/shared.js';
 
 /* Return the list of completed 2026 sessions (qualifying + race)
  * so the frontend can populate the telemetry session dropdown.
@@ -6,7 +6,7 @@ import { fetchWT, logSync, json } from './lib/shared.js';
 export default async (req) => {
   const start = Date.now();
   try {
-    const res = await fetchWT('https://api.openf1.org/v1/sessions?year=2026', {}, 10000);
+    const res = await fetchOpenF1('/v1/sessions?year=2026', 10000);
     if (!res.ok) throw new Error(`Sessions API ${res.status}`);
     const sessions = await res.json();
     const now = Date.now();
