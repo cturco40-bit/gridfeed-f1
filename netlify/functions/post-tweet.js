@@ -44,10 +44,17 @@ export default async (req, context) => {
     const dayPosted = await sb(`tweets?status=eq.posted&posted_at=gt.${dayAgo}&select=id,posted_at,tweet_text,tweet_type`);
 
     // ── 1. Pick next approved tweet (with live race priority) ──
-    const queue = await sb(`tweets?status=eq.approved&or=(scheduled_post_at.is.null,scheduled_post_at.lte.${new Date().toISOString()})&order=created_at.asc&limit=5`);
-    console.log('[post-tweet] Found approved tweets:', queue.length, 'ids:', queue.map(t => t.id).join(','));
+    // PostgREST `or=(…)` doesn't safely accept ISO timestamps because it
+    // splits clauses on `.` — earlier the OR with scheduled_post_at.lte was
+    // dropping every row. Pull all approved rows, then filter scheduling in
+    // JS where parsing is unambiguous.
+    const rawQueue = await sb('tweets?status=eq.approved&order=created_at.asc&limit=20');
+    console.log('[post-tweet] Raw approved rows:', rawQueue.length, 'ids:', rawQueue.map(t => `${t.id}(sched=${t.scheduled_post_at || 'null'})`).join(','));
+    const now = new Date();
+    const queue = rawQueue.filter(t => !t.scheduled_post_at || new Date(t.scheduled_post_at) <= now);
+    console.log('[post-tweet] Ready after scheduling filter:', queue.length);
     if (!queue.length) {
-      await logSync('post-tweet', 'success', 0, 'No approved tweets ready', Date.now() - start);
+      await logSync('post-tweet', 'success', 0, `No approved tweets ready (raw=${rawQueue.length})`, Date.now() - start);
       return json({ ok: true, posted: 0 });
     }
     queue.sort((a, b) => {
@@ -86,12 +93,7 @@ export default async (req, context) => {
       }
     }
 
-    // ── 5. Stale check ──
-    if (Date.now() - new Date(tweet.created_at).getTime() > TWENTY_FOUR_HOURS) {
-      await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
-      await logSync('post-tweet', 'success', 0, 'Skipped stale tweet', Date.now() - start);
-      return json({ ok: true, posted: 0, reason: 'stale' });
-    }
+    // (5. Stale check removed — post approved tweets regardless of age)
 
     // ── 6. Near-duplicate guard against last 3 posted tweets ──
     const recentPosted = dayPosted.slice(0, 3);
