@@ -1769,16 +1769,22 @@ function renderRaceContent(){
 /* ═══ LIVE SESSION HUB ═══ */
 S.livePoller=null;S.liveLB=[];S.liveRC=[];S.liveStints={};S.liveWx=null;S.prevPos={};S.selDrv=null;S.flNum=null;S.trackBuilt=false;S.livePits={};S.carDataHasOvertake=null;
 
+// Source of truth for the LIVE indicator is /live-session, which wraps
+// OpenF1's getLatestSession. That auto-switches across FP1/SQ/Sprint/Q/Race;
+// races.status only flips on Sunday so we can't rely on it during practice.
 async function checkLive(){
   try{
-    const{data:races}=await sbq(s=>s.from('races').select('*').eq('season',2026).eq('status','in_progress').limit(1));
-    const wasLive=S.isLive;S.isLive=!!(races&&races.length);
+    const r=await fetchWT('/.netlify/functions/live-session',{},8000);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const live=await r.json();
+    S.isLive=!!live.isLive;
     if(S.isLive){
-      S.liveSession=races[0];
+      S.liveSession=live;S.liveSessType=live.session_type||'race';
       document.getElementById('liveBadge')?.classList.add('vis');
       document.getElementById('liveState').style.display='block';
       document.getElementById('nonLive').style.display='none';
-      document.getElementById('liveSessName').textContent=races[0].name+' \u2014 Race';
+      const meeting=live.meeting_name||'';const sn=live.session_name||'Live';
+      document.getElementById('liveSessName').textContent=(meeting?meeting+' \u2014 ':'')+sn;
       document.querySelector('meta[name=theme-color]')?.setAttribute('content','#E8002D');
       if(!S.livePoller){S.livePoller=setInterval(fetchLive,8000);fetchLive()}
     }else{
@@ -1793,9 +1799,11 @@ async function checkLive(){
 
 async function fetchLive(){
   try{
+    const sessType=S.liveSessType||'race';
+    const sessKey=S.liveSession?.session_key?String(S.liveSession.session_key):null;
     const[lb,rc,st,wx,loc,sp,pit]=await Promise.allSettled([
-      sbq(s=>s.from('leaderboard').select('*').eq('session_type','race').order('position',{ascending:true}).limit(22)),
-      sbq(s=>s.from('race_control').select('*').order('date',{ascending:false}).limit(12)),
+      sbq(s=>s.from('leaderboard').select('*').eq('session_type',sessType).order('position',{ascending:true}).limit(22)),
+      sbq(s=>{let q=s.from('race_control').select('*');if(sessKey)q=q.eq('session_key',sessKey);return q.order('date',{ascending:false}).limit(12)}),
       sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
       sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
       sbq(s=>s.from('car_locations').select('driver_number,x,y,date').order('date',{ascending:false}).limit(500)),
