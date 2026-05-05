@@ -12,7 +12,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
 <title>GridFeed — Your Daily F1 Fix</title>
-<meta name="description" content="Live F1 timing, betting picks, race results and original analysis. Every race weekend. Free."/>
+<meta name="description" content="Live F1 timing, race results and original analysis. Every race weekend. Free."/>
 <meta name="theme-color" content="#1B1F2A" id="themeColor"/>
 <link rel="icon" type="image/png" href="/favicon.png" sizes="32x32"/>
 <link rel="shortcut icon" href="/favicon.ico"/>
@@ -25,7 +25,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png"/>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="GridFeed — Your Daily F1 Fix"/>
-<meta property="og:description" content="Live F1 timing, betting picks, race results and original analysis. Every race weekend."/>
+<meta property="og:description" content="Live F1 timing, race results and original analysis. Every race weekend."/>
 <meta property="og:url" content="https://gridfeed.co"/>
 <meta property="og:site_name" content="GridFeed"/>
 <meta property="og:image" content="https://gridfeed.co/og-image.png"/>
@@ -35,7 +35,7 @@
 <meta name="twitter:site" content="@GridFeedF1"/>
 <meta name="twitter:title" content="GridFeed — Your Daily F1 Fix"/>
 <meta name="twitter:image" content="https://gridfeed.co/og-image.png"/>
-<meta name="twitter:description" content="Live F1 timing, betting picks, race results and original analysis. Every race weekend."/>
+<meta name="twitter:description" content="Live F1 timing, race results and original analysis. Every race weekend."/>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"GridFeed","url":"https://gridfeed.co","publisher":{"@type":"NewsMediaOrganization","name":"GridFeed","url":"https://gridfeed.co"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -489,7 +489,6 @@ body{transition:background-color .2s,color .2s}
   <button class="tn act" data-t="home">Home</button>
   <button class="tn" data-t="results">Live</button>
   <button class="tn" data-t="news">News</button>
-  <button class="tn" data-t="picks">Picks</button>
   <button class="tn" data-t="standings">Standings</button>
   <button class="tn" data-t="schedule">Schedule</button>
   <div class="session-chip" id="sessChip" style="display:none"><span class="chip-label">NEXT</span><span class="chip-sess" id="sessChipName">&mdash;</span><span class="chip-time" id="sessChipTime">&mdash;</span></div>
@@ -508,9 +507,6 @@ body{transition:background-color .2s,color .2s}
       <div style="height:12px"></div>
       <div class="slabel">Championship</div>
       <div class="card" id="homeMini"><div class="card-body"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:80%"></div></div></div></div>
-      <div style="height:12px"></div>
-      <div class="slabel">Quick Picks</div>
-      <div id="homePicks"></div>
     </div>
     <div class="home-main">
       <div class="slabel">Latest</div>
@@ -520,13 +516,13 @@ body{transition:background-color .2s,color .2s}
   <div class="slabel" style="margin-top:20px">Tools</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">
     <button class="card tool-card" onclick="go('compare')" aria-label="Driver comparison tool"><div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:6px">VS</div><div style="font-size:11px;font-weight:700">Compare</div><div style="font-size:9px;color:var(--muted)">Driver vs driver</div></button>
-    <button class="card tool-card" onclick="go('predict')" aria-label="Predict race podium"><div style="font-size:22px;font-weight:900;color:var(--gold);margin-bottom:6px">?</div><div style="font-size:11px;font-weight:700">Predict</div><div style="font-size:9px;color:var(--muted)">Pick your podium</div></button>
+    <button class="card tool-card" onclick="go('predict')" aria-label="Predict race podium"><div style="font-size:22px;font-weight:900;color:var(--gold);margin-bottom:6px">?</div><div style="font-size:11px;font-weight:700">Predict</div><div style="font-size:9px;color:var(--muted)">Predict your podium</div></button>
     <button class="card tool-card" onclick="go('simulator')" aria-label="Championship simulator"><div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:6px">+/-</div><div style="font-size:11px;font-weight:700">Simulator</div><div style="font-size:9px;color:var(--muted)">What if?</div></button>
     <button class="card tool-card" onclick="go('telemetry');initTelemetry()" aria-label="Telemetry comparison"><div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:6px">&#8767;</div><div style="font-size:11px;font-weight:700">Telemetry</div><div style="font-size:9px;color:var(--muted)">Lap-by-lap traces</div></button>
     <button class="card tool-card" onclick="showHistory()" aria-label="Historical results archive"><div style="font-size:22px;font-weight:900;color:var(--accent);margin-bottom:6px">&boxbox;</div><div style="font-size:11px;font-weight:700">Archive</div><div style="font-size:9px;color:var(--muted)">2020\u20132025 results</div></button>
   </div>
   <div class="install-cta" id="installCta" style="display:none">
-    <div><h3>Get the GridFeed App</h3><p>Live timing, picks and news. Free. Add to home screen.</p></div>
+    <div><h3>Get the GridFeed App</h3><p>Live timing, news and analysis. Free. Add to home screen.</p></div>
     <button class="install-cta-btn" id="ctaInstall" onclick="triggerInstall()">Add to Home Screen</button>
   </div>
 </div>
@@ -586,13 +582,6 @@ body{transition:background-color .2s,color .2s}
   <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase">News</h2><div class="spacer"></div><span class="muted" id="newsCt"></span></div>
   <div class="stabs" id="newsTagBar" style="margin-bottom:12px"></div>
   <div id="newsArts"><div class="skel-row"><div class="skel"></div><div class="skel" style="width:70%"></div></div></div>
-</div>
-
-<!-- PICKS -->
-<div class="panel" id="p-picks">
-  <div class="flex-r mb-12"><h2 style="font-family:var(--head);font-size:24px;text-transform:uppercase" id="picksTitle">Race Picks</h2><div class="spacer"></div></div>
-  <div id="bRec" class="mb-16"></div>
-  <div class="picks-grid" id="picksGrid"><div class="empty">No picks yet.</div></div>
 </div>
 
 <!-- STANDINGS -->
@@ -689,7 +678,6 @@ body{transition:background-color .2s,color .2s}
   <button class="bn act" data-t="home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></button>
   <button class="bn" data-t="results"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Live</span></button>
   <button class="bn" data-t="news"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/></svg><span>News</span></button>
-  <button class="bn" data-t="picks"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Picks</span></button>
   <button class="bn" id="moreBtn" onclick="toggleMore()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg><span>More</span></button>
 </div></nav>
 
@@ -721,7 +709,7 @@ body{transition:background-color .2s,color .2s}
 
 <!-- INSTALL BANNER -->
 <div class="install-banner" id="installBanner">
-  <div class="ib-text"><strong>📱 Add GridFeed</strong><span>Live timing + picks. Free.</span></div>
+  <div class="ib-text"><strong>📱 Add GridFeed</strong><span>Live timing + news. Free.</span></div>
   <button class="ib-btn" id="installBtn">Add</button>
   <button class="ib-close" onclick="document.getElementById('installBanner').classList.remove('vis')">&times;</button>
 </div>
@@ -739,7 +727,7 @@ function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>
 const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
-const S={tab:'home',sess:'race',nf:'ALL',newsTagFilter:'ALL',arts:[],picks:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
+const S={tab:'home',sess:'race',nf:'ALL',newsTagFilter:'ALL',arts:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
 function tagCl(t){return{RACE:'tag-race',QUALIFYING:'tag-qual',BETTING:'tag-betting',PREVIEW:'tag-preview',ANALYSIS:'tag-analysis',BREAKING:'tag-breaking',RUMOUR:'tag-rumour',CHAMPIONSHIP:'tag-championship'}[t]||'tag-analysis'}
 // Reusable back-button markup for JS renders. Accepts an inline onclick
 // expression so callers can pass "go('standings')", "showHistory()", etc.
@@ -803,7 +791,7 @@ function go(t){
   // pathname) is dropped — otherwise a refresh after clicking Home would
   // re-route back into the article view via initRoute/checkHash.
   history.replaceState({tab:t},'','/?tab='+t);
-  if(t==='results')initRes();if(t==='news')initNews();if(t==='picks')initPicks();
+  if(t==='results')initRes();if(t==='news')initNews();
   if(t==='standings')initSt();if(t==='schedule')initSched();
   if(t==='compare')initCompare();if(t==='predict')initPredict();if(t==='simulator')initSim();if(t==='telemetry')initTelemetry();
   if(S._tapped)try{navigator.vibrate(10)}catch(e){}
@@ -1000,61 +988,24 @@ async function initHome(){
     <div onclick="go('standings')" style="margin-top:10px;padding:6px 2px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;text-align:right;letter-spacing:.5px">View all standings \u2192</div>
     <div id="heroCdBlock" style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)"></div></div>`;
   startHomeCountdown();
-  await Promise.all([loadArts(),loadPicks(),renderSched(),loadMini()]);
+  await Promise.all([loadArts(),renderSched(),loadMini()]);
 }
 
 async function loadArts(){
-  const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url,body').eq('status','published').order('published_at',{ascending:false}).limit(6));
-  S.arts=[...(data||[])];
+  // Pull more than we'll show so the BETTING-tag filter doesn't shrink the
+  // home feed below 6. Picks/betting feature is removed; legacy articles
+  // tagged BETTING from before the removal stay in the DB but are hidden.
+  const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url,body').eq('status','published').order('published_at',{ascending:false}).limit(15));
+  const filtered=(data||[]).filter(a=>!(a.tags||[]).some(t=>(t||'').toUpperCase()==='BETTING')).slice(0,6);
+  S.arts=[...filtered];
   const el=document.getElementById('homeArts');
-  if(!data?.length){el.innerHTML='<div class="empty">No articles yet.</div>';return}
-  const viewAll=data.length>=6?'<div onclick="go(\'news\')" style="text-align:center;padding:12px;font-size:12px;font-weight:700;color:var(--accent);cursor:pointer">View all articles \u2192</div>':'';
-  el.innerHTML='<div class="art-grid">'+data.map(a=>artCard(a)).join('')+'</div>'+viewAll;
+  if(!filtered.length){el.innerHTML='<div class="empty">No articles yet.</div>';return}
+  const viewAll=(data||[]).length>=15?'<div onclick="go(\'news\')" style="text-align:center;padding:12px;font-size:12px;font-weight:700;color:var(--accent);cursor:pointer">View all articles \u2192</div>':'';
+  el.innerHTML='<div class="art-grid">'+filtered.map(a=>artCard(a)).join('')+'</div>'+viewAll;
 }
 
 function readTime(body){if(!body)return'';const w=body.trim().split(/\s+/).filter(Boolean).length;if(!w)return'';return Math.max(1,Math.ceil(w/200))+' min read'}
 function artCard(a){const tag=(a.tags||['ANALYSIS'])[0];const tc=tagCl(tag);const img=a.image_url?`<div style="aspect-ratio:16/9;border-radius:8px 8px 0 0;margin:-16px -16px 10px;background:linear-gradient(180deg,rgba(0,0,0,0) 50%,var(--card) 100%),url('${a.image_url}') top/cover no-repeat;background-color:#12151E"></div>`:'';const rt=readTime(a.body);return`<div class="art-card" data-tag="${tc}" onclick="showArtView('${a.slug||a.id}')">${img}<div class="art-tag ${tc}">${tag}</div><div class="art-title">${a.title}</div><div class="art-by">${a.author||'GridFeed Staff'} \u00b7 ${tAgo(a.published_at)}${rt?' \u00b7 '+rt:''}</div></div>`}
-
-// Picks live ~5 days before the next race weekend — picks-empty states render
-// a live countdown so users know when odds arrive instead of seeing "No picks
-// yet." Date derived from the next race in SCH so this stays accurate without
-// per-weekend edits.
-function picksLiveAt(){
-  const next=SCH.find(r=>r.st==='active'||r.st==='up');
-  if(!next?.d)return Date.now()+86400000; // safe fallback: 1 day from now
-  return new Date(next.d).getTime()-5*86400000;
-}
-const PICKS_LIVE_AT=picksLiveAt();
-function picksCountdownHtml(id,compact){
-  const next=SCH.find(r=>r.st==='active'||r.st==='up');
-  const raceName=next?.n||'Next Race';
-  const dropDate=new Date(PICKS_LIVE_AT).toLocaleDateString('en-US',{month:'long',day:'numeric'});
-  const label=compact?'':`<div style="font-family:var(--head);font-size:18px;font-weight:900;text-transform:uppercase;margin-bottom:4px">${raceName} Picks</div><div style="font-size:11px;color:var(--muted);margin-bottom:12px">Available from ${dropDate} when odds go live</div>`;
-  return`<div class="card picks-cd" style="padding:16px;border-left:3px solid var(--accent);text-align:center">${label}<div class="hero-cd" style="justify-content:center" id="${id}"><div class="cd-u"><div class="cd-n" data-cd="d">--</div><div class="cd-l">Days</div></div><div class="cd-sep">:</div><div class="cd-u"><div class="cd-n" data-cd="h">--</div><div class="cd-l">Hrs</div></div><div class="cd-sep">:</div><div class="cd-u"><div class="cd-n" data-cd="m">--</div><div class="cd-l">Mins</div></div></div></div>`;
-}
-function startPicksCountdown(){
-  if(S._picksCdTimer)clearInterval(S._picksCdTimer);
-  const tick=()=>{
-    const nodes=document.querySelectorAll('[id="homePicksCd"],[id="picksGridCd"]');
-    if(!nodes.length){clearInterval(S._picksCdTimer);S._picksCdTimer=null;return}
-    const df=PICKS_LIVE_AT-Date.now();
-    if(df<=0){clearInterval(S._picksCdTimer);S._picksCdTimer=null;return}
-    const d=Math.floor(df/864e5),h=Math.floor(df%864e5/36e5),m=Math.floor(df%36e5/6e4);
-    nodes.forEach(n=>{
-      const dn=n.querySelector('[data-cd="d"]');if(dn)dn.textContent=String(d).padStart(2,'0');
-      const hn=n.querySelector('[data-cd="h"]');if(hn)hn.textContent=String(h).padStart(2,'0');
-      const mn=n.querySelector('[data-cd="m"]');if(mn)mn.textContent=String(m).padStart(2,'0');
-    });
-  };
-  tick();S._picksCdTimer=setInterval(tick,1000);
-}
-
-async function loadPicks(){
-  const{data}=await sbq(s=>s.from('betting_picks').select('*').eq('status','pending').not('locked_at','is',null).order('locked_at',{ascending:false}).limit(3));
-  const el=document.getElementById('homePicks');
-  if(!data?.length){el.innerHTML=picksCountdownHtml('homePicksCd',true);startPicksCountdown();return}
-  el.innerHTML=`<div class="card"><div class="card-body" style="padding:10px 14px">${data.map(p=>{const ab=p.driver_name?abbrByName(p.driver_name):'';return`<div ${ab?`data-drv="${ab}"`:''} style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="pk-type ${pkCl(p.pick_type)}" style="font-size:8px;padding:2px 6px">${p.pick_type}</span><span style="font-weight:600;font-size:12px;flex:1">${p.driver_name||''}</span><span style="font-family:var(--head);font-weight:700;color:var(--gold)">${p.odds||''}</span></div>`}).join('')}</div></div>`;
-}
 
 function renderSched(){
   const card=document.getElementById('homeSched');
@@ -1098,7 +1049,7 @@ async function initRes(){
 /* ═══ NEWS ═══ */
 const NEWS_TAGS=['ALL','RACE','QUALIFYING','PREVIEW','ANALYSIS','BREAKING','RUMOUR'];
 async function initNews(){
-  if(S.arts.length<7){const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url,body').eq('status','published').order('published_at',{ascending:false}).limit(30));S.arts=data||[]}
+  if(S.arts.length<7){const{data}=await sbq(s=>s.from('articles').select('id,title,slug,tags,author,published_at,source_url,image_url,body').eq('status','published').order('published_at',{ascending:false}).limit(40));S.arts=(data||[]).filter(a=>!(a.tags||[]).some(t=>(t||'').toUpperCase()==='BETTING'))}
   renderNews();
 }
 function setNewsFilter(tag){S.newsTagFilter=tag;renderNews()}
@@ -1109,18 +1060,6 @@ function renderNews(){
   const arts=f&&f!=='ALL'?S.arts.filter(a=>(a.tags||[]).includes(f)):S.arts;
   document.getElementById('newsCt').textContent=arts.length+' articles';
   document.getElementById('newsArts').innerHTML=arts.length?'<div class="art-grid">'+arts.map(a=>artCard(a)).join('')+'</div>':'<div class="empty">No articles.</div>';
-}
-
-/* ═══ PICKS ═══ */
-function pkCl(t){return{'BEST BET':'pk-bb',VALUE:'pk-v',LONGSHOT:'pk-l',FADE:'pk-f'}[t]||'pk-v'}
-async function initPicks(){
-  const[pr,rr]=await Promise.all([sbq(s=>s.from('betting_picks').select('*').eq('status','pending').not('locked_at','is',null).order('locked_at',{ascending:false})),sbq(s=>s.from('betting_record').select('*').order('created_at',{ascending:false}).limit(1))]);
-  S.picks=pr.data||[];
-  if(S.nr)document.getElementById('picksTitle').textContent=S.nr.n+' Picks';
-  const el=document.getElementById('picksGrid');
-  if(!S.picks.length){el.innerHTML='<div style="grid-column:1/-1">'+picksCountdownHtml('picksGridCd',false)+'</div>';startPicksCountdown();return}
-  el.innerHTML=S.picks.map(p=>{const ab=p.driver_name?abbrByName(p.driver_name):'';return`<div class="pk"><div class="pk-hd"><span class="pk-type ${pkCl(p.pick_type)}">${p.pick_type}</span><span class="pk-lock">\ud83d\udd12 Locked</span></div><div class="pk-bd"><div class="pk-drv" ${ab?`data-drv="${ab}"`:''}>${p.driver_name||''}</div><div class="pk-mkt">${p.market||''}</div><div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span class="pk-odds">${p.odds||''}</span>${p.edge?`<span class="pk-edge">+${Number(p.edge).toFixed(1)}%</span>`:''}</div><div class="pk-an">${p.analysis||''}</div></div></div>`}).join('');
-  const rec=rr.data?.[0];if(rec){const roi=rec.roi>=0?'+'+rec.roi+'%':rec.roi+'%';document.getElementById('bRec').innerHTML=`<div class="brec"><div class="brec-s"><div class="brec-n w">${rec.wins||0}</div><div class="brec-l">Wins</div></div><div class="brec-d"></div><div class="brec-s"><div class="brec-n l">${rec.losses||0}</div><div class="brec-l">Losses</div></div><div class="brec-d"></div><div class="brec-s"><div class="brec-n r">${roi}</div><div class="brec-l">ROI</div></div></div>`}
 }
 
 /* ═══ STANDINGS ═══ */
@@ -2167,7 +2106,7 @@ function initPredict(){
 function renderPredForm(){
   const el=document.getElementById('predictContent');if(!el)return;
   const opts=Object.keys(DSTATS).map(d=>`<option value="${d}">${d}</option>`).join('');
-  el.innerHTML=`<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Pick your ${(S.nr?.n||'next race')} podium. Lock before lights out.</div><div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px"><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:4px">P1 WINNER</div><select id="predP1" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:#C0C0C0;font-weight:700;margin-bottom:4px">P2</div><select id="predP2" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:#CD7F32;font-weight:700;margin-bottom:4px">P3</div><select id="predP3" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div></div><button onclick="lockPred()" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">Lock Predictions</button>`;
+  el.innerHTML=`<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Predict the ${(S.nr?.n||'next race')} podium. Lock before lights out.</div><div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px"><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:4px">P1 WINNER</div><select id="predP1" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:#C0C0C0;font-weight:700;margin-bottom:4px">P2</div><select id="predP2" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div><div class="card" style="padding:12px 16px"><div style="font-size:10px;color:#CD7F32;font-weight:700;margin-bottom:4px">P3</div><select id="predP3" class="race-sel" style="width:100%"><option value="">Select...</option>${opts}</select></div></div><button onclick="lockPred()" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">Lock Predictions</button>`;
 }
 async function lockPred(){const p1=document.getElementById('predP1')?.value,p2=document.getElementById('predP2')?.value,p3=document.getElementById('predP3')?.value;if(!p1||!p2||!p3)return;const did=localStorage.getItem('gf_did');const round=S.nr?.r;if(!round)return;const{data:races}=await sbq(s=>s.from('races').select('id,name').eq('round',round).eq('season',2026).limit(1));if(!races?.length)return;await sbq(s=>s.from('predictions').insert({device_id:did,race_id:races[0].id,p1,p2,p3}));window.gtag&&gtag('event','prediction_locked',{race:races[0].name||('R'+round)});renderLockedPred({p1,p2,p3})}
 function renderLockedPred(p){const el=document.getElementById('predictContent');if(!el)return;el.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:12px">LOCKED</div><div style="display:flex;flex-direction:column;gap:8px"><div class="card" style="padding:12px 16px;display:flex;justify-content:space-between"><span style="font-weight:700;color:var(--gold)">P1</span><span style="font-weight:700">${p.p1}</span></div><div class="card" style="padding:12px 16px;display:flex;justify-content:space-between"><span style="font-weight:700;color:#C0C0C0">P2</span><span style="font-weight:700">${p.p2}</span></div><div class="card" style="padding:12px 16px;display:flex;justify-content:space-between"><span style="font-weight:700;color:#CD7F32">P3</span><span style="font-weight:700">${p.p3}</span></div></div></div>`}
@@ -2656,7 +2595,6 @@ setInterval(checkLive,30000);
     <div style="font-family:var(--font);font-size:18px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px">GRID<span style="color:var(--accent)">FEED</span></div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Your Daily F1 Fix</div>
     <div style="max-width:600px;margin:0 auto 12px;color:#4A5168">GridFeed is an independent fan site and is not associated with Formula 1, the FIA, or any F1 team. F1, FORMULA 1, FORMULA ONE, FIA FORMULA ONE WORLD CHAMPIONSHIP, and related marks are trademarks of Formula One Licensing BV. Driver photos courtesy of Formula 1.</div>
-    <div style="max-width:600px;margin:0 auto 12px;color:#4A5168">Race picks and predictions are editorial analysis only, not financial advice. Gambling involves risk. 18+. Please bet responsibly.</div>
     <div style="color:#4A5168;margin-top:20px">&copy; 2026 GridFeed. All rights reserved.</div>
     <div style="margin-top:8px"><a href="https://twitter.com/GridFeedF1" target="_blank" style="color:#8A8E9A;text-decoration:none">Twitter</a> <span style="margin:0 8px;color:#3A3E4A">&middot;</span> <a href="mailto:hello@gridfeed.co" style="color:#8A8E9A;text-decoration:none">Contact</a></div>
   </div>

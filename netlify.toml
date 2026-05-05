@@ -66,9 +66,10 @@
   schedule = "*/5 * * * *"
   timeout = 30
 
-[functions.fetch-odds]
-  schedule = "0 */6 * * *"
-  timeout = 30
+# fetch-odds disabled — picks/betting feature removed 2026-05-05.
+# [functions.fetch-odds]
+#   schedule = "0 */6 * * *"
+#   timeout = 30
 
 [functions.fetch-intervals]
   schedule = "*/2 * * * *"
@@ -103,22 +104,20 @@
 [functions.list-sessions]
   timeout = 15
 
-[functions.generate-picks]
-  schedule = "0 5 * * *"
-  timeout = 60
-
-[functions.settle-picks]
-  # Monday 04:00 UTC — after the race weekend wraps, grade locked picks
-  # against the final leaderboard. Unsupported market categories are
-  # skipped quietly.
-  schedule = "0 4 * * 1"
-  timeout = 60
-
-[functions.approve-pick]
-  timeout = 10
-
-[functions.reject-pick]
-  timeout = 10
+# Picks / betting feature removed from the product 2026-05-05. The function
+# files remain in netlify/functions/ for git history but are no longer
+# scheduled and have no UI surface. fetch-odds, generate-picks, settle-picks,
+# approve-pick, reject-pick, list-picks, save-pick are all dead code paths.
+# [functions.generate-picks]
+#   schedule = "0 5 * * *"
+#   timeout = 60
+# [functions.settle-picks]
+#   schedule = "0 4 * * 1"
+#   timeout = 60
+# [functions.approve-pick]
+#   timeout = 10
+# [functions.reject-pick]
+#   timeout = 10
 
 # blog-scheduler DISABLED 2026-04-14 — duplicated generate-editorial.js
 # without any dedup / subject registry checks, producing dozens of

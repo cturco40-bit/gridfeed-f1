@@ -121,13 +121,8 @@ const EDITORIAL_TYPES = [
       'Write about the championship maths. Antonelli has {leaderPts} points from {races} races. At this rate, what does the final standings projection look like? When is the earliest Antonelli can clinch? When does it become mathematically impossible for Russell?',
     ],
   },
-  {
-    type: 'BETTING_GUIDE',
-    frequency: 'pre-race',
-    prompts: [
-      'Write a betting guide for the {nextRace}. Identify value picks for: race winner, podium finish, points finish, head-to-head matchups, and one longshot. Use the {races}-race form data to justify each pick.',
-    ],
-  },
+  // BETTING_GUIDE removed 2026-05-05 — picks/betting feature pulled from
+  // the product. Editorial pipeline no longer generates betting content.
   {
     type: 'OPINION',
     frequency: 'twice-weekly',
@@ -243,7 +238,6 @@ async function pickTopic() {
     POWER_RANKINGS: (t) => t.includes('power rank') || t.includes('rankings'),
     RACE_PREVIEW: (t) => t.includes('preview') || t.includes('things to watch'),
     PREDICTION: (t) => t.includes('prediction') || t.includes('who wins'),
-    BETTING_GUIDE: (t) => t.includes('betting') || t.includes('value pick'),
     DATA_STORY: (t) => t.includes('by the numbers') || t.includes('data'),
     HISTORICAL: (t) => t.includes('rookie season') || t.includes('regulation reset'),
   };
@@ -306,7 +300,7 @@ Return a JSON object:
   "tags": ["TAG1"]
 }
 
-Tags must be one of: ANALYSIS, PREVIEW, CHAMPIONSHIP, BETTING, OPINION
+Tags must be one of: ANALYSIS, PREVIEW, CHAMPIONSHIP, OPINION
 Do NOT wrap in markdown code fences. Return raw JSON only.`;
 
 async function generateArticle(topic) {
