@@ -39,11 +39,20 @@
   timeout = 30
 
 [functions.fetch-race-control]
-  # Every minute during sessions so chequered/SC/red-flag tweets land on
-  # Twitter within ~2 min of the actual race-control event (live-race-tweets
-  # also runs */1 and only sees rows in the last 90s window).
+  # 1-minute backup for live-poller. live-poller does the heavy lifting at
+  # 15s intervals during live sessions; this function catches any window
+  # live-poller missed (function crash, cold-start delay, etc.) so CHEQUERED
+  # / SC / red-flag events never go un-mirrored. Inserts dedup by date.
   schedule = "* * * * *"
   timeout = 30
+
+[functions.live-poller]
+  # Sub-minute race_control polling. Self-loops 4x at 15s intervals inside
+  # one invocation so worst-case detection lag is ~15s and end-to-end tweet
+  # latency stays inside the 25s target. Cron fires every minute to start a
+  # fresh polling burst.
+  schedule = "* * * * *"
+  timeout = 60
 
 [functions.live-race-tweets]
   schedule = "* * * * *"

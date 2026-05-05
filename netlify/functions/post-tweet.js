@@ -13,7 +13,11 @@ const TYPE_LIMITS = {
 };
 const DEFAULT_LIMIT = TYPE_LIMITS.social;
 const MIN_SPACING_MS = 30 * 1000;
-const LIVE_MIN_SPACING_MS = 20 * 1000;
+// Live tweets need to land fast — being first to report SC/red-flag/penalty
+// is the whole point. 5s is enough to keep Twitter from flagging us as a bot
+// without holding events in the queue when they fire close together (e.g.
+// CHEQUERED + recap moments apart).
+const LIVE_MIN_SPACING_MS = 5 * 1000;
 
 // Pull the HTTP status out of "Twitter API 401: ..." / "Twitter API 403: ..." etc.
 function parseTwitterStatus(msg) {
