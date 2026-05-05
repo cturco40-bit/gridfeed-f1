@@ -2162,7 +2162,32 @@ S.livePoller=null;S.liveLB=[];S.liveRC=[];S.liveStints={};S.liveWx=null;S.prevPo
 // Source of truth for the LIVE indicator is /live-session, which wraps
 // OpenF1's getLatestSession. That auto-switches across FP1/SQ/Sprint/Q/Race;
 // races.status only flips on Sunday so we can't rely on it during practice.
+//
+// Replay mode: ?_dbg_live=<session_key> forces the live tower + track map
+// into "live" mode against a historical session. car_locations / leader-
+// board / race_control / strategy / lap_times rows for that session_key
+// are still in the DB so the entire live UI populates as if the session
+// were happening now. Used to validate the live track map before the next
+// race weekend (Miami's data is at 11270/11271/11275/11276/11280).
 async function checkLive(){
+  const params=new URLSearchParams(location.search);
+  const dbgKey=params.get('_dbg_live');
+  if(dbgKey){
+    const sk=parseInt(dbgKey,10);
+    if(Number.isFinite(sk)){
+      S.isLive=true;
+      S.liveSession={session_key:sk,session_name:'[REPLAY]',meeting_name:'Replay',session_type:'race'};
+      S.liveSessType='race';
+      document.getElementById('liveBadge')?.classList.add('vis');
+      document.getElementById('liveState').style.display='block';
+      document.getElementById('nonLive').style.display='none';
+      const sessName=document.getElementById('liveSessName');
+      if(sessName)sessName.textContent='[REPLAY] session_key='+sk;
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content','#E8002D');
+      if(!S.livePoller){S.livePoller=setInterval(fetchLive,8000);fetchLive();bootstrapTrackHistory()}
+      return;
+    }
+  }
   try{
     const r=await fetchWT('/.netlify/functions/live-session',{},8000);
     if(!r.ok)throw new Error('HTTP '+r.status);
