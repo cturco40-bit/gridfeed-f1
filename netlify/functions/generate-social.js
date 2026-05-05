@@ -1,28 +1,34 @@
 import { sb, logSync, json } from './lib/shared.js';
 
-// Update these numbers after each race weekend so templates stay accurate
+// Update these fields after each race weekend so templates stay accurate.
+// nextRace + standings drive every template below — when stale, this fn
+// generates retrospective race-week tweets for a race that already happened.
+// TODO: pull these dynamically from races/standings tables so no manual
+// edit is needed (tracked as Fix B in the post-Miami audit).
 const STANDINGS = {
   leader: 'Antonelli', leaderPts: 72,
   p2: 'Russell',       p2Pts: 63,
   p3: 'Leclerc',       p3Pts: 49,
-  nextRace: 'Miami Grand Prix',
-  nextRaceTag: '#MiamiGP',
-  nextRaceDate: '2026-05-01',
+  nextRace: 'Canadian Grand Prix',
+  nextRaceShort: 'Canada',
+  nextRaceTag: '#CanadianGP',
+  nextRaceDate: '2026-05-24',
 };
 
 function daysUntilNextRace() {
   return Math.max(0, Math.ceil((new Date(STANDINGS.nextRaceDate) - Date.now()) / 86400000));
 }
 
+// Race-specific templates (predictions, "circuit in brief", custom schedules,
+// picks tease) live in a separate per-race module that gets swapped each
+// weekend. Templates here MUST be neutral — no city names, no circuit facts,
+// no race-specific schedules. Anything race-aware reads STANDINGS.nextRace*.
 const TEMPLATES = [
   // Countdown
-  () => `${daysUntilNextRace()} days until the ${STANDINGS.nextRace}.\n\n${STANDINGS.leader} ${STANDINGS.leaderPts} | ${STANDINGS.p2} ${STANDINGS.p2Pts} | ${STANDINGS.p3} ${STANDINGS.p3Pts}\n\nWho takes it in Miami?\n\n#F1 ${STANDINGS.nextRaceTag}`,
+  () => `${daysUntilNextRace()} days until the ${STANDINGS.nextRace}.\n\n${STANDINGS.leader} ${STANDINGS.leaderPts} | ${STANDINGS.p2} ${STANDINGS.p2Pts} | ${STANDINGS.p3} ${STANDINGS.p3Pts}\n\nWho takes it in ${STANDINGS.nextRaceShort}?\n\n#F1 ${STANDINGS.nextRaceTag}`,
 
   // Stat of the day
   () => `Stat: Bearman (17 pts) has outscored Verstappen (12 pts) through 3 races.\n\nA Haas rookie ahead of a 4x champion. 2026 is different.\n\n#F1`,
-
-  // Poll / pick
-  () => `Miami prediction:\n\n🔴 Antonelli extends the lead\n🔵 Russell fights back\n🟡 Leclerc wins his first 2026 race\n⚪ Someone else surprises\n\nQuote tweet your pick.\n\n#F1 ${STANDINGS.nextRaceTag}`,
 
   // Hot take
   () => `Hot take: Red Bull won't score a podium before the summer break.\n\nVerstappen has 12 points from 3 races. The chassis is broken and ADUO can't fix it fast enough.\n\n#F1`,
@@ -30,17 +36,8 @@ const TEMPLATES = [
   // Teammate battle
   () => `2026 teammate battles after 3 races:\n\nAntonelli 72 vs Russell 63\nLeclerc 49 vs Hamilton 41\nNorris 25 vs Piastri 21\nBearman 17 vs Ocon 1\nVerstappen 12 vs Hadjar 4\n\n#F1`,
 
-  // Preview fun facts
-  () => `Race week approaches: the ${STANDINGS.nextRace}.\n\nMiami in brief:\n🏎 3rd year on the calendar\n⏱ Sprint weekend format\n🌴 Street circuit, 57 laps\n🏆 Norris took last year\n\n#F1 ${STANDINGS.nextRaceTag}`,
-
   // Genuine question
   () => `Genuine question: is Antonelli already the best driver on the grid?\n\n72 points. 2 wins. 19 years old. Leading the championship.\n\nOr is it too early?\n\n#F1`,
-
-  // Schedule for race week
-  () => `RACE WEEK 🏁\n\n${STANDINGS.nextRace} schedule (ET):\n\nFri: FP1 2:30 | Sprint Quali 6:30\nSat: Sprint 12:00 | Qualifying 16:00\nSun: Race 16:00\n\nSprint weekend. Double points.\n\n#F1 ${STANDINGS.nextRaceTag}`,
-
-  // Picks tease
-  () => `Miami picks drop this week.\n\nLast round: 3/4 on the podium call.\n\nWho are we backing? Stay tuned.\n\n#F1 ${STANDINGS.nextRaceTag}`,
 
   // Data insight
   () => `Mercedes qualifying pace advantage after 3 races:\n\nvs Ferrari: +0.25s\nvs McLaren: +0.42s\nvs Red Bull: +0.62s\nvs Alpine: +0.58s\n\nThat's not a gap. That's a chasm.\n\n#F1`,
