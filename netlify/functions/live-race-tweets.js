@@ -52,6 +52,108 @@ function formatLapTime(seconds) {
   return `${m}:${s.padStart(6, '0')}`;
 }
 
+// Qualifying-style sessions run three back-to-back segments (Q1/Q2/Q3 or
+// SQ1/SQ2/SQ3) and emit CHEQUERED + SESSION FINISHED at the end of each.
+// They need per-segment recaps with the right framing — eliminated drivers
+// for Q1/Q2, pole + deltas for Q3 — instead of one "Qualifying ENDED"
+// tweet that fires off Q1's chequered.
+function isQualifyingSession(sessionName) {
+  const n = (sessionName || '').toLowerCase();
+  return n.includes('qualifying') || n.includes('shootout');
+}
+
+// Count prior CHEQUERED rows for this session strictly before the given
+// row's date. Returns the segment number for the row passed in (1, 2, or 3).
+// Caller guarantees the input row IS a chequered row already in the DB.
+async function detectQualifyingSegment(sessionKey, chequeredRow) {
+  const prior = await sb(`race_control?session_key=eq.${sessionKey}&flag=eq.CHEQUERED&date=lt.${encodeURIComponent(chequeredRow.date)}&select=date`);
+  return (prior?.length || 0) + 1;
+}
+
+// Find the SESSION STARTED most recently before the given timestamp. Used
+// to bound the segment time window for buildQualifyingSegmentRecap.
+async function findSegmentStart(sessionKey, beforeDate) {
+  const rows = await sb(`race_control?session_key=eq.${sessionKey}&category=eq.SessionStatus&message=ilike.*STARTED*&date=lt.${encodeURIComponent(beforeDate)}&order=date.desc&limit=1&select=date`);
+  return rows?.[0]?.date || null;
+}
+
+// Build a per-segment qualifying recap from /v1/laps filtered to the
+// segment's [segStart, segEnd] window. Q1 and Q2 list eliminated drivers;
+// Q3 lists the top 3 with deltas to pole. Driver standings inside a segment
+// are computed as best valid lap_duration ascending.
+async function buildQualifyingSegmentRecap(sessionKey, sessionName, raceName, segment, segStart, segEnd) {
+  try {
+    const [lapsRes, drvRes] = await Promise.all([
+      fetchOpenF1(`/v1/laps?session_key=${sessionKey}`),
+      fetchOpenF1(`/v1/drivers?session_key=${sessionKey}`).catch(() => ({ ok: false })),
+    ]);
+    if (!lapsRes.ok) return { ok: false, reason: 'laps_http' };
+    const allLaps = await lapsRes.json();
+    const drivers = drvRes.ok ? await drvRes.json() : [];
+    if (!Array.isArray(allLaps) || !allLaps.length) return { ok: false, reason: 'no_laps' };
+
+    const driverMap = {};
+    drivers.forEach(d => { driverMap[d.driver_number] = d; });
+
+    // Cars get to finish a hot lap that started before the chequered, so the
+    // window is "lap.date_start in [segStart, segEnd]" — not lap_end.
+    const segLaps = allLaps.filter(l => {
+      if (!l.date_start || !l.lap_duration || l.lap_duration <= 0) return false;
+      if (l.is_pit_out_lap) return false;
+      return l.date_start >= segStart && l.date_start <= segEnd;
+    });
+    if (!segLaps.length) return { ok: false, reason: 'no_segment_laps' };
+
+    const best = {};
+    for (const l of segLaps) {
+      if (!best[l.driver_number] || l.lap_duration < best[l.driver_number]) {
+        best[l.driver_number] = l.lap_duration;
+      }
+    }
+    const ranked = Object.entries(best)
+      .map(([drv, t]) => ({ driver_number: parseInt(drv, 10), time: t }))
+      .sort((a, b) => a.time - b.time);
+    if (!ranked.length) return { ok: false, reason: 'no_ranked' };
+
+    const isSprint = (sessionName || '').toLowerCase().includes('sprint');
+    const segLabel = (isSprint ? 'SQ' : 'Q') + segment;
+
+    const nameOf = drv => {
+      const d = driverMap[drv] || {};
+      return d.name_acronym || d.last_name || d.broadcast_name || `#${drv}`;
+    };
+
+    if (segment === 3) {
+      // Q3 — top 3 with deltas to pole
+      const top3 = ranked.slice(0, 3);
+      const pole = top3[0]?.time;
+      const lines = top3.map((r, i) => {
+        if (i === 0) return `P1 ${nameOf(r.driver_number)} ${formatLapTime(r.time)}`;
+        const delta = (r.time - pole).toFixed(3);
+        return `P${i + 1} ${nameOf(r.driver_number)} +${delta}`;
+      });
+      const text = `🏁 ${sessionName} ENDED — ${raceName}\n\n${lines.join('\n')}\n\nFull results: gridfeed.co`;
+      return { ok: true, text };
+    }
+
+    // Q1 / Q2 — eliminated drivers
+    // Q1 eliminates positions 16-20, Q2 eliminates positions 11-15. Slice
+    // works on best-lap rank, which matches the FIA elimination rule.
+    const startPos = segment === 1 ? 16 : 11;
+    const sliceStart = startPos - 1;
+    const eliminated = ranked.slice(sliceStart, sliceStart + 5);
+    if (!eliminated.length) return { ok: false, reason: 'no_eliminated' };
+    const lines = eliminated.map((r, i) => {
+      const pos = startPos + i;
+      return `P${pos} ${nameOf(r.driver_number)} ${formatLapTime(r.time)}`;
+    });
+    const text = `🏁 ${segLabel} ENDED — ${raceName}\n\nEliminated:\n${lines.join('\n')}\n\ngridfeed.co`;
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, reason: 'exception:' + (e.message || '').slice(0, 80) };
+  }
+}
+
 // Build a session-end recap from OpenF1: top 3 by latest position + each
 // driver's best lap. Used for chequered flag / SESSION ENDED tweets so
 // GridFeed can be first to post results with lap times.
@@ -133,8 +235,13 @@ function classifyEvent(m) {
   if (msgU.includes('SESSION SUSPENDED')) {
     return { kind: 'session_suspended', tag: 'sess-susp', tweetable: false };
   }
+  // SESSION FINISHED arrives ~0.1s after CHEQUERED. The chequered handler
+  // owns the recap tweet (and for qualifying owns the segment-aware path).
+  // Keep this as a blog event so the live blog still shows "Session Ended"
+  // but skip the tweet to avoid double-firing and to stop SESSION FINISHED
+  // from being mis-counted as a separate qualifying segment.
   if (msgU.includes('SESSION ENDED') || msgU.includes('SESSION FINISHED')) {
-    return { kind: 'session_end', tag: 'sess-end', tweetable: true };
+    return { kind: 'session_end', tag: 'sess-end', tweetable: false };
   }
   if (flag.includes('CHEQUERED') || msgU.includes('CHEQUERED FLAG')) {
     return { kind: 'chequered', tag: 'cheq', tweetable: true };
@@ -184,12 +291,28 @@ export default async (req) => {
       const endMs = session.date_end ? new Date(session.date_end).getTime() : null;
       const now = Date.now();
       if (endMs && now > endMs && (now - endMs) <= RECAP_FALLBACK_WINDOW_MS) {
-        const recapTag = `${sessionKey}-recap-once`;
+        const isQualType = isQualifyingSession(sessionName);
+        // For qualifying, the fallback only covers the FINAL segment (Q3 / SQ3).
+        // Q1 and Q2 chequered tweets fire on their own chequered handlers and
+        // shouldn't be retroactively posted from the fallback.
+        const recapTag = isQualType ? `${sessionKey}-q3-once` : `${sessionKey}-recap-once`;
         const existing = await sb(`tweets?event_tag=eq.${encodeURIComponent(recapTag)}&limit=1`);
         if (existing.length) {
           return json({ ok: true, skipped: 'recap_already_posted', session_key: sessionKey });
         }
-        const recap = await buildSessionRecap(sessionKey, sessionName, raceName);
+        let recap;
+        if (isQualType) {
+          // Build Q3 from the most recent SESSION STARTED to date_end — best
+          // approximation when fetch-race-control missed the Q3 chequered.
+          const seg3Start = await findSegmentStart(sessionKey, session.date_end);
+          if (!seg3Start) {
+            await logSync('live-race-tweets', 'success', 0, `Fallback Q3 recap deferred (${sessionName}): no SESSION STARTED row`, Date.now() - start);
+            return json({ ok: true, skipped: 'qual_fallback_no_start' });
+          }
+          recap = await buildQualifyingSegmentRecap(sessionKey, sessionName, raceName, 3, seg3Start, session.date_end);
+        } else {
+          recap = await buildSessionRecap(sessionKey, sessionName, raceName);
+        }
         if (!recap.ok) {
           // OpenF1 lag — don't write the dedup row, retry next tick
           await logSync('live-race-tweets', 'success', 0, `Fallback recap deferred (${session.session_name}): ${recap.reason || 'data_not_ready'}`, Date.now() - start);
@@ -269,16 +392,45 @@ export default async (req) => {
       // ── Tweet (one per kind per session) ──
       if (!ev.tweetable) continue;
 
-      // chequered + session_end share a single dedup tag — they're effectively
-      // the same event (session results) and OpenF1 may emit both.
-      const isRecap = ev.kind === 'chequered' || ev.kind === 'session_end';
-      const tweetTag = isRecap ? `${sessionKey}-recap-once` : `${sessionKey}-${ev.kind}-once`;
+      // For qualifying-style sessions, the chequered fires three times — once
+      // per segment. Treat each as its own recap with a per-segment dedup tag
+      // and segment-specific framing (eliminated drivers for Q1/Q2, top 3 +
+      // deltas for Q3). For all other sessions, the existing single recap
+      // path runs.
+      const isRecap = ev.kind === 'chequered';
+      const isQualType = isRecap && isQualifyingSession(sessionName);
+
+      let segment = null, segmentStart = null;
+      if (isQualType) {
+        segment = await detectQualifyingSegment(sessionKey, m);
+        segmentStart = await findSegmentStart(sessionKey, m.date);
+      }
+
+      const tweetTag = isQualType
+        ? `${sessionKey}-q${segment}-once`
+        : isRecap
+          ? `${sessionKey}-recap-once`
+          : `${sessionKey}-${ev.kind}-once`;
 
       const existing = await sb(`tweets?event_tag=eq.${encodeURIComponent(tweetTag)}&limit=1`);
       if (existing.length) continue;
 
       let tweetText = null;
-      if (isRecap) {
+      if (isQualType) {
+        if (!segmentStart) {
+          // Couldn't find a SESSION STARTED before this chequered — fetch-rc
+          // probably missed the start row. Don't write the dedup tag so the
+          // next chequered fires a fresh attempt.
+          errors.push(`qual_no_seg_start_q${segment}`);
+          continue;
+        }
+        const recap = await buildQualifyingSegmentRecap(sessionKey, sessionName, raceName, segment, segmentStart, m.date);
+        if (!recap.ok) {
+          errors.push(`qual_recap_skipped_q${segment}:` + (recap.reason || 'unknown'));
+          continue;
+        }
+        tweetText = recap.text;
+      } else if (isRecap) {
         const recap = await buildSessionRecap(sessionKey, sessionName, raceName);
         if (!recap.ok) {
           // OpenF1 sometimes lags behind the chequered flag — leave the dedup

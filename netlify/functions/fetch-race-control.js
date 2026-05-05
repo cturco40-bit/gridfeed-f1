@@ -2,12 +2,19 @@ import { fetchWT, sb, logSync, json, getLatestSession, fetchOpenF1 } from './lib
 
 // Live tweet generation moved to live-race-tweets.js (approval flow).
 // This function now only mirrors race_control data into our DB.
+//
+// Grace window: keep polling for 10 min past session.date_end so the final
+// CHEQUERED / SESSION FINISHED arrives even when OpenF1 emits it slightly
+// late (Miami quali Q3 chequered arrived after date_end and was missed).
+const POST_END_GRACE_MS = 10 * 60 * 1000;
 
 export default async (req, context) => {
   const start = Date.now();
   try {
     const session = await getLatestSession();
-    if (!session?.isLive) {
+    const endMs = session?.date_end ? new Date(session.date_end).getTime() : null;
+    const inGrace = !session?.isLive && endMs && (Date.now() - endMs) <= POST_END_GRACE_MS && (Date.now() > endMs);
+    if (!session?.isLive && !inGrace) {
       await logSync('fetch-race-control', 'success', 0, 'No live session', Date.now() - start);
       return json({ ok: true, records: 0 });
     }
