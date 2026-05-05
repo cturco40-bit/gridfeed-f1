@@ -56,13 +56,18 @@ async function isSubjectPublishedLocal(key) {
   } catch { return false; }
 }
 
-// ═══ VERIFIED 2026 DATA — update after each race ═══
+// ═══ VERIFIED 2026 DATA — update after each race weekend ═══
+// nextRace + nextRound + nextDate must be the UPCOMING weekend, never a
+// race that has already happened. Stale values here generate retrospective
+// previews / predictions / betting guides for a race already in the books.
+// TODO: pull from races table dynamically so post-race weekend updates are
+// not manual.
 const STANDINGS = {
-  races: 3,
-  remaining: 19,
-  nextRace: 'Miami Grand Prix',
-  nextRound: 4,
-  nextDate: 'May 1-3',
+  races: 4,
+  remaining: 18,
+  nextRace: 'Canadian Grand Prix',
+  nextRound: 5,
+  nextDate: 'May 22-24',
   leaderPts: 72,
   constructorPts: 135,
   keyStats: {
@@ -290,7 +295,7 @@ RULES:
 Drivers: P1 Antonelli 72, P2 Russell 63, P3 Leclerc 49, P4 Hamilton 41, P5 Norris 25, P6 Piastri 21, P7 Bearman 17, P8 Gasly 15, P9 Verstappen 12, P10 Lawson 10
 Constructors: P1 Mercedes 135, P2 Ferrari 90, P3 McLaren 46, P4 Haas 18, P5 Alpine 16, P6 Red Bull 16, P7 Racing Bulls 14, P8 Audi 2, P9 Williams 2, P10 Cadillac 0, P11 Aston Martin 0
 
-Next race: Miami Grand Prix, Round 4, May 1-3 (Sprint Weekend)
+Next race: ${STANDINGS.nextRace}, Round ${STANDINGS.nextRound}, ${STANDINGS.nextDate}
 
 FORMAT:
 Return a JSON object:

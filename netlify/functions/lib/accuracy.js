@@ -7,16 +7,17 @@ export const SEASON_CONTEXT = `Today is ${TODAY}.
 
 2026 F1 SEASON — VERIFIED FACTS. USE ONLY THESE. NEVER INVENT ALTERNATIVES.
 
-COMPLETED RACES (3 of 22 complete):
+COMPLETED RACES (4 of 22 complete):
 R1: Australia Mar 8 — P1 George Russell (Mercedes), P2 Kimi Antonelli (Mercedes), P3 Charles Leclerc (Ferrari)
 R2: China Mar 15 — P1 Kimi Antonelli (Mercedes), P2 George Russell (Mercedes), P3 Charles Leclerc (Ferrari)
 R3: Japan Mar 29 — P1 Kimi Antonelli (Mercedes), P2 Oscar Piastri (McLaren), P3 Charles Leclerc (Ferrari), P4 Russell, P5 Norris, P6 Hamilton, P7 Gasly, P8 Verstappen, P9 Lawson, P10 Bearman
-NEXT: R4 Miami Grand Prix May 1-3 2026 at Miami International Autodrome. Round 4 of 22.
+R4: Miami May 3 (Sprint Weekend) — P1 Kimi Antonelli (Mercedes), P2 Lando Norris (McLaren), P3 Oscar Piastri (McLaren), P4 Russell, P5 Verstappen, P6 Leclerc, P7 Hamilton, P8 Colapinto, P9 Sainz, P10 Albon. Sprint result earlier same weekend — P1 Norris, P2 Piastri, P3 Leclerc.
+NEXT: R5 Canadian Grand Prix May 22-24, 2026 at Circuit Gilles Villeneuve, Montreal (Sprint Weekend). Round 5 of 22.
 CANCELLED: Bahrain GP (Apr 12) and Saudi Arabian GP (Apr 19) both cancelled — Middle East conflict.
 
 2026 REGULATIONS: No DRS. Replaced by Overtake Mode (extra electrical deployment when within 1 second of car ahead) and Active Aero (wings adjust automatically). Never mention DRS in 2026 content.
 
-VERIFIED DRIVERS CHAMPIONSHIP after R3 Japan:
+VERIFIED DRIVERS CHAMPIONSHIP after R3 Japan (Miami R4 not yet incorporated — do NOT cite specific post-Miami point totals; if asked about post-Miami standings, defer to "official points pending verification"):
 P1 Kimi Antonelli (Mercedes) 72 pts
 P2 George Russell (Mercedes) 63 pts
 P3 Charles Leclerc (Ferrari) 49 pts
@@ -79,12 +80,16 @@ The 2026 calendar: Australia, China, Japan, [Bahrain CANCELLED], [Saudi CANCELLE
 NEVER invent a venue. NEVER write about Bristol, Nashville, Jakarta, Delhi, Seoul, or any city not on this list.
 
 RULE 4 — POINTS AND STANDINGS:
-Only 3 races completed. Max possible points = 72 (Antonelli). NEVER write a points total above 72.
-NEVER write a constructors total above 135. Use ONLY verified standings above.
+Verified standings above are post-R3 Japan only. Miami R4 happened but post-Miami totals
+are NOT incorporated yet. DO NOT cite specific post-Miami point totals. If a story requires
+fresh totals, defer with "official points pending verification" or focus the piece on race
+results / forward-looking analysis instead. Pre-Miami totals (e.g. Antonelli 72) remain
+correct only as snapshots labeled "after Round 3" / "pre-Miami". NEVER label them "current".
 
 RULE 5 — RACE COUNT:
-Only 3 races run. 22 total (not 24). NEVER reference round above 3 as completed.
-NEVER say "midway through the season" — we are at round 3 of 22.
+4 races run (Australia, China, Japan, Miami). 22 total (not 24). NEVER reference round above 4 as completed.
+NEXT race is Round 5 — Canadian Grand Prix on May 22-24. NEVER preview or predict Miami — Miami already happened.
+NEVER say "midway through the season" — we are at round 4 of 22.
 
 RULE 6 — NO INVENTED NEWS:
 NEVER invent driver absence, injury, crash, retirement, contract signing, or any event not in contextBlock.
