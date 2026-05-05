@@ -1319,18 +1319,21 @@ function processLocs(locs){
 
 function renderMap(){
   if(!S._trackOutlineSet)setupTrackOutline();
-  if(!S.isLive){document.getElementById('mapOffline').style.display='block';document.getElementById('carDots')?.replaceChildren();
-    const ns=document.getElementById('mapNextSess');if(ns&&S.nr)ns.textContent='Next: '+S.nr.n+' \u00b7 '+S.nr.dl;return}
-  document.getElementById('mapOffline').style.display='none';
+  // The dots container in the live HTML is <g id="lmDots">. Earlier
+  // versions used 'carDots' / 'mapOffline' ids; renderMap was never
+  // updated when the live SVG was rewritten, so dots silently never
+  // rendered (the function returned at the missing-element check or
+  // threw on .style.display of null). Use the live elements directly.
+  const g=document.getElementById('lmDots');if(!g)return;
+  if(!S.isLive){g.replaceChildren();return}
   if(!S.circBounds||!Object.keys(S.carLocs).length)return;
-  const g=document.getElementById('carDots');if(!g)return;g.replaceChildren();
+  g.replaceChildren();
   const svgNs='http://www.w3.org/2000/svg';
   Object.entries(S.carLocs).forEach(([num,loc])=>{
     const drv=S.drvCache[num];const tc=drv?.tc||'#E8002D';const abbr=drv?.abbr||('D'+num);
     const te=S.td[S.sess]?.find(d=>d.driverNum==num);const pos=te?.pos||99;
     const{sx,sy}=normCoord(loc.x,loc.y);
     const gg=document.createElementNS(svgNs,'g');gg.setAttribute('class','car-dot');gg.setAttribute('data-d',num);gg.style.cursor='pointer';
-    gg.addEventListener('click',e=>{showTip(num,e.clientX,e.clientY)});
     if(pos<=1){const gl=document.createElementNS(svgNs,'circle');gl.setAttribute('cx',sx);gl.setAttribute('cy',sy);gl.setAttribute('r','12');gl.setAttribute('fill',tc);gl.setAttribute('opacity','0.3');gg.appendChild(gl)}
     const c=document.createElementNS(svgNs,'circle');c.setAttribute('cx',sx);c.setAttribute('cy',sy);c.setAttribute('r','7');c.setAttribute('fill',tc);c.setAttribute('stroke','#fff');c.setAttribute('stroke-width','1.5');gg.appendChild(c);
     if(pos<=3){const pt=document.createElementNS(svgNs,'text');pt.setAttribute('x',sx);pt.setAttribute('y',sy+3);pt.setAttribute('text-anchor','middle');pt.setAttribute('fill','#fff');pt.setAttribute('font-size','7');pt.setAttribute('font-weight','900');pt.textContent='P'+pos;gg.appendChild(pt)}
@@ -1437,9 +1440,11 @@ function loadMapDemo(){
   S.prevLocs={...locs};
   S.isLive=true;
 
-  // Hide offline, render map
-  document.getElementById('mapOffline').style.display='none';
-  document.getElementById('mapHeader').textContent='MIAMI GRAND PRIX — RACE (DEMO)';
+  // Hide offline, render map. mapOffline / mapHeader live in older static
+  // mockup code paths that don't exist in the current live UI — guard so
+  // the demo doesn't blow up if those elements aren't on the page.
+  const mo=document.getElementById('mapOffline');if(mo)mo.style.display='none';
+  const mh=document.getElementById('mapHeader');if(mh)mh.textContent='MIAMI GRAND PRIX — RACE (DEMO)';
   renderMap();
 
   // Animate cars moving around the track
@@ -2216,14 +2221,20 @@ async function fetchLive(){
   try{
     const sessType=S.liveSessType||'race';
     const sessKey=S.liveSession?.session_key?String(S.liveSession.session_key):null;
+    // ALL session-scoped queries must filter by session_key. Without it the
+    // tower / strategy / lap_times / pit_stops queries return whatever rows
+    // PostgREST hands back from the entire table (race-type rows accumulate
+    // every weekend). Without the filter the leaderboard tower mixes drivers
+    // from different races and the names render as "#12" / "#1" because the
+    // mismatched rows fall through procLB's null-name fallback.
     const[lb,rc,st,wx,loc,sp,pit]=await Promise.allSettled([
-      sbq(s=>s.from('leaderboard').select('*').eq('session_type',sessType).order('position',{ascending:true}).limit(22)),
+      sbq(s=>{let q=s.from('leaderboard').select('*').eq('session_type',sessType);if(sessKey)q=q.eq('session_key',sessKey);return q.order('position',{ascending:true}).limit(22)}),
       sbq(s=>{let q=s.from('race_control').select('*');if(sessKey)q=q.eq('session_key',sessKey);return q.order('date',{ascending:false}).limit(12)}),
-      sbq(s=>s.from('strategy').select('*').order('stint_number',{ascending:true})),
-      sbq(s=>s.from('weather_data').select('*').order('fetched_at',{ascending:false}).limit(1)),
+      sbq(s=>{let q=s.from('strategy').select('*');if(sessKey)q=q.eq('session_key',sessKey);return q.order('stint_number',{ascending:true})}),
+      sbq(s=>{let q=s.from('weather_data').select('*');if(sessKey)q=q.eq('session_key',sessKey);return q.order('fetched_at',{ascending:false}).limit(1)}),
       sbq(s=>{const k=S.liveSession?.session_key;if(k==null)return{data:null,error:null};return s.rpc('car_locations_latest',{p_session_key:Number(k)})}),
-      sbq(s=>s.from('lap_times').select('driver_number,st_speed,lap_number').not('st_speed','is',null).order('st_speed',{ascending:false}).limit(100)),
-      sbq(s=>s.from('pit_stops').select('driver_number,lap_number,date,stop_duration').order('date',{ascending:false}).limit(200)),
+      sbq(s=>{let q=s.from('lap_times').select('driver_number,st_speed,lap_number').not('st_speed','is',null);if(sessKey)q=q.eq('session_key',sessKey);return q.order('st_speed',{ascending:false}).limit(100)}),
+      sbq(s=>{let q=s.from('pit_stops').select('driver_number,lap_number,date,stop_duration');if(sessKey)q=q.eq('session_key',sessKey);return q.order('date',{ascending:false}).limit(200)}),
     ]);
     if(lb.status==='fulfilled'&&lb.value.data)procLB(lb.value.data);
     if(rc.status==='fulfilled'&&rc.value.data){S.liveRC=rc.value.data;checkBans()}
