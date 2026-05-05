@@ -168,7 +168,7 @@ body{transition:background-color .2s,color .2s}
 .race-sel{background:var(--header);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:var(--radius);padding:8px 32px 8px 12px;font-family:var(--font);font-size:13px;font-weight:600;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;cursor:pointer;width:100%;max-width:320px}
 .stabs{display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border)}
 .stabs::-webkit-scrollbar{display:none}
-.stab{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:7px 14px;white-space:nowrap;color:var(--muted);cursor:pointer;border:1px solid var(--border);border-radius:20px;background:transparent;min-height:36px;display:flex;align-items:center;transition:all .15s}
+.stab{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:9px 16px;white-space:nowrap;color:var(--muted);cursor:pointer;border:1px solid var(--border);border-radius:20px;background:transparent;min-height:40px;display:flex;align-items:center;transition:all .15s}
 .stab.act{color:#fff;background:var(--accent);border-color:var(--accent)}
 .tt{width:100%;border-collapse:collapse;font-size:13px}
 .tt th{text-align:left;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border)}
@@ -283,15 +283,15 @@ body{transition:background-color .2s,color .2s}
 .twr-pane{background:#0E1117;border-right:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:420px}
 @media(max-width:768px){.twr-pane{max-height:none;border-right:none}}
 .twr-hd{position:sticky;top:0;background:var(--header);padding:6px 8px;display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
-.twr-row{display:grid;grid-template-columns:22px 8px 1fr 18px 44px 50px 16px;gap:4px;padding:6px 8px;border-bottom:1px solid #1C2333;border-left:3px solid transparent;cursor:pointer;align-items:center;transition:background .1s}
+.twr-row{display:grid;grid-template-columns:28px 4px 1fr 22px 50px 56px 18px;gap:6px;padding:9px 10px;border-bottom:1px solid #1C2333;border-left:3px solid transparent;cursor:pointer;align-items:center;transition:background .1s}
 .twr-row:hover{background:rgba(255,255,255,.02)}
 .twr-row.sel{background:rgba(232,0,45,.07);border-left-color:var(--accent)}
 .twr-row.fl .tr-lt{color:#B47FFF}
-.tr-pos{font-size:10px;font-weight:900;color:var(--muted)}.tr-p1{color:#F5A623}.tr-p2{color:#B0B0B0}.tr-p3{color:#CD7F32}
-.tr-bar{width:3px;height:22px;border-radius:2px}
-.tr-nm{font-family:var(--head);font-size:12px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden}
+.tr-pos{font-size:12px;font-weight:900;color:var(--muted)}.tr-p1{color:#F5A623}.tr-p2{color:#B0B0B0}.tr-p3{color:#CD7F32}
+.tr-bar{width:4px;height:24px;border-radius:2px}
+.tr-nm{font-family:var(--head);font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;letter-spacing:.2px}
 .tr-ty{width:16px;height:16px;border-radius:50%;font-size:7px;font-weight:900;display:flex;align-items:center;justify-content:center}
-.tr-gp{font-size:9px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.tr-gp{font-size:11px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
 .tr-lt{font-size:9px;text-align:right;font-variant-numeric:tabular-nums}
 .tr-ar{font-size:9px}.tr-up{color:#22C55E}.tr-dn{color:var(--accent)}
 .rc-sec{padding:12px 16px;border-bottom:1px solid var(--border)}
@@ -303,14 +303,14 @@ body{transition:background-color .2s,color .2s}
 .rb-content{flex:1}
 .rb-headline{font-size:13px;font-weight:700;color:#fff;margin-bottom:2px}
 .rb-body{font-size:11px;color:var(--dim);line-height:1.4}
-.rc-msg{padding:6px 10px;border-radius:4px;margin-bottom:5px;border-left:3px solid var(--border);font-size:11px;background:rgba(255,255,255,.02)}
-.rc-msg .rc-meta{font-size:9px;color:var(--muted);margin-bottom:2px}
+.rc-msg{padding:9px 12px;border-radius:5px;margin-bottom:6px;border-left:3px solid var(--border);font-size:12px;line-height:1.45;background:rgba(255,255,255,.025)}
+.rc-msg .rc-meta{font-size:10px;color:var(--muted);margin-bottom:3px}
 .rc-sc{border-color:#F5A623;background:rgba(245,166,35,.06)}.rc-rf{border-color:var(--accent);background:rgba(232,0,45,.06)}.rc-ot{border-color:#22C55E;background:rgba(34,197,94,.05)}.rc-pen{border-color:#F97316;background:rgba(249,115,22,.05)}.rc-fl{border-color:#B47FFF;background:rgba(180,127,255,.05)}
 .strat-sec{padding:12px 16px}
-.st-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.st-nm{font-size:10px;font-weight:700;min-width:28px;color:var(--text)}
+.st-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.st-nm{font-size:12px;font-weight:800;min-width:34px;color:var(--text)}
 .st-trk{flex:1;display:flex;gap:2px}
-.st-blk{height:20px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;min-width:8px;letter-spacing:0.2px}
+.st-blk{height:24px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;min-width:10px;letter-spacing:0.2px}
 .st-cur{animation:stP 1.5s infinite}@keyframes stP{0%,100%{opacity:1}50%{opacity:.7}}
 .drv-card{position:absolute;background:#1C2333;border:1px solid var(--border);border-radius:4px;padding:10px 12px;min-width:150px;pointer-events:none;z-index:50;border-left:3px solid var(--accent)}
 .dc-name{font-size:12px;font-weight:700;margin-bottom:1px}.dc-team{font-size:10px;color:var(--muted);margin-bottom:6px}
@@ -724,7 +724,7 @@ try{sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.warn('[GF]',e)}
 async function sbq(fn){if(!sb)return{data:null,error:1};try{return await fn(sb)}catch(e){return{data:null,error:e}}}
 function fetchWT(u,o,ms){return Promise.race([fetch(u,o||{}),new Promise((_,r)=>setTimeout(()=>r(new Error('Timeout')),ms||8000))])}
 
-const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
+const TC={red_bull:'#3671C6',ferrari:'#E8002D',mercedes:'#27F4D2',mclaren:'#FF8000',aston_martin:'#229971',alpine:'#FF87BC',williams:'#64C4FF',rb:'#6692FF',sauber:'#52E252',kick_sauber:'#52E252',audi:'#52E252',haas:'#B6BABD',cadillac:'#CC0000'};
 const TN={red_bull:'Red Bull Racing',aston_martin:'Aston Martin',rb:'Racing Bulls',kick_sauber:'Audi',alpine:'Alpine',haas:'Haas F1 Team',mclaren:'McLaren',mercedes:'Mercedes',ferrari:'Ferrari',williams:'Williams',cadillac:'Cadillac',sauber:'Audi'};
 
 const S={tab:'home',sess:'race',nf:'ALL',newsTagFilter:'ALL',arts:[],td:{},nr:null,ct:null,rt:null,_raceSubTab:'classification',_selectedDriver:null,_mapZoom:1,_mapVx:null,_mapVy:null};
@@ -1534,6 +1534,50 @@ function _shortenTeam(team){
 // session-tab UI uses 'sprint_quali' — normalise on load.
 function _normSessionType(t){return t==='sprint_qualifying'?'sprint_quali':t}
 
+// Jolpica/Ergast hosts official FIA-classified results. We prefer it over the
+// raw OpenF1 leaderboard for the race and qualifying tabs because Jolpica
+// applies post-race penalties (Leclerc dropped from P6 to P8 at Miami after
+// his 20s time penalty — OpenF1 only reflected the pre-penalty order) and
+// flags retirements as "Retired" / "DNF" instead of just listing them at the
+// bottom of the running order.
+async function fetchJolpicaSession(round,kind){
+  // kind: 'results' (race) | 'qualifying' | 'sprint'
+  try{
+    const res=await fetchWT(`https://api.jolpi.ca/ergast/f1/2026/${round}/${kind}.json`,{},10000);
+    if(!res.ok)return null;
+    const j=await res.json();
+    const race=j?.MRData?.RaceTable?.Races?.[0];
+    if(!race)return null;
+    const rows=race.Results||race.QualifyingResults||race.SprintResults;
+    if(!rows?.length)return null;
+    return rows.map(r=>{
+      const pos=r.positionText||r.position;
+      const isDnf=pos==='R'||pos==='W'||pos==='D'||pos==='E'||pos==='F'||pos==='N';
+      const drv=`${r.Driver.givenName} ${r.Driver.familyName}`;
+      const cid=r.Constructor.constructorId;
+      const tc=TC[cid]||'#888';
+      // Race rows have Time + status; quali rows have Q1/Q2/Q3 fastest.
+      let g='';
+      if(kind==='qualifying'){
+        // Show fastest of Q3>Q2>Q1, suffix segment for eliminated drivers.
+        if(r.Q3)g=r.Q3;
+        else if(r.Q2)g=r.Q2+' (Q2)';
+        else if(r.Q1)g=r.Q1+' (Q1)';
+      }else{
+        if(isDnf)g=r.status||'DNF';
+        else g=(r.Time?.time)||(r.status==='Lapped'?'+1 Lap':r.status||'--');
+      }
+      return {
+        p:isDnf?'DNF':parseInt(pos,10),
+        d:_titleCaseDriver(drv),
+        t:_shortenTeam(r.Constructor.name),
+        tc,
+        g,
+      };
+    });
+  }catch(e){console.warn('[jolpica] fetch failed',round,kind,e.message);return null}
+}
+
 async function buildRdFromDb(round){
   const sch=SCH.find(r=>r.r===round);
   if(!sch||sch.st==='can')return null;
@@ -1554,13 +1598,24 @@ async function buildRdFromDb(round){
       if(!races?.length)return null;
       const race=races[0];
 
-      const{data:rows}=await sbq(s=>s.from('leaderboard').select('position,driver_name,team_name,team_color,time_str,gap_str,session_type,session_key,driver_number').eq('race_id',race.id).order('position',{ascending:true}));
-      if(!rows?.length)return null;
+      // Pull leaderboard (covers FP1/FP2/FP3 + sprint_quali which Jolpica
+      // doesn't expose) AND fire all three Jolpica endpoints in parallel.
+      const[lbRes,jolRace,jolQuali,jolSprint]=await Promise.all([
+        sbq(s=>s.from('leaderboard').select('position,driver_name,team_name,team_color,time_str,gap_str,session_type,session_key,driver_number').eq('race_id',race.id).order('position',{ascending:true})),
+        fetchJolpicaSession(round,'results'),
+        fetchJolpicaSession(round,'qualifying'),
+        fetchJolpicaSession(round,'sprint'),
+      ]);
+      const rows=lbRes?.data||[];
+      const haveAnything=rows.length||jolRace||jolQuali||jolSprint;
+      if(!haveAnything)return null;
 
       const sessions={};
       let raceResults=[];
+      let raceSessionKey=null;
       for(const r of rows){
         const st=_normSessionType(r.session_type);
+        if(st==='race'&&!raceSessionKey)raceSessionKey=r.session_key;
         const entry={
           p:(r.position==='DNF'||r.position==='DNS'||r.position==='DNQ')?r.position:r.position,
           d:_titleCaseDriver(r.driver_name||''),
@@ -1572,25 +1627,89 @@ async function buildRdFromDb(round){
         else{(sessions[st]=sessions[st]||[]).push(entry)}
       }
 
+      // Override race / qualifying / sprint with Jolpica when available.
+      // Jolpica reflects post-race penalties, marks DNFs as Retired/DNF, and
+      // exposes Q1/Q2/Q3 segmentation that the leaderboard table flattens.
+      if(jolRace?.length)raceResults=jolRace;
+      if(jolQuali?.length)sessions.qualifying=jolQuali;
+      if(jolSprint?.length)sessions.sprint=jolSprint;
+
+      // Strategy + race control for the race tab. Both are read-only from
+      // the existing tables we already populate during the live session.
+      let strats=[];
+      let rc=[];
+      if(raceSessionKey){
+        try{
+          const{data:stratRows}=await sbq(s=>s.from('strategy').select('driver_number,driver_name,stint_number,compound,lap_start,lap_end').eq('session_key',raceSessionKey).order('driver_number').order('stint_number'));
+          const compoundLetter={SOFT:'S',MEDIUM:'M',HARD:'H',INTERMEDIATE:'I',WET:'W'};
+          const byDriver={};
+          for(const r of(stratRows||[])){
+            if(!byDriver[r.driver_number]){
+              const dstats=Object.values(DSTATS).find(d=>d.num===r.driver_number);
+              const fallback=(r.driver_name||'').split(/\s+/).pop().slice(0,3).toUpperCase();
+              byDriver[r.driver_number]={d:dstats?.abbr||fallback,s:[]};
+            }
+            const c=compoundLetter[(r.compound||'').toUpperCase()]||'M';
+            const lapCount=Math.max(1,(r.lap_end||r.lap_start||1)-(r.lap_start||1)+1);
+            byDriver[r.driver_number].s.push({c,l:lapCount});
+          }
+          strats=Object.values(byDriver);
+        }catch(e){console.warn('[rd] strategy fetch failed',e.message)}
+
+        try{
+          const{data:rcRows}=await sbq(s=>s.from('race_control').select('lap_number,category,message,flag,date').eq('session_key',raceSessionKey).order('date',{ascending:true}));
+          for(const r of(rcRows||[])){
+            const m=(r.message||'').replace(/\s+/g,' ').trim();
+            if(!m)continue;
+            const u=m.toUpperCase();
+            // Skip routine sector flags + lap-time deletions (too noisy).
+            if(r.flag==='YELLOW'||r.flag==='DOUBLE YELLOW'||r.flag==='CLEAR')continue;
+            if(u.includes('TRACK LIMITS'))continue;
+            // Keep high-impact events: SC, RF, penalties, retirements, FL,
+            // session lifecycle, and any explicit FIA stewards messages.
+            const keep=
+              (r.category||'').toLowerCase()==='safetycar'||
+              u.includes('VSC')||u.includes('VIRTUAL SAFETY')||
+              r.flag==='RED'||r.flag==='GREEN'||r.flag==='CHEQUERED'||
+              u.includes('PENALTY')||u.includes('STEWARDS')||u.includes('DRIVE THROUGH')||u.includes('DISQUALIF')||
+              u.includes('STOPPED')||u.includes('WILL NOT')||u.includes('RETIRE')||
+              u.includes('INCIDENT')||u.includes('COLLISION')||
+              u.includes('FASTEST LAP')||
+              u.includes('SESSION STARTED')||u.includes('SESSION ENDED')||u.includes('SESSION FINISHED');
+            if(!keep)continue;
+            const lap=(typeof r.lap_number==='number'&&r.lap_number>0)?r.lap_number:0;
+            rc.push((lap?`Lap ${lap}: `:'')+m);
+          }
+          rc=rc.slice(0,40);
+        }catch(e){console.warn('[rd] race_control fetch failed',e.message)}
+      }
+
       const circKey=CIRC_MAP[round];
       const circ=circKey?CIRCUITS[circKey]:null;
+      // Race distance — strategy bar widths divide by this. Prefer the
+      // CIRCUITS lap count, fall back to the longest stint chain in the
+      // strategy data, then a sensible default to avoid Infinity widths.
+      let totalLaps=circ?.laps||0;
+      if(!totalLaps&&strats.length){
+        for(const s of strats){
+          const stintsSum=(s.s||[]).reduce((acc,st)=>acc+(st.l||0),0);
+          if(stintsSum>totalLaps)totalLaps=stintsSum;
+        }
+      }
+      if(!totalLaps)totalLaps=50;
       const rd={
         name:race.name||sch.n,
         circuit:race.circuit||circ?.name||sch.c||'',
         date:sch.dl||'',
-        laps:circ?.laps||0,
+        laps:totalLaps,
         wx:'',
         sessions,
         results:raceResults,
-        rc:[],
-        strats:[],
+        rc,
+        strats,
       };
-      // Surface the sprint top 3 in the same banner the static RACE_DATA does.
       if(sessions.sprint?.length){
-        const top3=sessions.sprint.slice(0,3).map(e=>{
-          const surname=(e.d||'').split(' ').pop();
-          return surname;
-        });
+        const top3=sessions.sprint.slice(0,3).map(e=>(e.d||'').split(' ').pop());
         if(top3.length===3)rd.sprint='P1 '+top3[0]+' P2 '+top3[1]+' P3 '+top3[2];
       }
       S._rdCache[round]=rd;
