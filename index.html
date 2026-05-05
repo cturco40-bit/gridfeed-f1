@@ -1494,6 +1494,115 @@ const RACE_DATA={
     strats:[{d:'ANT',s:[{c:'M',l:21},{c:'M',l:32}]},{d:'PIA',s:[{c:'S',l:8},{c:'M',l:20},{c:'H',l:25}]},{d:'LEC',s:[{c:'M',l:22},{c:'H',l:31}]},{d:'RUS',s:[{c:'M',l:20},{c:'H',l:33}]},{d:'NOR',s:[{c:'S',l:7},{c:'M',l:22},{c:'H',l:24}]},{d:'HAM',s:[{c:'M',l:18},{c:'H',l:35}]},{d:'GAS',s:[{c:'M',l:21},{c:'H',l:32}]},{d:'VER',s:[{c:'M',l:19},{c:'H',l:34}]},{d:'LAW',s:[{c:'M',l:20},{c:'H',l:33}]},{d:'BEA',s:[{c:'S',l:6},{c:'M',l:16},{c:'H',l:31}]},{d:'SAI',s:[{c:'M',l:22},{c:'H',l:31}]},{d:'OCO',s:[{c:'M',l:20},{c:'H',l:33}]},{d:'STR',s:[{c:'H',l:26},{c:'M',l:27}]},{d:'HAD',s:[{c:'M',l:21},{c:'H',l:32}]},{d:'LIN',s:[{c:'M',l:23},{c:'H',l:30}]},{d:'ALB',s:[{c:'M',l:24},{c:'H',l:29}]},{d:'BOR',s:[{c:'H',l:27},{c:'M',l:26}]},{d:'HUL',s:[{c:'H',l:25},{c:'M',l:28}]},{d:'BOT',s:[{c:'H',l:30},{c:'M',l:23}]},{d:'PER',s:[{c:'H',l:29},{c:'M',l:24}]}]},
 };
 
+// Dynamic race-data loader. RACE_DATA above is hand-maintained and stops at
+// R3 — anything from R4 onward needs to come from the leaderboard table that
+// fetch-timing populates as each session ends. This builds the same shape
+// renderRaceContent() expects so the UI doesn't have to branch.
+//
+// Cache lasts the page session so we don't re-query on every tab switch.
+// fetch-timing runs */2 min during sessions, so reloading the page once
+// after a session ends is enough to surface the new results.
+S._rdCache={};
+S._rdCacheAt={};
+S._rdInflight={};
+// Active race weekend cache TTL — re-pull leaderboard rows every 30s while a
+// race is in progress so newly-finished sessions surface without a refresh.
+// Done races cache permanently.
+const _RD_ACTIVE_TTL_MS=30*1000;
+
+function _titleCaseDriver(name){
+  return (name||'').split(/\s+/).filter(Boolean).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+}
+function _shortenTeam(team){
+  return (team||'')
+    .replace(/Mercedes-AMG Petronas F1 Team/i,'Mercedes')
+    .replace(/Scuderia Ferrari/i,'Ferrari')
+    .replace(/McLaren F1 Team/i,'McLaren')
+    .replace(/Oracle Red Bull Racing/i,'Red Bull')
+    .replace(/Red Bull Racing/i,'Red Bull')
+    .replace(/Aston Martin Aramco F1 Team/i,'Aston Martin')
+    .replace(/BWT Alpine F1 Team/i,'Alpine')
+    .replace(/MoneyGram Haas F1 Team/i,'Haas')
+    .replace(/Haas F1 Team/i,'Haas')
+    .replace(/Visa Cash App Racing Bulls/i,'Racing Bulls')
+    .replace(/Williams Racing/i,'Williams')
+    .replace(/Audi F1 Team/i,'Audi')
+    .replace(/Cadillac F1 Team/i,'Cadillac')
+    .trim();
+}
+// fetch-timing writes session_type='sprint_qualifying' but the renderer's
+// session-tab UI uses 'sprint_quali' — normalise on load.
+function _normSessionType(t){return t==='sprint_qualifying'?'sprint_quali':t}
+
+async function buildRdFromDb(round){
+  const sch=SCH.find(r=>r.r===round);
+  if(!sch||sch.st==='can')return null;
+
+  // For an in-progress weekend, drop stale cache so a session that just
+  // ended shows up. For a finished weekend, never expire.
+  if(S._rdCache[round]){
+    const isActive=sch.st==='active';
+    const age=Date.now()-(S._rdCacheAt[round]||0);
+    if(!isActive||age<_RD_ACTIVE_TTL_MS)return S._rdCache[round];
+    // age ≥ TTL on an active weekend — fall through to refresh
+  }
+  if(S._rdInflight[round])return S._rdInflight[round];
+
+  const promise=(async()=>{
+    try{
+      const{data:races}=await sbq(s=>s.from('races').select('id,name,circuit').eq('season',2026).eq('round',round).limit(1));
+      if(!races?.length)return null;
+      const race=races[0];
+
+      const{data:rows}=await sbq(s=>s.from('leaderboard').select('position,driver_name,team_name,team_color,time_str,gap_str,session_type,session_key,driver_number').eq('race_id',race.id).order('position',{ascending:true}));
+      if(!rows?.length)return null;
+
+      const sessions={};
+      let raceResults=[];
+      for(const r of rows){
+        const st=_normSessionType(r.session_type);
+        const entry={
+          p:(r.position==='DNF'||r.position==='DNS'||r.position==='DNQ')?r.position:r.position,
+          d:_titleCaseDriver(r.driver_name||''),
+          t:_shortenTeam(r.team_name||''),
+          tc:r.team_color||'#888',
+          g:r.gap_str||r.time_str||'',
+        };
+        if(st==='race')raceResults.push(entry);
+        else{(sessions[st]=sessions[st]||[]).push(entry)}
+      }
+
+      const circKey=CIRC_MAP[round];
+      const circ=circKey?CIRCUITS[circKey]:null;
+      const rd={
+        name:race.name||sch.n,
+        circuit:race.circuit||circ?.name||sch.c||'',
+        date:sch.dl||'',
+        laps:circ?.laps||0,
+        wx:'',
+        sessions,
+        results:raceResults,
+        rc:[],
+        strats:[],
+      };
+      // Surface the sprint top 3 in the same banner the static RACE_DATA does.
+      if(sessions.sprint?.length){
+        const top3=sessions.sprint.slice(0,3).map(e=>{
+          const surname=(e.d||'').split(' ').pop();
+          return surname;
+        });
+        if(top3.length===3)rd.sprint='P1 '+top3[0]+' P2 '+top3[1]+' P3 '+top3[2];
+      }
+      S._rdCache[round]=rd;
+      S._rdCacheAt[round]=Date.now();
+      return rd;
+    }catch(e){console.warn('[rd] build failed for round',round,e);return null}
+    finally{delete S._rdInflight[round]}
+  })();
+  S._rdInflight[round]=promise;
+  return promise;
+}
+
 // Circuit info for upcoming races
 const CIRC_INFO={
   4:{laps:57,dist:'308.3km',record:'1:29.708 (VER 2023)',ot:3,first:2022},
@@ -1530,7 +1639,11 @@ const CIRCUITS={
   3:[[-5921,-1069],[-6131,2],[-5920,965],[-5888,1607],[-6160,1566],[-6343,1291],[-6672,726],[-7464,-181],[-8372,-423],[-9418,-294],[-10430,120],[-11401,1160],[-11838,2157],[-12286,2743],[-12743,2833],[-13334,2713],[-13662,2378],[-13669,1930],[-13272,1361],[-12466,756],[-11686,276],[-10753,-201],[-9632,-629],[-8621,-970],[-7720,-1272],[-6598,-1649],[-5376,-2046],[-4504,-1829],[-3941,-1506],[-3603,-1247],[-3165,-842],[-2624,-310],[-2122,146],[-1782,231],[-1578,105],[-1439,33],[-1294,31],[-1086,140],[-870,332],[-351,489],[126,421],[510,274],[816,85],[1071,-138],[1448,-550],[1640,-774],[1871,-1044],[2152,-1373],[2403,-1666],[2653,-1958],[2851,-2189],[3177,-2571],[3464,-2906],[3525,-2977],[3819,-3322],[4405,-4012],[4960,-4664],[5898,-5799],[6022,-6555],[5578,-7263],[5053,-7253],[4409,-6423],[3762,-5595],[3255,-5439],[2573,-5214],[2221,-4391],[1776,-3811],[994,-3683],[305,-3310],[145,-2695],[388,-2070],[329,-1320],[-249,-929],[-1081,-706],[-2207,-908],[-2876,-1409],[-3488,-2214],[-4335,-2773],[-5268,-2859],[-5633,-2527],[-5709,-2044],[-5868,-1314]],
 };
 
-S.selRound=3;
+// Default to the latest live/active race; fall back to the most recent
+// completed round; final fallback R3 (the season's first detailed entry in
+// RACE_DATA). Without this the live tab's pill would always land on R3
+// regardless of how far the season has progressed.
+S.selRound=((SCH.find(r=>r.st==='active'))||(SCH.filter(r=>r.st==='done').pop())||{}).r||3;
 
 function initRaceBrowser(){
   const el=document.getElementById('racePills');if(!el)return;
@@ -1677,9 +1790,24 @@ function bindCircuitPan(){
 
 function renderRaceContent(){
   const el=document.getElementById('raceContent');if(!el)return;
-  const rd=RACE_DATA[S.selRound];
-  const sch=SCH.find(r=>r.r===S.selRound);
+  // Prefer the hand-maintained RACE_DATA when present (R1-R3 detailed mock
+  // data); otherwise fall back to the dynamic build from leaderboard rows
+  // that fetch-timing writes after each session ends. The dynamic build
+  // populates S._rdCache asynchronously and re-renders when it lands.
+  const round=S.selRound;
+  const rd=RACE_DATA[round]||S._rdCache[round];
+  const sch=SCH.find(r=>r.r===round);
   if(!sch){el.innerHTML='<div class="empty">Select a race</div>';return}
+
+  // Fire-and-forget DB fetch for any round we don't already have, plus a
+  // refresh path for active weekends where new sessions land throughout the
+  // weekend. Cancelled weekends are skipped.
+  if(!RACE_DATA[round]&&!S._rdInflight[round]&&(sch.st==='done'||sch.st==='active')){
+    const cacheStale=sch.st==='active'&&S._rdCache[round]&&(Date.now()-(S._rdCacheAt[round]||0))>=_RD_ACTIVE_TTL_MS;
+    if(!S._rdCache[round]||cacheStale){
+      buildRdFromDb(round).then(result=>{if(result&&S.selRound===round)renderRaceContent()});
+    }
+  }
 
   // Cancelled
   if(sch.st==='can'){
@@ -1692,8 +1820,14 @@ function renderRaceContent(){
 
   // Completed race — full hub
   if(rd){
-    if(!S._raceSess)S._raceSess='race';
     const sessData=rd.sessions||{};
+    // Pick the latest-available session as the default tab so a race weekend
+    // mid-progress (only fp1 + sprint quali done) doesn't open on an empty
+    // Race tab. Order: race > qualifying > sprint > sprint_quali > fp3 > fp2 > fp1.
+    if(!S._raceSess){
+      const sessHasData=t=>t==='race'?(rd.results||[]).length>0:(sessData[t]||[]).length>0;
+      S._raceSess=['race','qualifying','sprint','sprint_quali','fp3','fp2','fp1'].find(sessHasData)||'race';
+    }
     const activeResults=(S._raceSess==='race'?rd.results:sessData[S._raceSess])||rd.results;
     const availSessions=Object.keys(sessData);if(!availSessions.includes('race'))availSessions.push('race');
     const sessNames={fp1:'FP1',fp2:'FP2',fp3:'FP3',sprint_quali:'Sprint Quali',sprint:'Sprint',qualifying:'Qualifying',race:'Race'};
@@ -1866,6 +2000,18 @@ function renderRaceContent(){
         ${_standN[0]?.last||'\u2014'} leads with ${_standN[0]?.pts??0}pts \u2014 ${_leadN} ahead of ${_standN[1]?.last||'\u2014'} (${_standN[1]?.pts??0}). ${_standN[2]?.last||'\u2014'} P3 (${_standN[2]?.pts??0}), ${_standN[3]?.last||'\u2014'} P4 (${_standN[3]?.pts??0}), ${_standN[4]?.last||'\u2014'} P5 (${_standN[4]?.pts??0}). Standings reflect ${_racesDoneN} race${_racesDoneN===1?'':'s'} completed.
       </div></div>
     `;
+    return;
+  }
+
+  // Done race whose results are still loading from the leaderboard table.
+  // Show a placeholder so the user doesn't see the future-race preview for
+  // a race that already happened.
+  if((sch.st==='done'||sch.st==='active')&&S._rdInflight[round]){
+    el.innerHTML=`<div style="text-align:center;padding:32px 20px;color:var(--muted)">
+      <div style="font-family:var(--head);font-size:22px;font-weight:900;text-transform:uppercase;color:var(--text);margin-bottom:8px">${sch.n}</div>
+      <div style="font-size:13px;margin-bottom:16px">${sch.c} · ${sch.dl}</div>
+      <div style="font-size:12px">Loading results...</div>
+    </div>`;
     return;
   }
 
