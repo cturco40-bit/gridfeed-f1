@@ -17,34 +17,35 @@ CANCELLED: Bahrain GP (Apr 12) and Saudi Arabian GP (Apr 19) both cancelled — 
 
 2026 REGULATIONS: No DRS. Replaced by Overtake Mode (extra electrical deployment when within 1 second of car ahead) and Active Aero (wings adjust automatically). Never mention DRS in 2026 content.
 
-VERIFIED DRIVERS CHAMPIONSHIP after R3 Japan (Miami R4 not yet incorporated — do NOT cite specific post-Miami point totals; if asked about post-Miami standings, defer to "official points pending verification"):
-P1 Kimi Antonelli (Mercedes) 72 pts
-P2 George Russell (Mercedes) 63 pts
-P3 Charles Leclerc (Ferrari) 49 pts
-P4 Lewis Hamilton (Ferrari) 41 pts
-P5 Lando Norris (McLaren) 25 pts
-P6 Oscar Piastri (McLaren) 21 pts
-P7 Oliver Bearman (Haas) 17 pts
-P8 Pierre Gasly (Alpine) 15 pts
-P9 Max Verstappen (Red Bull) 12 pts
+VERIFIED DRIVERS CHAMPIONSHIP after R4 Miami (current — cite freely):
+P1 Kimi Antonelli (Mercedes) 100 pts
+P2 George Russell (Mercedes) 80 pts
+P3 Charles Leclerc (Ferrari) 63 pts
+P4 Lando Norris (McLaren) 51 pts
+P5 Lewis Hamilton (Ferrari) 49 pts
+P6 Oscar Piastri (McLaren) 43 pts
+P7 Max Verstappen (Red Bull) 26 pts
+P8 Oliver Bearman (Haas) 17 pts
+P9 Pierre Gasly (Alpine) 16 pts
 P10 Liam Lawson (Racing Bulls) 10 pts
-P11 Arvid Lindblad (Racing Bulls) 4 pts
-P12 Isack Hadjar (Red Bull) 4 pts
-P13 Gabriel Bortoleto (Audi) 2 pts
-P14 Carlos Sainz (Williams) 2 pts
-P15 Esteban Ocon (Haas) 1 pt
-P16 Franco Colapinto (Alpine) 1 pt
+P11 Franco Colapinto (Alpine) 5 pts
+P12 Arvid Lindblad (Racing Bulls) 4 pts
+P13 Isack Hadjar (Red Bull) 4 pts
+P14 Carlos Sainz (Williams) 4 pts
+P15 Gabriel Bortoleto (Audi) 2 pts
+P16 Alexander Albon (Williams) 1 pt
+P17 Esteban Ocon (Haas) 1 pt
 
-VERIFIED CONSTRUCTORS CHAMPIONSHIP after R3:
-P1 Mercedes 135 pts
-P2 Ferrari 90 pts
-P3 McLaren 46 pts
-P4 Haas 18 pts
-P5 Alpine 16 pts
-P6 Red Bull Racing 16 pts
+VERIFIED CONSTRUCTORS CHAMPIONSHIP after R4 Miami:
+P1 Mercedes 180 pts
+P2 Ferrari 112 pts
+P3 McLaren 94 pts
+P4 Red Bull Racing 30 pts
+P5 Alpine 21 pts
+P6 Haas 18 pts
 P7 Racing Bulls 14 pts
-P8 Audi 2 pts
-P9 Williams 2 pts
+P8 Williams 5 pts
+P9 Audi 2 pts
 P10 Cadillac 0 pts
 P11 Aston Martin 0 pts`;
 
@@ -80,11 +81,10 @@ The 2026 calendar: Australia, China, Japan, [Bahrain CANCELLED], [Saudi CANCELLE
 NEVER invent a venue. NEVER write about Bristol, Nashville, Jakarta, Delhi, Seoul, or any city not on this list.
 
 RULE 4 — POINTS AND STANDINGS:
-Verified standings above are post-R3 Japan only. Miami R4 happened but post-Miami totals
-are NOT incorporated yet. DO NOT cite specific post-Miami point totals. If a story requires
-fresh totals, defer with "official points pending verification" or focus the piece on race
-results / forward-looking analysis instead. Pre-Miami totals (e.g. Antonelli 72) remain
-correct only as snapshots labeled "after Round 3" / "pre-Miami". NEVER label them "current".
+Verified standings above are post-R4 Miami and reflect current totals.
+Cite them as "current" or "after Miami" — both are correct. Do NOT mix in
+older pre-Miami snapshots (e.g. Antonelli 72) — those are stale and should
+not appear in any new article.
 
 RULE 5 — RACE COUNT:
 4 races run (Australia, China, Japan, Miami). 22 total (not 24). NEVER reference round above 4 as completed.

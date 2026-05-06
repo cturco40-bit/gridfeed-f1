@@ -1249,15 +1249,25 @@ function parsePathBounds(d){
   return{nx,mx,ny,my};
 }
 
-// Resolve current circuit → CS slug → static SVG path. CIRC_MAP maps
-// round number → slug; falls back to circuit_short_name match.
+// Resolve current circuit → CS slug → static SVG path.
+// When a session is LIVE, the live session's circuit is the source of
+// truth — drawing S.nr's circuit (the next upcoming race) would project
+// Miami's car positions onto the Canada outline. Only fall back to
+// S.nr when there's no live session at all.
 function getCircuitPath(){
   if(typeof CS==='undefined'||!CS)return null;
+  const liveCsn=(S.liveSession?.circuit_short_name||S.liveSession?.meeting_name||'').toLowerCase();
+  if(S.isLive&&liveCsn){
+    for(const slug of new Set(Object.values(CIRC_MAP))){
+      if(slug&&liveCsn.includes(slug)&&CS[slug])return CS[slug];
+    }
+  }
   const r=S.nr?.r;
   if(r&&CIRC_MAP[r]&&CS[CIRC_MAP[r]])return CS[CIRC_MAP[r]];
-  const csn=(S.liveSession?.circuit_short_name||S.liveSession?.meeting_name||'').toLowerCase();
-  for(const slug of new Set(Object.values(CIRC_MAP))){
-    if(slug&&csn.includes(slug)&&CS[slug])return CS[slug];
+  if(liveCsn){
+    for(const slug of new Set(Object.values(CIRC_MAP))){
+      if(slug&&liveCsn.includes(slug)&&CS[slug])return CS[slug];
+    }
   }
   return null;
 }

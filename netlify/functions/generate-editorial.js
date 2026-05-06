@@ -68,13 +68,13 @@ const STANDINGS = {
   nextRace: 'Canadian Grand Prix',
   nextRound: 5,
   nextDate: 'May 22-24',
-  leaderPts: 72,
-  constructorPts: 135,
+  leaderPts: 100,
+  constructorPts: 180,
   keyStats: {
-    antonelliWins: 2,
+    antonelliWins: 3,
     bearmanPts: 17,
-    verstappenPts: 12,
-    norrisConsecutiveFifths: 3,
+    verstappenPts: 26,
+    norrisMiamiP2: true,
   },
 };
 
@@ -109,14 +109,14 @@ const EDITORIAL_TYPES = [
     type: 'DEEP_DIVE',
     frequency: 'twice-weekly',
     prompts: [
-      'Write a deep dive on the Mercedes vs Ferrari battle in 2026. Mercedes leads {constructorPts} to Ferrari\'s 90 points. Compare their car philosophies, driver lineups, and development trajectories. Where will this fight be by mid-season?',
-      'Write an analysis of the 2026 rookie class: Antonelli, Bearman, Hadjar, Lindblad, and Bortoleto. Compare their first 3 races. Who is exceeding expectations? Who is struggling? Use specific results and points.',
+      'Write a deep dive on the Mercedes vs Ferrari battle in 2026. Mercedes leads {constructorPts} to Ferrari\'s 112 points. Compare their car philosophies, driver lineups, and development trajectories. Where will this fight be by mid-season?',
+      'Write an analysis of the 2026 rookie class: Antonelli, Bearman, Hadjar, Lindblad, and Bortoleto. Compare their first {races} races. Who is exceeding expectations? Who is struggling? Use specific results and points.',
       'Write an analysis of why Red Bull went from 4 consecutive titles to {verstappenPts} points in {races} races. Cover the personnel losses (Newey, Marshall, Stevenson), the chassis problems, and whether ADUO can help Honda close the engine gap.',
-      'Write a piece about the midfield battle: Haas ({bearmanPts} from Bearman alone), Alpine, Red Bull, and Racing Bulls are separated by 4 points. Who wins this fight and why? Use specific driver and constructor points.',
-      'Write about the McLaren plateau. Norris has finished P5 in all {races} races — {norrisConsecutiveFifths} consecutive fifths. Is the MCL61 a P5 car or can they break through? Compare Norris and Piastri\'s different results.',
+      'Write a piece about the midfield battle behind the top three: Red Bull (30), Alpine (21), Haas (18), and Racing Bulls (14). Who wins this fight and why? Use specific driver and constructor points.',
+      'Write about McLaren\'s Miami breakthrough. Norris finished P5 in the first three races then took P2 at Miami; Piastri took P3. Has the MCL61 found pace, or did Miami flatter them? Compare Norris and Piastri\'s seasons.',
       'Write about Cadillac\'s debut F1 season. Zero points from Perez and Bottas. How does this compare to other team debuts? What are realistic expectations for their first year? When might they score their first point?',
-      'Write about Hamilton\'s move to Ferrari. Three races in, he has 41 points to Leclerc\'s 49. Is the partnership working? Compare their qualifying and race performances. Is Hamilton adapting to the car or is the car limiting him?',
-      'Write about the Overtake Mode and Active Aero system. Three races of data — is it delivering better racing than DRS? Analyse overtaking statistics and whether the regulations are achieving their goals.',
+      'Write about Hamilton\'s move to Ferrari. Four races in, he has 49 points to Leclerc\'s 63. Is the partnership working? Compare their qualifying and race performances. Is Hamilton adapting to the car or is the car limiting him?',
+      'Write about the Overtake Mode and Active Aero system. Four races of data — is it delivering better racing than DRS? Analyse overtaking statistics and whether the regulations are achieving their goals.',
       'Write about Fernando Alonso\'s situation. Zero points at 44 years old. Aston Martin dead last in constructors. Is this how a legend should end his career? What does the data show about his driving vs the car\'s limitations?',
       'Write about the championship maths. Antonelli has {leaderPts} points from {races} races. At this rate, what does the final standings projection look like? When is the earliest Antonelli can clinch? When does it become mathematically impossible for Russell?',
     ],
@@ -164,7 +164,7 @@ function fillTemplate(prompt) {
     .replace(/\{verstappenPts\}/g, STANDINGS.keyStats.verstappenPts)
     .replace(/\{bearmanPts\}/g, STANDINGS.keyStats.bearmanPts)
     .replace(/\{antonelliWins\}/g, STANDINGS.keyStats.antonelliWins)
-    .replace(/\{norrisConsecutiveFifths\}/g, STANDINGS.keyStats.norrisConsecutiveFifths);
+    ;
 }
 
 // Light suffix stripper so keyword-block matches "failed"/"failure"/"failing",
@@ -262,10 +262,8 @@ async function pickTopic() {
 }
 
 const SYSTEM_PROMPT = `CRITICAL — READ BEFORE WRITING:
-Leclerc has TWO podiums, not three. His results are P3, P4, P3.
-P4 is NOT a podium. If you write "three podiums" or "three consecutive
-podiums" the article will be rejected and you will have wasted this
-API call. TWO podiums. P3, P4, P3.
+Leclerc has TWO podiums, not three. Across four races his results are P3, P4, P3, P6.
+P4 and P6 are NOT podiums. If you write "three podiums" the article will be rejected.
 
 You are GridFeed, an independent F1 news and analysis platform. Write original editorial content in a direct, opinionated sports journalism voice.
 
@@ -277,17 +275,17 @@ RULES:
 - End with a forward-looking statement about the next race
 - No fabricated quotes — you can paraphrase public statements but never invent direct quotes
 - Do not use phrases like "sources confirm" or "according to briefings"
-- CRITICAL: Leclerc has TWO podiums (P3, P4, P3) — NOT three
-- CRITICAL: Antonelli has 72 TOTAL points, his LEAD is 9 points
+- CRITICAL: Leclerc has TWO podiums (R1 P3, R3 P3) — NOT three
+- CRITICAL: Antonelli has 100 TOTAL points after Miami, leads Russell by 20
 - CRITICAL: Norris is the DEFENDING 2025 champion, not Verstappen
 - CRITICAL: No DRS in 2026 — Overtake Mode and Active Aero replaced it
 - CRITICAL: Hamilton drives for Ferrari, Antonelli for Mercedes
-- CRITICAL: Alonso has ZERO points, not 4
+- CRITICAL: Alonso has ZERO points
 - CRITICAL: Aston Martin has ZERO constructor points
 
-2026 VERIFIED STANDINGS (after Round 3 Japan):
-Drivers: P1 Antonelli 72, P2 Russell 63, P3 Leclerc 49, P4 Hamilton 41, P5 Norris 25, P6 Piastri 21, P7 Bearman 17, P8 Gasly 15, P9 Verstappen 12, P10 Lawson 10
-Constructors: P1 Mercedes 135, P2 Ferrari 90, P3 McLaren 46, P4 Haas 18, P5 Alpine 16, P6 Red Bull 16, P7 Racing Bulls 14, P8 Audi 2, P9 Williams 2, P10 Cadillac 0, P11 Aston Martin 0
+2026 VERIFIED STANDINGS (after Round 4 Miami — current):
+Drivers: P1 Antonelli 100, P2 Russell 80, P3 Leclerc 63, P4 Norris 51, P5 Hamilton 49, P6 Piastri 43, P7 Verstappen 26, P8 Bearman 17, P9 Gasly 16, P10 Lawson 10
+Constructors: P1 Mercedes 180, P2 Ferrari 112, P3 McLaren 94, P4 Red Bull 30, P5 Alpine 21, P6 Haas 18, P7 Racing Bulls 14, P8 Williams 5, P9 Audi 2, P10 Cadillac 0, P11 Aston Martin 0
 
 Next race: ${STANDINGS.nextRace}, Round ${STANDINGS.nextRound}, ${STANDINGS.nextDate}
 
