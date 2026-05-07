@@ -1,5 +1,5 @@
 import { sb, logSync, json } from './lib/shared.js';
-import { postTweetNow } from './lib/twitter.js';
+import { postTweetNow, tweetSimilarity } from './lib/twitter.js';
 
 // Safety caps to prevent Twitter suspension — type-based limits so social
 // chatter doesn't crowd out live race alerts
@@ -25,13 +25,14 @@ function parseTwitterStatus(msg) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// Legacy substring dedup kept as a cheap pre-filter — exact-substring matches
+// are caught here before falling through to tweetSimilarity (which handles
+// 5-gram phrase overlap and 80%+ word-set overlap across the full 24h window).
 function tooSimilar(a, b) {
-  // Compare normalized text — Twitter rejects near-duplicates
   const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const na = norm(a), nb = norm(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  // 90%+ overlap counts as duplicate
   const shorter = na.length < nb.length ? na : nb;
   const longer = na.length < nb.length ? nb : na;
   if (longer.includes(shorter) && shorter.length / longer.length > 0.85) return true;
@@ -128,13 +129,24 @@ export default async (req, context) => {
 
     // (5. Stale check removed — post approved tweets regardless of age)
 
-    // ── 6. Near-duplicate guard against last 3 posted tweets ──
-    const recentPosted = dayPosted.slice(0, 3);
-    for (const r of recentPosted) {
-      if (tooSimilar(tweet.tweet_text, r.tweet_text)) {
-        await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed' });
-        await logSync('post-tweet', 'success', 0, `Near-duplicate of recent post — failed: "${tweet.tweet_text.slice(0,40)}"`, Date.now() - start);
-        return json({ ok: true, posted: 0, reason: 'duplicate' });
+    // ── 6. Near-duplicate guard against full 24h of posted tweets ──
+    // Two passes: cheap substring check, then 5-gram + word-overlap via
+    // tweetSimilarity. Catches paraphrases that hash dedup misses. Live tweets
+    // are exempt — we want fast results posts even if wording is similar to a
+    // mid-race update from earlier.
+    if (!isLive) {
+      for (const r of dayPosted) {
+        if (tooSimilar(tweet.tweet_text, r.tweet_text)) {
+          await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed', error_detail: `Near-duplicate (substring) of posted tweet ${r.id}` });
+          await logSync('post-tweet', 'success', 0, `Substring-dup of posted tweet — failed: "${tweet.tweet_text.slice(0,40)}"`, Date.now() - start);
+          return json({ ok: true, posted: 0, reason: 'duplicate' });
+        }
+        const sim = tweetSimilarity(tweet.tweet_text, r.tweet_text);
+        if (sim.similar) {
+          await sb(`tweets?id=eq.${tweet.id}`, 'PATCH', { status: 'failed', error_detail: `Near-dup of posted tweet ${r.id}: ${sim.reason}` });
+          await logSync('post-tweet', 'success', 0, `Near-dup of posted (${sim.reason}) — failed: "${tweet.tweet_text.slice(0,40)}"`, Date.now() - start);
+          return json({ ok: true, posted: 0, reason: 'near_duplicate', detail: sim.reason });
+        }
       }
     }
 

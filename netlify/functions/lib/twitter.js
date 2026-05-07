@@ -61,6 +61,64 @@ export async function postTweetNow(text) {
 }
 
 /**
+ * tweetSimilarity — detect near-duplicate tweets that hash dedup misses.
+ *
+ * Two-pass:
+ *   1. If both tweets have >= 5 tokens, look for any shared 5-word phrase.
+ *      A 5-gram match is a strong signal the tweets share the same hook.
+ *   2. Stem tokens (strip trailing s/es/ed/ing) and compute word-set overlap;
+ *      >= 80% counts as duplicate. Catches "finished P2" ≈ "finishes P2".
+ *
+ * Returns { similar: bool, reason?: string }. Used by post-tweet.js and
+ * generate-tweets.js to widen the dedup window from "exact hash" to
+ * "anything a reader would notice as repeat content".
+ */
+function _stem(w) {
+  if (w.length <= 4) return w;
+  if (w.endsWith('ing') && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith('ed')  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith('es')  && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith('s')   && w.length > 3) return w.slice(0, -1);
+  return w;
+}
+
+export function tweetSimilarity(a, b) {
+  const norm = (s) => (s || '')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/gridfeed\.co\/\S+/g, '')
+    .replace(/#[a-z0-9_]+/gi, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2);
+
+  const tokensA = norm(a);
+  const tokensB = norm(b);
+  if (tokensA.length === 0 || tokensB.length === 0) return { similar: false };
+
+  // Pass 1: 5-gram phrase match (only when both tweets are long enough)
+  const N = 5;
+  if (tokensA.length >= N && tokensB.length >= N) {
+    const grams = new Set();
+    for (let i = 0; i <= tokensA.length - N; i++) grams.add(tokensA.slice(i, i + N).join(' '));
+    for (let i = 0; i <= tokensB.length - N; i++) {
+      const g = tokensB.slice(i, i + N).join(' ');
+      if (grams.has(g)) return { similar: true, reason: `5-gram match: "${g}"` };
+    }
+  }
+
+  // Pass 2: stemmed word-set overlap
+  const aSet = new Set(tokensA.map(_stem));
+  const bSet = new Set(tokensB.map(_stem));
+  const shared = [...aSet].filter((w) => bSet.has(w)).length;
+  const minSet = Math.min(aSet.size, bSet.size);
+  const ratio = minSet > 0 ? shared / minSet : 0;
+  if (ratio >= 0.8) return { similar: true, reason: `word-overlap ${Math.round(ratio * 100)}%` };
+
+  return { similar: false };
+}
+
+/**
  * Create a tweet record in DB and post it immediately.
  * Falls back to pending status if posting fails.
  */

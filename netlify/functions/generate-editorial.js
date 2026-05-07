@@ -1,5 +1,5 @@
 import { sb, fetchWT, logSync, json } from './lib/shared.js';
-import { validateArticle, fixEncoding } from './lib/accuracy.js';
+import { validateArticle, detectFactualErrors, selfCritique, fixEncoding } from './lib/accuracy.js';
 import { qualityCheck } from './lib/quality-check.js';
 import { classifySemanticallyBlocked } from './lib/semantic-classifier.js';
 
@@ -415,6 +415,24 @@ export default async (req) => {
     if (!validation.valid) {
       await logSync('generate-editorial', 'validation_failed', 0, `${topic.type}: ${validation.reason} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);
       return json({ ok: true, generated: 0, reason: 'validation_failed', detail: validation.reason });
+    }
+
+    // 4c. Numeric-claim validator — extracts driver/team points claims and
+    // checks against canonical post-Miami table. Hard-rejects stale snapshots
+    // (Antonelli 72, Mercedes 135, etc.) before they reach manual review.
+    const factCheck = detectFactualErrors(article);
+    if (!factCheck.valid) {
+      await logSync('generate-editorial', 'stats_failed', 0, `${topic.type}: ${factCheck.errors.join('; ')} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'stats_wrong', errors: factCheck.errors });
+    }
+
+    // 4d. Self-critique pass — second Haiku call compares draft to verified
+    // facts and flags qualitative errors. Adds ~5-8s latency; editorial is
+    // not latency-sensitive so this is fine.
+    const critique = await selfCritique(article, fetchWT);
+    if (!critique.ok) {
+      await logSync('generate-editorial', 'critique_failed', 0, `${topic.type}: ${(critique.errors || '').slice(0, 200)} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);
+      return json({ ok: true, generated: 0, reason: 'critique_flagged', errors: critique.errors });
     }
 
     // 5. Dedup against existing drafts (exact title)

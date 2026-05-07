@@ -1,5 +1,5 @@
 import { fetchWT, sb, logSync, json, hashContent } from './lib/shared.js';
-import { buildSystemPrompt, validateArticle, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
+import { buildSystemPrompt, validateArticle, detectFactualErrors, selfCritique, buildLiveContext, fixEncoding, TODAY } from './lib/accuracy.js';
 import { qualityCheck } from './lib/quality-check.js';
 import { classifySemanticallyBlocked } from './lib/semantic-classifier.js';
 
@@ -488,6 +488,27 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Quality: ' + qc.errors.join('; ') }).catch(() => {});
         await logSync('generate-content', 'quality_failed', 0, `Quality failed: ${qc.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
         return json({ ok: true, generated: 0, reason: 'quality_failed', errors: qc.errors });
+      }
+
+      // Numeric-claim validator — extracts every "[Driver] NN points" /
+      // "[Team] NN points" claim and checks against the canonical post-Miami
+      // table in accuracy.js. Hard-rejects stale snapshots (Antonelli 72,
+      // Mercedes 135, etc.) so they never reach manual review.
+      const factCheck = detectFactualErrors(parsed);
+      if (!factCheck.valid) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Stats: ' + factCheck.errors.join('; ') }).catch(() => {});
+        await logSync('generate-content', 'stats_failed', 0, `Stats wrong: ${factCheck.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'stats_wrong', errors: factCheck.errors });
+      }
+
+      // Self-critique pass — second Haiku call compares draft to verified
+      // facts and lists any qualitative errors (wrong team, invented quote,
+      // stale narrative). Adds ~5-8s latency; acceptable for editorial.
+      const critique = await selfCritique(parsed, fetchWT);
+      if (!critique.ok) {
+        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Critique: ' + (critique.errors || '').slice(0, 400) }).catch(() => {});
+        await logSync('generate-content', 'critique_failed', 0, `Critique flagged: ${(critique.errors || '').slice(0, 200)} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+        return json({ ok: true, generated: 0, reason: 'critique_flagged', errors: critique.errors });
       }
 
       // Insert draft

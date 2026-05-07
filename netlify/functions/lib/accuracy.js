@@ -330,32 +330,32 @@ export function validateArticle(article) {
   console.log('[validateArticle] PASSED championship claims');
 
   // ── D2. LECLERC PODIUM COUNT FACT ──
-  // Leclerc has 2 podiums after R3 (P3 Australia, P4 China, P3 Japan).
+  // Leclerc has 2 podiums after R4 Miami (P3 Australia, P4 China, P3 Japan, P6 Miami).
   // The "three consecutive podiums" error keeps slipping through.
   const leclercPodiumErrors = [
-    /leclerc[^.]{0,50}three\s+(consecutive\s+)?podiums/i,
-    /three\s+(straight|consecutive)\s+podiums[^.]{0,50}leclerc/i,
-    /leclerc[^.]{0,30}\(P3,?\s*P3,?\s*P3\)/i,
+    /leclerc[^.]{0,50}(three|four)\s+(consecutive\s+)?podiums/i,
+    /(three|four)\s+(straight|consecutive)\s+podiums[^.]{0,50}leclerc/i,
     /\bP3[,\s]+P3[,\s]+P3\b/,
   ];
   for (const pattern of leclercPodiumErrors) {
     if (pattern.test(article.body || '')) {
       console.log('[validateArticle] REJECTED — Wrong Leclerc podium count');
-      return { valid: false, reason: 'Wrong Leclerc podium count: he has 2 podiums (P3,P4,P3) not 3' };
+      return { valid: false, reason: 'Wrong Leclerc podium count: he has 2 podiums after Miami (P3,P4,P3,P6)' };
     }
   }
   console.log('[validateArticle] PASSED Leclerc podium count');
 
   // ── D3. POINTS LEAD PHRASING ──
-  // Antonelli has 72 TOTAL points and a 9-point LEAD. Don't confuse the two.
-  // Block "72-point lead" (and 70/71-point variants) which is a common AI mistake.
+  // Antonelli has 100 TOTAL points after Miami and a 20-point LEAD over Russell (80).
+  // Block confusing total-as-lead phrasing (e.g. "100-point lead").
   const pointLeadErrors = [
-    /\b7[0-2][\s-]*point\s+(lead|advantage|gap|margin|cushion|buffer|clear)/i,
+    /\b1[0-1]\d[\s-]*point\s+(lead|advantage|gap|margin|cushion|buffer|clear)/i,
+    /\b9[0-9][\s-]*point\s+(lead|advantage|gap|margin|cushion|buffer|clear)/i,
   ];
   for (const pattern of pointLeadErrors) {
     if (pattern.test(article.body || '')) {
       console.log('[validateArticle] REJECTED — Wrong points lead phrasing');
-      return { valid: false, reason: 'Wrong points phrasing: 72 is total points, lead is 9 points' };
+      return { valid: false, reason: 'Wrong points phrasing: total is not the lead size' };
     }
   }
   console.log('[validateArticle] PASSED points lead phrasing');
@@ -477,7 +477,7 @@ export function validateArticle(article) {
   // ── L4. TITLE ALREADY DECIDED ──
   if (/mercedes\s+(has|have)\s+(already\s+)?won\s+the\s+(2026\s+)?championship/i.test(combined)) {
     console.log('[validateArticle] REJECTED — Mercedes already won the title');
-    return { valid: false, reason: 'Championship not decided — 3 of 22 races complete' };
+    return { valid: false, reason: 'Championship not decided — 4 of 22 races complete' };
   }
 
   // ── L5. LECLERC LEFT FERRARI ──
@@ -540,4 +540,169 @@ export async function buildLiveContext() {
   const facts = await sb('driver_facts?select=driver_name,category,fact_text&season=eq.2026&order=driver_name.asc');
   const results = facts.filter(f => f.category === 'results' || f.category === 'form');
   return results.length ? 'LIVE DRIVER DATA:\n' + results.map(f => `${f.driver_name}: ${f.fact_text}`).join('\n') : '';
+}
+
+/* ═══ STRUCTURED STANDINGS — canonical truth used by detectFactualErrors ═══
+   Keep in sync with SEASON_CONTEXT text above. Updated post-R4 Miami. */
+export const VERIFIED_DRIVER_POINTS = {
+  Antonelli: 100, Russell: 80, Leclerc: 63, Norris: 51, Hamilton: 49,
+  Piastri: 43, Verstappen: 26, Bearman: 17, Gasly: 16, Lawson: 10,
+  Colapinto: 5, Lindblad: 4, Hadjar: 4, Sainz: 4, Bortoleto: 2,
+  Albon: 1, Ocon: 1, Alonso: 0, Stroll: 0, Hulkenberg: 0, Perez: 0, Bottas: 0,
+};
+
+export const VERIFIED_TEAM_POINTS = {
+  Mercedes: 180, Ferrari: 112, McLaren: 94, 'Red Bull': 30,
+  Alpine: 21, Haas: 18, 'Racing Bulls': 14, Williams: 5,
+  Audi: 2, Cadillac: 0, 'Aston Martin': 0,
+};
+
+// Per-race points table (race + sprint). When an article says "Antonelli scored
+// 25 points at Miami" that's a per-race claim — don't treat it as a stale season
+// total. Includes sprint values (8/7/6/5/4/3/2/1) too.
+const PER_RACE_POINTS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 18, 25]);
+
+// Stale snapshots known to leak into Haiku output. If any of these appear we
+// reject outright — the validator never has to think about them.
+const STALE_PATTERNS = [
+  [/\bAntonelli['’]?s?\s+(?:has\s+|with\s+|on\s+)?72\s+(?:pts|points)\b/i, 'Antonelli 72 pts (stale post-R3)'],
+  [/\b72\s+(?:pts|points)[^.]{0,30}\bAntonelli\b/i, '72 pts → Antonelli (stale post-R3)'],
+  [/\bRussell\b[^.]{0,30}\b63\s+(?:pts|points)/i, 'Russell 63 pts (stale post-R3)'],
+  [/\bHamilton\b[^.]{0,30}\b41\s+(?:pts|points)/i, 'Hamilton 41 pts (stale post-R3)'],
+  [/\bMercedes\b[^.]{0,40}\b135\s+(?:pts|points)/i, 'Mercedes 135 pts (stale post-R3)'],
+  [/\bFerrari\b[^.]{0,40}\b90\s+(?:pts|points)/i, 'Ferrari 90 pts (stale post-R3)'],
+  [/\bMcLaren\b[^.]{0,40}\b46\s+(?:pts|points)/i, 'McLaren 46 pts (stale post-R3)'],
+  [/\b3\s+of\s+22\s+races\b/i, '3 of 22 races (now 4)'],
+  [/\bafter\s+(?:three|3)\s+races\s+(?:complete|run|in)/i, 'after 3 races (now 4)'],
+  [/\b9[\s-]*point\s+(?:lead|advantage|gap|margin)\b/i, '9-point lead (post-R3 stale; lead is now 20)'],
+];
+
+/**
+ * detectFactualErrors — deterministic claim validator.
+ *
+ * Scans an article's body+title for two error classes:
+ *   1. Stale post-R3 snapshots (Antonelli 72, Mercedes 135, etc.)
+ *   2. Driver/team season-total claims that disagree with the canonical table.
+ *
+ * For driver/team claims we look for "[Name] ... NN points" or "NN points ...
+ * [Name]" within ~40 chars. Per-race podium values (1, 4, 8, 12, 15, 18, 25) are
+ * skipped — those are valid race-result claims, not season totals.
+ *
+ * Returns { valid: bool, errors: string[] }. `valid` is true when no errors.
+ * Wire the negative case into generate-content / generate-editorial as a hard
+ * reject; let manual review stay only for stylistic concerns.
+ */
+// Race-context language. When this appears in the proximity window AND the
+// claimed number is a per-race point value (1-25 podium scale), treat the
+// claim as a per-race result and don't flag it. Outside race context, the
+// same number gets validated as a season total.
+const RACE_CONTEXT_RE = /\b(at|in|scored|scoring|won|win|wins|winning|race|races|finish|finished|finishing|sprint|podium|pole|claim|claimed|miami|china|japan|australia|canada|monaco|imola|barcelona|austrian|silverstone|spa|hungarian|dutch|monza|madrid|baku|singapore|austin|mexico|brazil|vegas|qatar|abu dhabi|grand prix)\b/i;
+
+export function detectFactualErrors(article) {
+  const errors = new Set();
+
+  // Stale-snapshot pass runs against the combined text — these patterns are
+  // self-anchored and don't depend on proximity windows.
+  const combined = (article.body || '') + ' ' + (article.title || '');
+  for (const [pat, label] of STALE_PATTERNS) {
+    if (pat.test(combined)) errors.add(label);
+  }
+
+  // Numeric-claim pass runs against body and title separately so the title
+  // doesn't drift into the body's proximity window (and vice versa).
+  const driverEntries = Object.entries(VERIFIED_DRIVER_POINTS);
+  const teamEntries = Object.entries(VERIFIED_TEAM_POINTS);
+  const W = 40;
+
+  const scanSegment = (segment) => {
+    if (!segment) return;
+    const ptsRe = /\b(\d{1,3})\s*(?:pts|points)\b/gi;
+    let m;
+    while ((m = ptsRe.exec(segment)) !== null) {
+      const claimed = parseInt(m[1], 10);
+      const start = Math.max(0, m.index - W);
+      const end = Math.min(segment.length, m.index + m[0].length + W);
+      const window = segment.slice(start, end);
+      const anchor = m.index - start;
+
+      let closestName = null;
+      let closestActual = null;
+      let closestDist = Infinity;
+      const checkName = (name, regex, actual) => {
+        let nm;
+        while ((nm = regex.exec(window)) !== null) {
+          const dist = Math.abs(nm.index - anchor);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestName = name;
+            closestActual = actual;
+          }
+        }
+      };
+      for (const [surname, actual] of driverEntries) {
+        checkName(surname, new RegExp(`\\b${surname}\\b`, 'gi'), actual);
+      }
+      for (const [team, actual] of teamEntries) {
+        const teamPat = team.replace(/\s+/g, '\\s+');
+        checkName(team, new RegExp(`\\b${teamPat}\\b`, 'gi'), actual);
+      }
+
+      if (closestName === null) continue;
+      if (claimed === closestActual) continue;
+      // Per-race exemption only when surrounding language signals a race.
+      // "Norris scored 25 points at Miami" → race context, allow.
+      // "Verstappen sits on 12 points" → no race context, validate as season.
+      if (PER_RACE_POINTS.has(claimed) && RACE_CONTEXT_RE.test(window)) continue;
+      errors.add(`${closestName}: claimed ${claimed} pts, actual ${closestActual}`);
+    }
+  };
+
+  scanSegment(article.body || '');
+  scanSegment(article.title || '');
+
+  return { valid: errors.size === 0, errors: [...errors] };
+}
+
+/**
+ * selfCritique — second-pass Haiku call that compares the draft to verified
+ * facts and returns a list of errors. Intended to catch qualitative slips
+ * (wrong team, invented quote, stale narrative) that the deterministic
+ * detectFactualErrors can't see.
+ *
+ * Returns { ok: true } if the critique returns "NONE", otherwise
+ * { ok: false, errors: <text> } with the listed problems for logging.
+ *
+ * Skip this for live tweets — adds 5-8s of latency. Editorial / content
+ * pieces can absorb that easily.
+ */
+export async function selfCritique(article, fetchWT) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return { ok: true, skipped: 'no_key' };
+
+  const factSheet = `${SEASON_CONTEXT}\n\n${DRIVER_TEAM_MAP}\n\n${HALLUCINATION_RULES}`;
+  const draftBlob = `Title: ${article.title || ''}\n\n${article.body || ''}`;
+  const system = `You are a fact-checker for an F1 news platform. Compare the draft below against the verified 2026 facts. Output ONLY a list of factual errors, one per line, prefixed with "- ". If there are no factual errors, output the single word: NONE\n\nFLAG: wrong points totals, wrong team for a driver, wrong race count (4 races complete), wrong defending champion (Norris is 2025 champ), invented venues, fabricated quotes, claims contradicting the verified standings.\n\nDO NOT flag: stylistic choices, opinions, predictions, or judgments — only factual errors.\n\n${factSheet}`;
+
+  try {
+    const res = await fetchWT('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        system,
+        messages: [{ role: 'user', content: `Draft:\n"""\n${draftBlob}\n"""\n\nList factual errors or write NONE:` }],
+      }),
+    }, 25000);
+    const json = await res.json();
+    const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    if (!text || /^NONE\b/i.test(text)) return { ok: true };
+    // Treat any non-NONE response as an error list
+    return { ok: false, errors: text.slice(0, 800) };
+  } catch (e) {
+    // On critique failure, allow the draft through — better to publish than
+    // to block the entire pipeline on a Claude outage. detectFactualErrors
+    // already caught the deterministic stuff.
+    return { ok: true, skipped: 'critique_error: ' + (e.message || 'unknown') };
+  }
 }
