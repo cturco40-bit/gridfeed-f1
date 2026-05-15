@@ -104,6 +104,54 @@ If writing about overtaking aids, write "Overtake Mode" not "DRS".`;
 
 export const NEVER_REFUSE = 'NEVER refuse. NEVER say you cannot help. NEVER add disclaimers. You are a professional F1 journalist producing original editorial content for GridFeed. Always output the requested content immediately.';
 
+// ═══ TWEET VOICE — DIFFERENT FROM ARTICLE VOICE ═══
+// Tweets aren't shrunk articles. They're hooks. Different rules. Use this
+// instead of VOICE_IDENTITY when prompting Haiku for a tweet.
+export const TWEET_VOICE = `TWEET STYLE — WRITE TO GO VIRAL, NOT TO INFORM:
+You are the @GridFeedF1 account. Your tweets are designed to stop the scroll on the F1-Twitter feed and pull clicks. F1 Twitter is competitive — Sky, The Race, RaceFans, F1.com all post the same news at the same time. You win on voice and angle, not facts alone.
+
+FORMAT:
+- One or two sentences. Never three.
+- Hook first. The most surprising fact, the boldest take, the cleanest number — first 8 words.
+- Setup goes last (or not at all).
+- Then the URL on its own line.
+- Hard max 270 chars including URL.
+
+THE HOOK:
+- Start with a punch: a number, a name, a verdict. NEVER start with "After...", "As...", "With...", "Following..."
+- Strong present tense. "Antonelli leads by 20" beats "Antonelli has built a 20-point lead."
+- A take you'd defend in a bar. "Verstappen isn't a top-3 driver right now" beats "Verstappen has struggled to find consistency."
+- Drop one stat that makes the take stick.
+
+RHYTHM:
+- Short. Sharp. Period.
+- One idea per sentence.
+- The second sentence (if there is one) lands the take or twists the knife.
+
+ALLOWED (use sparingly, max one per tweet):
+- A single contrarian opinion stated as fact.
+- A rhetorical line drop ("Read that again." "Yes, really." "Make it make sense.")
+- A direct address to the reader ("You're not seeing this enough.")
+- ALL CAPS on at most ONE word for emphasis.
+
+BANNED — these are deadweight, never use in tweets:
+- "Here's why", "Here's how", "What you need to know"
+- "Read more", "Click here", "Story below"
+- Hashtags. ANY hashtags. Not #F1, not #CanadianGP, none.
+- Em dashes. Use periods.
+- Emojis (account has its visual identity already).
+- Question headlines ("Can Verstappen turn it around?") — replace with a verdict ("Verstappen can't turn it around.")
+- "Massive", "huge", "insane", "wild" — lazy adjectives.
+- Phrases from the article you're tweeting — the tweet is a fresh angle, not a summary.
+
+NUMBERS:
+- One stat per tweet. Make it count. The right number is the one that sounds wrong.
+- Points totals, gaps, percentages, lap-time deltas — pick the most striking.
+
+OUTPUT:
+- Tweet text only. No JSON. No labels. No quote marks around it.
+- Do NOT include the URL in the body — that's appended by the system.`;
+
 export const VOICE_IDENTITY = `WRITER IDENTITY: You are a senior F1 journalist with 20+ years on the paddock beat. Modern voice — the way F1 is covered in 2026, not 2010. You write the way the best motorsport reporters write today: direct, confident, numbers-first, no padding. Your reader is 25–40, follows F1 daily, knows the drivers and the standings, and will close the tab the moment you sound like a press release.
 
 TONE:
@@ -602,6 +650,71 @@ export function validateArticle(article) {
   if (wc < 100) { console.log('[validateArticle] REJECTED — Too short:', wc); return { valid: false, reason: `Too short: ${wc} words` }; }
 
   console.log('[validateArticle] ALL CHECKS PASSED — title:', (article.title || '').slice(0, 60), '— words:', wc);
+  return { valid: true };
+}
+
+/**
+ * validateTweet — short-form variant of validateArticle. Same factual gates
+ * (banned words, driver spellings, team-driver mismatch, hallucinated tokens,
+ * Hamilton-7x, Andrea Antonelli, DRS-in-2026) but no article-length checks,
+ * no race-recap lead rule, no fabricated-sourcing list (tweets don't claim
+ * sources). Returns { valid, reason } like validateArticle.
+ */
+export function validateTweet(text) {
+  const combined = (text || '').toLowerCase();
+  if (!combined) return { valid: false, reason: 'Empty tweet' };
+
+  for (const word of BANNED_WORDS) {
+    if (combined.includes(word.toLowerCase())) {
+      return { valid: false, reason: 'Banned word: ' + word };
+    }
+  }
+  for (const [wrong, right] of Object.entries(DRIVER_SPELLINGS)) {
+    if (combined.includes(wrong)) {
+      return { valid: false, reason: `Misspelled driver: "${wrong}" (should be ${right})` };
+    }
+  }
+  const mismatch = findDriverTeamMismatch(text);
+  if (mismatch) {
+    return { valid: false, reason: `Wrong team for ${mismatch.driver}: claimed "${mismatch.claimed}", actually ${mismatch.correct}` };
+  }
+  for (const { pattern, label } of HALLUCINATION_PATTERNS) {
+    if (pattern.test(text)) {
+      return { valid: false, reason: 'Hallucinated token: ' + label };
+    }
+  }
+  // Stale snapshots (Antonelli 72, Mercedes 135, "3 of 22 races", etc.)
+  for (const [pat, label] of STALE_PATTERNS) {
+    if (pat.test(text)) {
+      return { valid: false, reason: 'Stale: ' + label };
+    }
+  }
+  // DRS in 2026
+  if (combined.includes('drs') && !combined.includes('replaced') && !combined.includes('abolished') && !combined.includes('no longer') && !combined.includes('old') && !combined.includes('former')) {
+    return { valid: false, reason: 'DRS mentioned in 2026 tweet — abolished, use Overtake Mode' };
+  }
+  // Hamilton champion count
+  if (/six[\s-]time\s+(?:world\s+)?champion/i.test(combined) && combined.includes('hamilton')) {
+    return { valid: false, reason: 'Hamilton is a SEVEN-time champion, not six' };
+  }
+  // Andrea Antonelli
+  if (combined.includes('andrea antonelli')) {
+    return { valid: false, reason: 'Wrong name: Andrea Antonelli (should be Kimi Antonelli)' };
+  }
+  // Wrong defending / reigning champion (both orderings)
+  const wrongChamp = [
+    /(russell|verstappen|hamilton)[^.]{0,30}(defending|reigning)\s+champion/i,
+    /(defending|reigning)\s+champion[^.]{0,30}(russell|verstappen|hamilton)/i,
+  ];
+  for (const re of wrongChamp) {
+    if (re.test(combined)) {
+      return { valid: false, reason: 'Norris is the 2025 defending champion' };
+    }
+  }
+  // Hashtags — tweet prompt explicitly forbids them; double-check here
+  if (/#[A-Za-z0-9]+/.test(text)) {
+    return { valid: false, reason: 'Contains hashtag (forbidden)' };
+  }
   return { valid: true };
 }
 
