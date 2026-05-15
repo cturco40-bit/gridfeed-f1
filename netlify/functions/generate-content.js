@@ -146,6 +146,21 @@ export default async (req, context) => {
     const url = new URL(req.url);
     chainHop = Math.max(1, parseInt(url.searchParams.get('chain') || '1', 10) || 1);
   } catch { /* non-URL invocation, leave chainHop=1 */ }
+
+  // Fire-and-forget chain trigger. Called from every exit path — success,
+  // terminal rejection, or empty source — so the queue keeps draining
+  // regardless of whether the topic we just looked at produced a draft.
+  // Mid-retry rejections (validation failure with retry_count < 3) skip this
+  // because the same topic is going back to pending; the cron tick will pick
+  // it up. Capped at MAX_CHAIN_HOPS to avoid runaway.
+  const triggerNextHop = () => {
+    if (chainHop >= MAX_CHAIN_HOPS) {
+      console.log('[generate-content] chain cap reached (' + chainHop + '/' + MAX_CHAIN_HOPS + ') — not self-chaining');
+      return;
+    }
+    const siteUrl = process.env.URL || 'https://gridfeed.co';
+    fetchWT(siteUrl + '/.netlify/functions/generate-content?chain=' + (chainHop + 1), { method: 'POST' }, 60000).catch(() => {});
+  };
   try {
     if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -290,6 +305,7 @@ export default async (req, context) => {
       if (topic.source_url && (!sourceContent || sourceContent.length < 200)) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Empty source content' }).catch(() => {});
         await logSync('generate-content', 'success', 0, `Empty source skipped: ${topicText.slice(0, 50)}`, Date.now() - start);
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: 'empty_source' });
       }
 
@@ -302,6 +318,7 @@ export default async (req, context) => {
           || lc.includes('become a subscriber')) {
           if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Paywalled source' }).catch(() => {});
           await logSync('generate-content', 'success', 0, `Paywalled source skipped: ${topicText.slice(0, 50)}`, Date.now() - start);
+          triggerNextHop();
           return json({ ok: true, generated: 0, reason: 'paywalled' });
         }
       }
@@ -321,6 +338,7 @@ export default async (req, context) => {
           if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject already published: ' + topicKey }).catch(() => {});
           console.log(`[generate-content] Skipping topic: ${topicKey} — blocked until ${exactMatch.expires_at || 'permanent'}`);
           await logSync('generate-content', 'success', 0, `Subject blocked (${topicKey}): ${topicText.slice(0, 50)}`, Date.now() - start);
+          triggerNextHop();
           return json({ ok: true, generated: 0, reason: 'subject_blocked', key: topicKey });
         }
       }
@@ -330,6 +348,7 @@ export default async (req, context) => {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Subject stem-match: ' + stemMatch.subject }).catch(() => {});
         console.log(`[generate-content] Skipping topic: ${stemMatch.subject} — blocked until ${stemMatch.expires_at || 'permanent'}`);
         await logSync('generate-content', 'success', 0, `Stem-match blocked (${stemMatch.subject}): ${topicText.slice(0, 50)}`, Date.now() - start);
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: 'stem_blocked', key: stemMatch.subject });
       }
 
@@ -344,6 +363,7 @@ export default async (req, context) => {
           if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: `Semantic match: ${semantic.matched || '?'} — ${semantic.reason}` }).catch(() => {});
           console.log(`[generate-content] Skipping topic: ${semantic.matched || '(semantic)'} — ${semantic.reason}`);
           await logSync('generate-content', 'success', 0, `Semantic blocked (${semantic.matched || '?'}): ${topicText.slice(0, 50)} — ${semantic.reason}`, Date.now() - start);
+          triggerNextHop();
           return json({ ok: true, generated: 0, reason: 'semantic_blocked', matched: semantic.matched });
         }
       }
@@ -447,6 +467,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
             await logSync('generate-content', 'validation_retry', 0, `Validation failed (attempt ${newRetryCount}/3): ${topicText.slice(0,40)}: ${validation.reason}`, Date.now() - start);
           }
         }
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: validation.reason, retry: newRetryCount });
       }
 
@@ -457,6 +478,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       if (titleCheck.length) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
         await logSync('generate-content', 'success', 0, 'Duplicate title skipped: ' + parsed.title.slice(0, 50), Date.now() - start);
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: 'duplicate_title' });
       }
 
@@ -469,6 +491,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       if (overlapMatch && !parsed.title.toLowerCase().startsWith('update')) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'skipped', last_error: 'Subject already covered: ' + overlapMatch.slice(0, 60) });
         await logSync('generate-content', 'success', 0, `Subject overlap skipped: "${parsed.title.slice(0, 40)}" vs "${overlapMatch.slice(0, 40)}"`, Date.now() - start);
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: 'subject_overlap', existing: overlapMatch });
       }
 
@@ -478,37 +501,63 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       if (hashCheck.length) {
         if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'drafted' });
         await logSync('generate-content', 'success', 0, 'Duplicate content hash', Date.now() - start);
+        triggerNextHop();
         return json({ ok: true, generated: 0, reason: 'duplicate_hash' });
       }
 
       // Quality check — catches runaway generation, leaked metadata, orphan
-      // fragments, empty markers, bad title length
+      // fragments, empty markers, bad title length. Retries with error
+      // feedback (same loop as validateArticle) so Claude gets up to 3
+      // attempts to produce a clean draft.
       const qc = qualityCheck(parsed.title, parsed.body);
       if (!qc.valid) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Quality: ' + qc.errors.join('; ') }).catch(() => {});
-        await logSync('generate-content', 'quality_failed', 0, `Quality failed: ${qc.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'quality_failed', errors: qc.errors });
+        const newRetryCount = (topic.retry_count || 0) + 1;
+        const reason = 'Quality: ' + qc.errors.join('; ');
+        if (topic.id) {
+          if (newRetryCount >= 3) {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', retry_count: newRetryCount, last_error: reason }).catch(() => {});
+            await logSync('generate-content', 'quality_failed', 0, `Quality failed after 3 retries: ${qc.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+          } else {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'pending', retry_count: newRetryCount, last_error: reason }).catch(() => {});
+            await logSync('generate-content', 'quality_retry', 0, `Quality failed (attempt ${newRetryCount}/3): ${qc.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+          }
+        }
+        triggerNextHop();
+        return json({ ok: true, generated: 0, reason: 'quality_failed', errors: qc.errors, retry: newRetryCount });
       }
 
       // Numeric-claim validator — extracts every "[Driver] NN points" /
       // "[Team] NN points" claim and checks against the canonical post-Miami
       // table in accuracy.js. Hard-rejects stale snapshots (Antonelli 72,
-      // Mercedes 135, etc.) so they never reach manual review.
+      // Mercedes 135, etc.). Retries with error feedback so Claude gets up
+      // to 3 attempts to fix the specific stats it got wrong.
       const factCheck = detectFactualErrors(parsed);
       if (!factCheck.valid) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Stats: ' + factCheck.errors.join('; ') }).catch(() => {});
-        await logSync('generate-content', 'stats_failed', 0, `Stats wrong: ${factCheck.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'stats_wrong', errors: factCheck.errors });
+        const newRetryCount = (topic.retry_count || 0) + 1;
+        const reason = 'Stats: ' + factCheck.errors.join('; ');
+        if (topic.id) {
+          if (newRetryCount >= 3) {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', retry_count: newRetryCount, last_error: reason }).catch(() => {});
+            await logSync('generate-content', 'stats_failed', 0, `Stats wrong after 3 retries: ${factCheck.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+          } else {
+            await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'pending', retry_count: newRetryCount, last_error: reason }).catch(() => {});
+            await logSync('generate-content', 'stats_retry', 0, `Stats wrong (attempt ${newRetryCount}/3): ${factCheck.errors.join('; ')} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
+          }
+        }
+        triggerNextHop();
+        return json({ ok: true, generated: 0, reason: 'stats_wrong', errors: factCheck.errors, retry: newRetryCount });
       }
 
       // Self-critique pass — second Haiku call compares draft to verified
-      // facts and lists any qualitative errors (wrong team, invented quote,
-      // stale narrative). Adds ~5-8s latency; acceptable for editorial.
+      // facts and lists any qualitative errors. LOG-ONLY: never blocks. The
+      // deterministic gates (validateArticle, detectFactualErrors, qualityCheck)
+      // are the hard wall. selfCritique stays as a visibility tool — its output
+      // lands in sync_log so we can spot patterns the deterministic gates miss
+      // and harden them over time. The LLM gate had near-zero recall and was
+      // either letting bad drafts through or false-flagging good ones.
       const critique = await selfCritique(parsed, fetchWT);
       if (!critique.ok) {
-        if (topic.id) await sb(`content_topics?id=eq.${topic.id}`, 'PATCH', { status: 'failed', last_error: 'Critique: ' + (critique.errors || '').slice(0, 400) }).catch(() => {});
-        await logSync('generate-content', 'critique_failed', 0, `Critique flagged: ${(critique.errors || '').slice(0, 200)} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
-        return json({ ok: true, generated: 0, reason: 'critique_flagged', errors: critique.errors });
+        await logSync('generate-content', 'critique_logged', 0, `Critique notes (non-blocking): ${(critique.errors || '').slice(0, 200)} — "${(parsed.title || '').slice(0, 40)}"`, Date.now() - start);
       }
 
       // Insert draft
@@ -538,13 +587,7 @@ BANNED WORDS — using any of these will cause automatic rejection: fascinating,
       fetchWT(siteUrl + '/.netlify/functions/notify-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title, content_type: contentType, priority_score: topic.priority || 5, excerpt: (parsed.excerpt || '').slice(0, 200) }) }, 5000).catch(() => {});
 
       // Self-chain: kick another generate-content so the queue drains in one cron tick
-      // (fire and forget — won't extend this function's runtime). Capped at
-      // MAX_CHAIN_HOPS so a single cron tick can't burst 20+ drafts in a row.
-      if (chainHop < MAX_CHAIN_HOPS) {
-        fetchWT(siteUrl + '/.netlify/functions/generate-content?chain=' + (chainHop + 1), { method: 'POST' }, 60000).catch(() => {});
-      } else {
-        console.log('[generate-content] chain cap reached (' + chainHop + '/' + MAX_CHAIN_HOPS + ') — not self-chaining');
-      }
+      triggerNextHop();
 
       await logSync('generate-content', 'success', 1, `Draft: "${parsed.title}"`, Date.now() - start);
       return json({ ok: true, generated: 1, title: parsed.title });

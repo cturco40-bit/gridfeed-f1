@@ -104,14 +104,41 @@ If writing about overtaking aids, write "Overtake Mode" not "DRS".`;
 
 export const NEVER_REFUSE = 'NEVER refuse. NEVER say you cannot help. NEVER add disclaimers. You are a professional F1 journalist producing original editorial content for GridFeed. Always output the requested content immediately.';
 
-export const VOICE_IDENTITY = `WRITER IDENTITY: You are a seasoned F1 journalist with 30 years of experience. You write with authority for a 25-35 year old audience who follows F1 on social media, bets on races, and shares articles. Tone: authoritative but never stuffy, sharp but never tabloid, opinionated but grounded in fact. Credible first. Viral second.
+export const VOICE_IDENTITY = `WRITER IDENTITY: You are a senior F1 journalist with 20+ years on the paddock beat. Modern voice — the way F1 is covered in 2026, not 2010. You write the way the best motorsport reporters write today: direct, confident, numbers-first, no padding. Your reader is 25–40, follows F1 daily, knows the drivers and the standings, and will close the tab the moment you sound like a press release.
 
-HEADLINE RULES: Specific over vague. Statement over question. Present tense. Under 12 words. No clickbait.
-LEAD SENTENCE: Must contain a specific name AND number. Make the reader feel they missed something.
-BANNED WORDS: fascinating, incredible, dominant, stunning, masterclass, trajectory, wheelhouse, showcase, narrative, pivotal, monumental, seismic, sensational, breathtaking, remarkable, unraveling, historic (unless it actually is).
-BANNED PHRASES: it's worth noting, it's important to remember, as we can see, at the end of the day, it remains to be seen, without a doubt, needless to say, in the world of F1, make no mistake, love it or hate it.
-DATA: Minimum 3 specific data points per article. Championship context required. End with forward-looking sentence.
-Never mention AI, automation, or content generation.`;
+TONE:
+- Authority without stuffiness. Wit without snark.
+- Strong verbs. Short sentences when the moment is sharp; longer when the analysis needs room.
+- Vary cadence — never three flat sentences in a row.
+- Opinions are welcome, hedging is not. "Verstappen is the second-best driver on this grid right now" beats "Verstappen has perhaps not been at his most consistent."
+- Write like a human who watched the race, not a model summarising it.
+
+HEADLINE RULES:
+- Specific over vague. Statement over question. Present tense. Under 12 words.
+- A name and a verb. "Antonelli extends lead as Mercedes lock out Miami front row" — not "What we learned in Miami."
+- No clickbait. No colons-with-buzzword formula. No "Here's why."
+
+LEAD SENTENCE:
+- A specific driver/team name AND a number in the first sentence. No exceptions.
+- Open with the most surprising fact of the story, not the setup.
+- The reader should feel they missed something if they hadn't read this.
+
+BODY:
+- Minimum 3 hard data points per article (points, lap times, gaps, percentages, head-to-head splits).
+- Every paragraph earns its space. Cut anything you'd skim past as a reader.
+- Use championship context — what this means for the standings, the constructors' fight, the next race.
+- End with a forward-looking line that lands. Not "time will tell."
+
+LANGUAGE TO AVOID (these are AI tells — using them gets the draft rejected):
+- Words: fascinating, incredible, stunning, masterclass, wheelhouse, monumental, seismic, sensational, breathtaking, transformative, paradigm, ecosystem, journey, landscape.
+- Phrases: "it's worth noting", "it remains to be seen", "without a doubt", "needless to say", "in the world of F1", "make no mistake", "at the end of the day", "love it or hate it", "speaks volumes", "begs the question", "in many ways", "look no further than", "the fact of the matter is", "going forward", "moving forward", "navigate", "delve into", "explore".
+- Tics: no rhetorical questions, no "but here's the thing", no em-dash overuse, no sentences that start with "And" or "But" more than twice per piece.
+
+WHAT GOOD LOOKS LIKE:
+- The Race, Joe Saward, Mark Hughes when he's tight, modern Sky F1 written copy.
+- Not: generic SEO blog, fan forum, "5 things we learned" listicle, ChatGPT-flavoured analysis.
+
+Never mention AI, automation, models, prompts, "as an", or content generation. You are a person who covers F1 for a living.`;
 
 export const SOURCING_PHILOSOPHY = `SOURCING: You have access to global F1 intelligence from 35 sources across 10 languages. A story covered by 5 publications is one story with 5 angles. Write one definitive article better than any single source.
 ALLOWED: Reference facts from other outlets. Use public driver/team/FIA quotes with attribution. Combine multiple sources. Take a unique angle.
@@ -208,10 +235,13 @@ export function checkPlagiarism(article, source) {
 
 /* ═══ VALIDATION CONSTANTS ═══ */
 
-// Style-police banned words list removed — was rejecting legitimate words like
-// "masterclass", "unraveling", "monumental", killing drafts that Claude could
-// easily polish in review. Factual validation only from here on.
-const BANNED_WORDS = [];
+// Tight filler-only list. Every word here signals weak F1 writing — never a
+// proper noun, never a stat, never a name. Catch them at the validator so
+// Haiku doesn't ship slop drafts that need rewriting.
+const BANNED_WORDS = [
+  'fascinating', 'stunning', 'masterclass', 'monumental', 'seismic',
+  'sensational', 'breathtaking', 'wheelhouse',
+];
 
 const DRIVER_SPELLINGS = {
   'antinelli': 'Antonelli',
@@ -271,6 +301,63 @@ const VALID_ATTRIBUTIONS = [
 const THESIS_VERBS = ['has identified', 'has revealed', 'believes', 'thinks', 'has admitted'];
 
 const SURNAMES = ['Antonelli','Russell','Leclerc','Hamilton','Norris','Piastri','Verstappen','Hadjar','Alonso','Stroll','Gasly','Colapinto','Sainz','Albon','Ocon','Bearman','Lawson','Lindblad','Hulkenberg','Bortoleto','Perez','Bottas'];
+
+// Canonical 2026 driver→team pairing. Used by validateDriverTeamPairs to
+// catch any "driver near team" claim where the team is wrong. Mirror of
+// DRIVER_TEAM_MAP string above, keyed for programmatic lookup.
+const DRIVER_TEAM_PAIRS = {
+  antonelli: 'mercedes', russell: 'mercedes',
+  leclerc: 'ferrari', hamilton: 'ferrari',
+  norris: 'mclaren', piastri: 'mclaren',
+  verstappen: 'red bull', hadjar: 'red bull',
+  alonso: 'aston martin', stroll: 'aston martin',
+  gasly: 'alpine', colapinto: 'alpine',
+  sainz: 'williams', albon: 'williams',
+  bearman: 'haas', ocon: 'haas',
+  lawson: 'racing bulls', lindblad: 'racing bulls',
+  hulkenberg: 'audi', bortoleto: 'audi',
+  perez: 'cadillac', bottas: 'cadillac',
+};
+const ALL_TEAM_NAMES_RE = 'mercedes|ferrari|mclaren|red\\s+bull|aston\\s+martin|alpine|williams|haas|racing\\s+bulls|audi|cadillac';
+// Phrases that flip the meaning (story is about a past pairing, not current).
+// "Hamilton left Mercedes for Ferrari" should not trip the validator.
+const PAIR_NEGATIONS = /\b(former|formerly|ex[-\s]|left|departed|moved\s+from|previously|once|before|old|prior|past|earlier)\b/i;
+// Common claim-shapes that put a driver and a team in clear association.
+// We deliberately don't match generic "Driver and Team" because that catches
+// mentions like "Hamilton spoke to Mercedes engineers about..." which are fine.
+function findDriverTeamMismatch(text) {
+  if (!text) return null;
+  const lc = text.toLowerCase();
+  const shapes = [
+    new RegExp(`\\b(\\w+)['’]s\\s+(${ALL_TEAM_NAMES_RE})\\b`, 'gi'),                  // "Hamilton's Mercedes"
+    new RegExp(`\\b(${ALL_TEAM_NAMES_RE})['’]s\\s+(\\w+)\\b`, 'gi'),                  // "Mercedes' Hamilton"
+    new RegExp(`\\b(${ALL_TEAM_NAMES_RE})\\s+(?:driver|man|star|ace|pilot)\\s+(\\w+)\\b`, 'gi'), // "Mercedes driver Hamilton"
+    new RegExp(`\\b(\\w+)\\s+(?:drives\\s+for|races\\s+for|is\\s+at)\\s+(${ALL_TEAM_NAMES_RE})\\b`, 'gi'),
+    new RegExp(`\\b(\\w+)\\s+of\\s+(${ALL_TEAM_NAMES_RE})\\b`, 'gi'),                      // "Hamilton of Mercedes"
+    new RegExp(`\\b(\\w+)['’]s\\s+move\\s+to\\s+(${ALL_TEAM_NAMES_RE})\\b`, 'gi'),
+    new RegExp(`\\b(\\w+)\\s+\\((${ALL_TEAM_NAMES_RE})\\)`, 'gi'),                          // "Hamilton (Mercedes)"
+  ];
+  for (const re of shapes) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(lc)) !== null) {
+      // m[1] / m[2] — figure out which is the driver token, which is the team.
+      let driver, team;
+      if (DRIVER_TEAM_PAIRS[m[1]]) { driver = m[1]; team = m[2]; }
+      else if (DRIVER_TEAM_PAIRS[m[2]]) { driver = m[2]; team = m[1]; }
+      else continue;
+      const normalizedTeam = team.replace(/\s+/g, ' ');
+      const correct = DRIVER_TEAM_PAIRS[driver];
+      if (normalizedTeam === correct) continue;
+      // Negation window — 30 chars before the match. "Hamilton left Mercedes" passes.
+      const start = Math.max(0, m.index - 30);
+      const window = lc.slice(start, m.index + m[0].length);
+      if (PAIR_NEGATIONS.test(window)) continue;
+      return { driver, claimed: normalizedTeam, correct, snippet: m[0] };
+    }
+  }
+  return null;
+}
 
 export function validateArticle(article) {
   console.log('[validateArticle] RUNNING — title:', (article.title || '').slice(0, 60));
@@ -442,10 +529,14 @@ export function validateArticle(article) {
   }
   console.log('[validateArticle] PASSED fake venues');
 
-  // ── J. HAMILTON AT MERCEDES ──
-  if (combined.includes('hamilton') && (combined.includes('his mercedes') || combined.includes('mercedes team-mate hamilton') || combined.includes('hamilton leads mercedes'))) {
-    console.log('[validateArticle] REJECTED — Hamilton at Mercedes');
-    return { valid: false, reason: 'Hallucination: Hamilton placed at Mercedes in 2026' };
+  // ── J. DRIVER-TEAM PAIRING (generic) ──
+  // Catches any "<driver> at <team>" / "<team>'s <driver>" claim where the team
+  // doesn't match the canonical 2026 pairing. Excludes "former/left/moved from"
+  // phrasings so historical references survive.
+  const mismatch = findDriverTeamMismatch(article.body || '') || findDriverTeamMismatch(article.title || '');
+  if (mismatch) {
+    console.log('[validateArticle] REJECTED — Wrong team for', mismatch.driver, ':', mismatch.snippet);
+    return { valid: false, reason: `Wrong team for ${mismatch.driver}: claimed "${mismatch.claimed}", actually ${mismatch.correct}` };
   }
 
   // ── K. ANDREA ANTONELLI ──
@@ -572,9 +663,21 @@ const STALE_PATTERNS = [
   [/\bMercedes\b[^.]{0,40}\b135\s+(?:pts|points)/i, 'Mercedes 135 pts (stale post-R3)'],
   [/\bFerrari\b[^.]{0,40}\b90\s+(?:pts|points)/i, 'Ferrari 90 pts (stale post-R3)'],
   [/\bMcLaren\b[^.]{0,40}\b46\s+(?:pts|points)/i, 'McLaren 46 pts (stale post-R3)'],
+  [/\bMcLaren\b[^.]{0,40}\b30\s+(?:pts|points)/i, 'McLaren 30 pts (stale)'],
+  [/\bMcLaren\b[^.]{0,40}\b64\s+(?:pts|points)/i, 'McLaren 64 pts (stale post-R3)'],
+  [/\bNorris\b[^.]{0,30}\b31\s+(?:pts|points)/i, 'Norris 31 pts (stale post-R3)'],
+  [/\bNorris\b[^.]{0,30}\b33\s+(?:pts|points)/i, 'Norris 33 pts (stale post-R3)'],
+  [/\bPiastri\b[^.]{0,30}\b33\s+(?:pts|points)/i, 'Piastri 33 pts (stale post-R3)'],
+  [/\bVerstappen\b[^.]{0,30}\b18\s+(?:pts|points)/i, 'Verstappen 18 pts (stale post-R3)'],
+  [/\bLeclerc\b[^.]{0,30}\b45\s+(?:pts|points)/i, 'Leclerc 45 pts (stale post-R3)'],
   [/\b3\s+of\s+22\s+races\b/i, '3 of 22 races (now 4)'],
   [/\bafter\s+(?:three|3)\s+races\s+(?:complete|run|in)/i, 'after 3 races (now 4)'],
+  [/\bthree\s+races\s+into\b/i, 'three races in (now 4)'],
   [/\b9[\s-]*point\s+(?:lead|advantage|gap|margin)\b/i, '9-point lead (post-R3 stale; lead is now 20)'],
+  // Miami already happened — forward-looking Miami phrasings are wrong.
+  [/\b(upcoming|next|this\s+weekend['’]?s)\s+miami\s+(?:gp|grand\s+prix)/i, 'Miami treated as upcoming (already happened May 3)'],
+  [/\bpreview\s+(?:of\s+)?(?:the\s+)?miami\b/i, 'Miami preview (already happened)'],
+  [/\bpredict[a-z]*\s+(?:the\s+)?miami\b/i, 'Miami prediction (already happened)'],
 ];
 
 /**
@@ -597,6 +700,13 @@ const STALE_PATTERNS = [
 // claim as a per-race result and don't flag it. Outside race context, the
 // same number gets validated as a season total.
 const RACE_CONTEXT_RE = /\b(at|in|scored|scoring|won|win|wins|winning|race|races|finish|finished|finishing|sprint|podium|pole|claim|claimed|miami|china|japan|australia|canada|monaco|imola|barcelona|austrian|silverstone|spa|hungarian|dutch|monza|madrid|baku|singapore|austin|mexico|brazil|vegas|qatar|abu dhabi|grand prix)\b/i;
+
+// Gap / margin language. When these words appear in the proximity window
+// the number is describing a relative gap (e.g. "Leclerc sits 14 points
+// clear"), not a season total. Bypasses the season-total check entirely.
+// Wrong gap sizes are caught separately by POINT_LEAD patterns in
+// validateArticle, so this exemption is safe.
+const GAP_CONTEXT_RE = /\b(clear|ahead|behind|margin|gap|advantage|cushion|buffer|lead\s+over|in\s+front\s+of|adrift|deficit|short\s+of|shy\s+of|away\s+from)\b/i;
 
 export function detectFactualErrors(article) {
   const errors = new Set();
@@ -653,6 +763,10 @@ export function detectFactualErrors(article) {
       // "Norris scored 25 points at Miami" → race context, allow.
       // "Verstappen sits on 12 points" → no race context, validate as season.
       if (PER_RACE_POINTS.has(claimed) && RACE_CONTEXT_RE.test(window)) continue;
+      // Gap / margin exemption — "Leclerc sits 14 points clear" is a gap
+      // claim, not a season total. Wrong gap sizes are caught elsewhere by
+      // POINT_LEAD patterns in validateArticle.
+      if (GAP_CONTEXT_RE.test(window)) continue;
       errors.add(`${closestName}: claimed ${claimed} pts, actual ${closestActual}`);
     }
   };

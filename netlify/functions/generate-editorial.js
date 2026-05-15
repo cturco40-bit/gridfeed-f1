@@ -180,13 +180,48 @@ function stemWord(w) {
   return w;
 }
 
+// Parse STANDINGS.nextDate ("May 22-24") and return days until that race
+// starts. Returns Infinity on any parse failure so the caller falls back to
+// the default shuffle without trying the pre-race bias.
+function daysUntilNextRace() {
+  try {
+    const m = (STANDINGS.nextDate || '').match(/^([A-Za-z]+)\s+(\d+)/);
+    if (!m) return Infinity;
+    const year = new Date().getFullYear();
+    const raceStart = new Date(`${m[1]} ${m[2]}, ${year} 00:00:00`);
+    if (isNaN(raceStart.getTime())) return Infinity;
+    // If the race-start date is more than 60 days in the past, the year rolled
+    // over (e.g. "Abu Dhabi Dec 6" parsed in January). Roll forward one year.
+    const days = (raceStart - Date.now()) / 86400e3;
+    if (days < -60) return ((raceStart.getTime() + 365 * 86400e3) - Date.now()) / 86400e3;
+    return days;
+  } catch {
+    return Infinity;
+  }
+}
+
 // Pick a topic whose likely subject key isn't in the blocked set. Each
 // prompt has the subject it's about encoded directly in its text — we
 // extract the key from the prompt with getSubjectKeyLocal and reject any
 // prompt whose key is already covered. Returns null if every prompt is
 // blocked (natural rate limit — wait for new events).
+//
+// Pre-race bias: when within 8 days of nextRace, put 'pre-race' types
+// (RACE_PREVIEW + PREDICTION) at the front of the shuffle so the upcoming
+// weekend dominates editorial output. Outside that window we fall back to
+// random shuffle.
 async function pickTopicFiltered(blockedKeys, blockedRecords) {
+  const daysOut = daysUntilNextRace();
+  const preRaceWindow = daysOut >= -1 && daysOut <= 8;
   const shuffled = [...EDITORIAL_TYPES].sort(() => Math.random() - 0.5);
+  if (preRaceWindow) {
+    shuffled.sort((a, b) => {
+      const aPre = a.frequency === 'pre-race' ? -1 : 0;
+      const bPre = b.frequency === 'pre-race' ? -1 : 0;
+      return aPre - bPre;
+    });
+    console.log(`[generate-editorial] pre-race bias active (${daysOut.toFixed(1)}d to ${STANDINGS.nextRace})`);
+  }
   for (const type of shuffled) {
     const prompts = [...type.prompts].sort(() => Math.random() - 0.5);
     for (const prompt of prompts) {
@@ -344,20 +379,16 @@ export default async (req) => {
       return json({ ok: true, generated: 0, reason: 'daily_cap', count: dayDrafts.length });
     }
 
-    // 0b. Seed permanent editorial blocks (90-day expiry) if missing.
-    const ninetyDaysOut = new Date(Date.now() + 90 * 24 * 36e5).toISOString();
-    const permIn = PERMANENT_BLOCKS.map(encodeURIComponent).join(',');
-    const existingPerm = await sb(`published_subjects?subject=in.(${permIn})&select=subject&limit=20`).catch(() => []);
-    const havePerm = new Set((existingPerm || []).map(r => r.subject));
-    for (const key of PERMANENT_BLOCKS) {
-      if (!havePerm.has(key)) {
-        await sb('published_subjects', 'POST', {
-          subject: key,
-          article_id: null,
-          expires_at: ninetyDaysOut,
-        }).catch(() => {});
-      }
-    }
+    // 0b. Clean up legacy PERMANENT_BLOCKS rows from published_subjects. These
+    // used to be seeded with a 90-day expiry, which had the side effect of
+    // poisoning the news pipeline (generate-content reads the same registry).
+    // We now keep PERMANENT_BLOCKS in-memory inside this function only — they
+    // gate editorial templates but never block breaking news. Idempotent DELETE
+    // so old rows get swept on the next editorial run.
+    try {
+      const permIn = PERMANENT_BLOCKS.map(encodeURIComponent).join(',');
+      await sb(`published_subjects?subject=in.(${permIn})&article_id=is.null`, 'DELETE').catch(() => {});
+    } catch { /* best-effort cleanup */ }
 
     // Build blocked-subject set from registry + recent drafts + recent articles
     const blockedKeys = new Set();
@@ -375,6 +406,13 @@ export default async (req) => {
     }
     for (const r of (thirtyRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
     for (const r of (draftsRecent || [])) { const k = getSubjectKeyLocal(r.title); if (k) blockedKeys.add(k); }
+
+    // Editorial-only blocks: in-memory PERMANENT_BLOCKS gate this pipeline's
+    // template selection but never reach the news pipeline.
+    for (const key of PERMANENT_BLOCKS) {
+      blockedKeys.add(key);
+      blockedRecords.push({ subject: key, expires_at: null });
+    }
 
     // 2. Pick a topic whose likely subject key is NOT blocked and whose
     // prompt text doesn't match any blocked subject's keyword parts
@@ -426,13 +464,14 @@ export default async (req) => {
       return json({ ok: true, generated: 0, reason: 'stats_wrong', errors: factCheck.errors });
     }
 
-    // 4d. Self-critique pass — second Haiku call compares draft to verified
-    // facts and flags qualitative errors. Adds ~5-8s latency; editorial is
-    // not latency-sensitive so this is fine.
+    // 4d. Self-critique pass — LOG-ONLY. The deterministic gates above are
+    // the hard wall. We keep selfCritique to surface patterns the deterministic
+    // gates miss (so we can harden them) but it never blocks a draft. The LLM
+    // gate had near-zero recall and was either passing bad drafts or false-
+    // flagging good ones, which broke the queue.
     const critique = await selfCritique(article, fetchWT);
     if (!critique.ok) {
-      await logSync('generate-editorial', 'critique_failed', 0, `${topic.type}: ${(critique.errors || '').slice(0, 200)} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);
-      return json({ ok: true, generated: 0, reason: 'critique_flagged', errors: critique.errors });
+      await logSync('generate-editorial', 'critique_logged', 0, `${topic.type} (non-blocking): ${(critique.errors || '').slice(0, 200)} — "${(article.title || '').slice(0, 50)}"`, Date.now() - start);
     }
 
     // 5. Dedup against existing drafts (exact title)
