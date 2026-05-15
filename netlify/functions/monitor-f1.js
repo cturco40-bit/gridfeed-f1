@@ -231,11 +231,16 @@ export default async (req, context) => {
   const ONE_HOUR_MS = 6 * 60 * 60 * 1000;
   const freshnessCutoff = Date.now() - ONE_HOUR_MS;
   try {
-    // No daily cap anymore — the 60-min freshness window + seen_urls dedup +
+    // No daily cap anymore — the 6h freshness window + seen_urls dedup +
     // subject registry act as the natural rate limit.
-    // Clean up seen_urls older than 7 days to prevent table growing indefinitely
+    // Clean up seen_urls older than 36h. Was 7d, which locked out re-ingest
+    // for a week if a URL was ever seen — fine in steady state, terrible
+    // after a multi-day outage (Anthropic credits out, RSS feed failure,
+    // etc) because every URL ingested-but-never-drafted during the outage
+    // window kept blocking ingest for 7 more days. 36h still dedups any
+    // genuinely repeating headline within a single news cycle.
     try {
-      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
       await sb('seen_urls?created_at=lt.' + cutoff, 'DELETE').catch(() => {});
     } catch {}
     const recentTopics = [];
